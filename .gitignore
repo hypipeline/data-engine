@@ -1,0 +1,41 @@
+# === Data Engine .gitignore ===
+# The repo tracks CODE only. Scraped data + backups are large/derived and stay out.
+
+# --- scraped data (rebuildable; ~2.6 GB) ---
+mergr_companies/
+mergr_investors/
+mergr_transactions/
+mergr_txn_details/
+embeddings/
+*.jsonl
+*.state
+
+# --- DB snapshots / dumps ---
+*.sql.gz
+*.dump
+
+# --- id lists, logs, scratch text ---
+mergr_*ids*.txt
+mergr_skip_ids*
+mergr_missing_*.txt
+mergr_investor_urls.txt
+mergr_companies_with_revenue*.txt
+mergr_txn_needs_parties.txt
+*.log
+
+# --- saved HTML / CSV / sample payloads ---
+*.html
+*.csv
+mergr_sample.json
+match_results.json
+
+# --- separate Laravel backup app (not part of Data Engine) ---
+origryxd/
+origryxd-*/
+
+# --- python / tooling / os ---
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+mergr_scraper_rust/

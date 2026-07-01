@@ -1,0 +1,74 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5433:5432"               # host 5433 to avoid clashing with anything on 5432
+    environment:
+      POSTGRES_USER: mergr
+      POSTGRES_PASSWORD: mergr
+      POSTGRES_DB: mergr
+    volumes:
+      - mergr_pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mergr -d mergr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot loader. Run:  docker compose run --rm loader
+  loader:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
+      DATA_DIR: /data
+      # LIMIT: "500"              # uncomment for a quick smoke test
+    volumes:
+      - ..:/data:ro              # project root holds mergr_investors/ companies/ transactions/
+    command: ["python", "import.py"]
+
+  # One-shot gap analysis -> writes mergr_missing_*.txt into the project root.
+  gap:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
+      OUT_DIR: /data
+    volumes:
+      - ..:/data                 # read-write: this service writes the queue files
+    command: ["python", "gap_analysis.py"]
+
+  # Streamlit web UI on http://localhost:8501
+  web:
+    build: .
+    ports:
+      - "8501:8501"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+  api:
+    build: .
+    command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
+      API_USER: ${API_USER:-mergr}
+      API_PASS: ${API_PASS:-mergr}
+
+volumes:
+  mergr_pgdata:
