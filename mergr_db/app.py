@@ -402,10 +402,10 @@ def render_entity_lookup():
         return
 
     base = entity_client.ENTITY_PUBLIC_BASE
-    st.caption(f"[Open the full app in a new tab →]({base}/)")
-    # Embed the entity app's own interface (URL form + rendered report with the
-    # View Input / View Output panels) — the native experience, inside Data Engine.
-    components.iframe(f"{base}/", height=900, scrolling=True)
+    st.caption(f"[Open in a new tab →]({base}/live)")
+    # Embed the entity app's streaming ("chatty") page: URL form + a live progress log
+    # that streams each pipeline stage as it runs, then renders the report inline.
+    components.iframe(f"{base}/live", height=900, scrolling=True)
 
 
 # =============================================================================

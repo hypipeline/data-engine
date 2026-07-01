@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 import anthropic
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import uvicorn
 
 from pipeline import lookup_entity
@@ -125,10 +125,12 @@ PRE-GATHERED DATA (from automated scrapers — WHOIS, website extraction, SEC ED
 
 Based on this data, produce the structured JSON report. Use source URLs from the pipeline data where available. If data is insufficient for a confident recommendation, set confidence to "insufficient" and explain what's missing in the note."""
 
-    # Step 2: Claude API
+    # Step 2: Claude API (run the sync SDK call off the event loop so progress can stream)
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    print("[reasoning] sending gathered data to Claude...")
     t1 = time.time()
-    response = client.messages.create(
+    response = await asyncio.to_thread(
+        client.messages.create,
         model="claude-sonnet-4-6",
         max_tokens=8192,
         system=SYSTEM_PROMPT,
@@ -474,6 +476,105 @@ async def lookup_api(request: Request):
         return JSONResponse({"error": "url is required"}, status_code=400)
     result = await do_lookup(url)
     return JSONResponse(result)
+
+
+# --- Streaming ("chatty") lookup: live pipeline log via SSE, then the rendered report ---
+@app.get("/lookup/stream")
+async def lookup_stream(url: str):
+    """Server-Sent Events: streams each pipeline progress line as it happens, then a
+    'result' event with the rendered report HTML. do_lookup's print() output is captured
+    and relayed live; the Claude call runs off-loop so logs keep flowing."""
+    import contextlib
+
+    queue: asyncio.Queue = asyncio.Queue()
+
+    class _QueueWriter:
+        def write(self, s):
+            for line in s.splitlines():
+                if line.strip():
+                    queue.put_nowait(("log", line.rstrip()))
+        def flush(self):
+            pass
+
+    async def run():
+        try:
+            with contextlib.redirect_stdout(_QueueWriter()):
+                result = await do_lookup(url)
+            queue.put_nowait(("result", result))
+        except Exception as e:  # noqa: BLE001
+            queue.put_nowait(("error", str(e)))
+        finally:
+            queue.put_nowait(("__done__", None))
+
+    async def gen():
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "log":
+                    yield f"event: log\ndata: {json.dumps(payload)}\n\n"
+                elif kind == "result":
+                    html = _render_report_card(payload["report"])
+                    yield "event: result\ndata: " + json.dumps(
+                        {"html": html, "meta": payload["meta"]}) + "\n\n"
+                elif kind == "error":
+                    yield f"event: error\ndata: {json.dumps(payload)}\n\n"
+                else:  # __done__
+                    yield "event: done\ndata: {}\n\n"
+                    break
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/live", response_class=HTMLResponse)
+async def live(url: str = ""):
+    """A self-contained page: URL form + a live progress log that streams as the lookup
+    runs, then renders the report inline. This is the 'chatty' interface."""
+    from report_schema import _CSS
+    safe_url = _esc(url)
+    autostart = "true" if url else "false"
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>Entity Lookup</title>{_CSS}
+<style>
+  body {{ margin:0; padding:20px; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:#0f1117; color:#e6e6e6; }}
+  .row {{ display:flex; gap:8px; margin-bottom:14px; }}
+  input[type=text] {{ flex:1; padding:10px 12px; border-radius:8px; border:1px solid #333; background:#1a1d27; color:#eee; font-size:14px; }}
+  button {{ padding:10px 18px; border:0; border-radius:8px; background:#2e8b6f; color:#fff; font-weight:600; cursor:pointer; }}
+  #log {{ background:#12151d; border:1px solid #232838; border-radius:8px; padding:12px 14px; font-family:ui-monospace,Menlo,monospace;
+          font-size:12px; line-height:1.55; white-space:pre-wrap; max-height:260px; overflow-y:auto; color:#a6e3a1; }}
+  #log .r {{ color:#f0c674; }}  #log .d {{ color:#8ab4f8; }}
+  #report {{ margin-top:18px; background:#fff; color:#111; border-radius:10px; overflow:hidden; }}
+  .muted {{ color:#8a8f9c; font-size:12px; }}
+</style></head><body>
+<form class="row" onsubmit="go(event)">
+  <input id="url" type="text" placeholder="https://www.example.com/" value="{safe_url}">
+  <button type="submit">Look up</button>
+</form>
+<div id="log" class="muted">Enter a company website URL and press Look up.</div>
+<div id="meta" class="muted" style="margin-top:8px"></div>
+<div id="report"></div>
+<script>
+function go(e){{ if(e) e.preventDefault(); var u=document.getElementById('url').value.trim(); if(!u) return;
+  history.replaceState(null,'', '/live?url='+encodeURIComponent(u)); start(u); }}
+function line(t){{ var l=document.getElementById('log'); var cls=''; if(t.indexOf('[reasoning]')>=0)cls='r'; else if(/^\\s*\\[\\d/.test(t))cls='d';
+  l.classList.remove('muted'); l.innerHTML += '<span class="'+cls+'">'+t.replace(/</g,'&lt;')+'</span>\\n'; l.scrollTop=l.scrollHeight; }}
+function start(u){{
+  document.getElementById('log').innerHTML=''; document.getElementById('report').innerHTML=''; document.getElementById('meta').innerHTML='';
+  line('Starting lookup for '+u+' ...');
+  var es=new EventSource('/lookup/stream?url='+encodeURIComponent(u));
+  es.addEventListener('log', function(ev){{ line(JSON.parse(ev.data)); }});
+  es.addEventListener('result', function(ev){{ var d=JSON.parse(ev.data); document.getElementById('report').innerHTML=d.html;
+    var m=d.meta||{{}}; document.getElementById('meta').innerHTML='pipeline '+(m.pipeline_time_s||'?')+'s · reasoning '+(m.api_time_s||'?')+'s · $'+(m.sonnet_cost_usd||'?');
+    es.close(); }});
+  es.addEventListener('error', function(ev){{ try{{line('ERROR: '+JSON.parse(ev.data));}}catch(e){{}} es.close(); }});
+  es.addEventListener('done', function(){{ es.close(); }});
+}}
+if({autostart}) start("{safe_url}");
+</script></body></html>"""
 
 
 if __name__ == "__main__":

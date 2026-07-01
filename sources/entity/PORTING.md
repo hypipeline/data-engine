@@ -1,50 +1,38 @@
-# Entity Lookup — PHP → Python porting plan (strangler-fig)
+# Entity Lookup — status & architecture
 
-`entity-lookup` currently runs as a **PHP sidecar** container inside Data Engine. The
-Python API (`/entity/*`) and the dashboard Entity view proxy to it (see
-`mergr_db/entity_client.py`). This lets the source be fully integrated *today* while we
-port it to Python incrementally — behind a stable interface, with no big-bang rewrite.
+**The entity source is the original Python app** (`app/`), revived and integrated into
+Data Engine. The `php/` dir is a later PHP *replica* that was tagged "legacy" in the
+upstream repo and only ever pushed to GitHub because the Python was gitignored — it's kept
+here as reference, **not deployed**.
 
-## What it does
-Given a company website URL, an LLM agent (Claude `claude-sonnet-4-6`, tool-calling)
-extracts candidate legal names, verifies them in official registers/regulators, walks up
-to the TopCo, builds a bidirectional evidence chain, and scores credit/substance
-confidence — returning `null` rather than guessing. Output includes a prebuilt
-`embed_html` report + `meta` (model, cost, tokens, timing). The JSON API is **async**:
-`?format=json&url=` returns `202 {status:processing}` and must be polled until
-`{status:complete}` (a lookup takes ~1–4 min; Apple ≈ 246s / $0.35).
+## How it works (`app/`)
+`server.py` (FastAPI) → `pipeline.lookup_entity()` gathers register data with fast HTTP
+scrapers (WHOIS, website extraction, **SEC EDGAR**, **Companies House**, **North Data**),
+then Claude (`claude-sonnet-4-6`) reasons over the gathered data into a structured report
+(`viewer._render_report_card` renders it). It's *gather-then-reason*, not a tool-use loop.
 
-## The pieces to port (from `php/`)
-| PHP file | Responsibility | Python target |
-|---|---|---|
-| `lookup.php` | Orchestration (phases: fetch → extract → verify → topco → score) | `agent.py` |
-| `tools.php` | LLM tool definitions + dispatch | `tools/__init__.py` |
-| `oc.php` | OpenCorporates | `tools/opencorporates.py` |
-| `bizapedia.php`, `bizapedia_tm.php` | Bizapedia (US) | `tools/bizapedia.py` |
-| SEC (in lookup/tools) | EDGAR + IAPD | `tools/sec.py` |
-| (Companies House API calls) | UK register | `tools/companies_house.py` |
-| (North Data calls + login) | EU aggregator | `tools/northdata.py` |
-| `browserbase_fetch.php`, `scraping_browser*.{php,mjs}` | headless fetch (Browserbase / Brightdata) | `tools/browser.py` — **reuse the existing Playwright setup from the Mergr scrapers** |
-| `compare.php`, `validate.php` | name/registry validation | `verify.py` |
-| `cache.php` | result cache | move to Postgres (`entity.lookups`) |
-| `prompts/*.txt`, `prompts.php` | LLM prompts | reuse the `.txt` **verbatim** |
-| `config.php`, `settings.json` | config/secrets | fold into shared Data Engine config |
+**Routes:** `/` native form UI · `/lookup?url=` blocking HTML report · `/api/lookup` JSON
+· **`/lookup/stream?url=`** SSE (live pipeline log) · **`/live?url=`** the "chatty" page
+(URL form + streaming log + inline report) — this is what the dashboard embeds.
 
-## Order of work
-0. **(done)** Sidecar wired in: `/entity/lookup` API proxy + dashboard view + cache volume.
-1. Stand up `agent.py` (Anthropic Python SDK, tool-use loop) + prompt loading; stub tools.
-2. Port tools **one at a time**, validating each against the existing PHP behaviour using
-   the suite in `tests/` and `php/tests/` as an **oracle** (same URL in → same entity out).
-   Start with SEC (highest signal), then Companies House, OpenCorporates, Bizapedia,
-   North Data, WHOIS, then the headless browser fetch.
-3. Move the cache to Postgres → unlocks a **lookup history** dashboard tab and lets Mergr
-   records cross-link to resolved entities (enrich a Mergr company/firm with its legal
-   contracting entity + credit score).
-4. Flip `/entity/*` from proxy → native Python; retire the PHP sidecar (Phase 3).
+## Integration points
+- Docker: `app/Dockerfile`; compose `entity` service (internal :8000, debug :9090).
+- Keys: gitignored `mergr_db/entity.secrets.env` (ANTHROPIC, OPENAI, BROWSERBASE, CH).
+- `mergr_db/entity_client.py` — client used by the API + dashboard.
+- `/entity/lookup` API proxies it; dashboard Entity view iframes `/live`.
 
-## Notes
-- Keep the **async poll contract** (`entity_client.lookup` already implements kick-off +
-  poll); or move to a proper job table when native.
-- `settings.json` holds live API keys (committed by decision) — centralise into shared config.
-- The headless scraping connects to **remote** browsers (Browserbase/Brightdata), so no
-  local Chromium is needed in the sidecar.
+## Fixes applied during integration
+- Retired model `claude-sonnet-4-20250514` → `claude-sonnet-4-6`.
+- `max_tokens` 4096 → 8192 (reports were truncating → invalid JSON → "insufficient").
+- Claude call moved off the event loop (`asyncio.to_thread`) so progress can stream.
+- Added SSE streaming + `/live` page for the chatty UX.
+
+## Known follow-ups
+- **Browser register scrapers** (Delaware DOS, Ontario OBR, OpenCorporates — via
+  Browserbase) are **opt-in** (`ENTITY_USE_BROWSER=1`): they currently hang/are slow and
+  need per-scraper timeouts before enabling by default. The fast HTTP path (SEC + CH +
+  North Data) covers US/UK/EU public + registered entities well.
+- **No result caching** — every lookup re-runs (~$0.12, ~70s). Add a cache (Postgres
+  `entity.lookups`) to reuse results + unlock a lookup-history view + Mergr enrichment.
+- **Prod cutover:** put `entity.secrets.env` on the box; route `/entity` (API) and the
+  embedded `/live` UI through Caddy; merge branch → main.
