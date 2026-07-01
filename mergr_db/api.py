@@ -225,28 +225,25 @@ def domain_search(q: str = Query(..., description="A domain or full website URL"
                                {"d": d})}
 
 
-# ---- entity endpoints (proxied to the PHP sidecar) -------------------------
+# ---- entity endpoints (proxied to the Python entity service) ---------------
 @entity.get("/health")
 def entity_health():
-    return {"sidecar_up": entity_client.health(), "base": entity_client.ENTITY_BASE}
+    return {"service_up": entity_client.health(), "base": entity_client.ENTITY_BASE}
 
 
 @entity.get("/lookup")
-def entity_lookup(url: str = Query(..., description="Company website URL to resolve to a legal entity"),
-                  refresh: bool = Query(False, description="Bypass cache and re-run the lookup"),
-                  model: str = Query(None, description="Override the LLM model for this lookup"),
-                  max_wait: int = Query(180, le=280,
-                                        description="Seconds to block waiting for the result before returning 202")):
+def entity_lookup(url: str = Query(..., description="Company website URL to resolve to a legal entity")):
     """
-    Resolve a company website URL to its optimal legal contracting entity, with a credit-
-    confidence score and a verifiable evidence chain. Blocks up to `max_wait`s while the
-    sidecar runs (LLM + live register scraping); if still running, returns 202 — poll again.
+    Resolve a company website URL to its optimal legal contracting entity, with a
+    confidence score and a bidirectional evidence chain. Blocks ~1-2 min while the entity
+    service gathers register data and Claude reasons over it. Returns {report, input_payload, meta}.
     """
-    payload, status = entity_client.lookup(url, refresh=refresh, model=model, max_wait=max_wait)
+    try:
+        payload, status = entity_client.lookup(url)
+    except Exception as e:
+        raise HTTPException(502, f"entity service error: {e}")
     if status == 400:
         raise HTTPException(400, payload.get("error", "invalid url"))
-    if status == 202:
-        return JSONResponse(payload, status_code=202)
     return payload
 
 

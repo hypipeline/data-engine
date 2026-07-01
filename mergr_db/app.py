@@ -388,102 +388,24 @@ def pager(total, key):
 
 
 # =============================================================================
-# Entity Lookup view (Data Engine "entity" source) — talks to the PHP sidecar.
+# Entity Lookup view (Data Engine "entity" source) — embeds the Python app's UI.
 # =============================================================================
 def render_entity_lookup():
     st.header("Entity Lookup")
     st.caption("Given a company website, identify the optimal legal contracting entity "
-               "(TopCo where verifiable), score credit confidence, and prove it with an "
-               "evidence chain from official registers. Returns null rather than guess.")
+               "(TopCo where verifiable), score confidence, and prove it with a bidirectional "
+               "evidence chain from official registers (SEC EDGAR, Companies House, North Data, "
+               "OpenCorporates, DE/Ontario). Returns null rather than guess.")
 
-    up = entity_client.health()
-    if not up:
-        st.error("Entity-lookup service is not reachable. Is the `entity` sidecar container running?")
-
-    with st.form("entity_lookup_form"):
-        url = st.text_input("Company website URL", placeholder="https://www.example.com/",
-                            key="entity_url").strip()
-        c1, c2 = st.columns([1, 1])
-        model = c1.text_input("Model override (optional)", placeholder="e.g. claude-opus-4-6",
-                              key="entity_model").strip() or None
-        refresh = c2.checkbox("Bypass cache (re-run)", value=False, key="entity_refresh")
-        submitted = st.form_submit_button("Look up entity", type="primary", disabled=not up)
-
-    if not submitted:
-        # re-render the last result if we have one (survives incidental reruns)
-        cached = st.session_state.get("entity_last")
-        if cached:
-            _render_entity_result(*cached)
+    if not entity_client.health():
+        st.error("Entity Lookup service is not reachable. Is the `entity` container running?")
         return
 
-    if not url:
-        st.warning("Enter a website URL to look up.")
-        return
-
-    status_box = st.empty()
-    prog = st.progress(0.0)
-
-    def on_poll(elapsed):
-        status_box.info(f"Researching… {elapsed:.0f}s elapsed  ·  querying registers & regulators "
-                        "(this can take 1–3 minutes)")
-        prog.progress(min(0.95, elapsed / 150.0))
-
-    status_box.info("Starting lookup…")
-    try:
-        payload, code = entity_client.lookup(url, refresh=refresh, model=model,
-                                             max_wait=240, on_poll=on_poll)
-    except Exception as e:
-        prog.empty(); status_box.error(f"Lookup failed: {e}")
-        return
-    prog.progress(1.0); prog.empty(); status_box.empty()
-
-    if code == 400:
-        st.error(f"Invalid URL: {payload.get('error', 'bad request')}")
-        return
-    if code == 202:
-        st.warning("Still processing after the wait window — the lookup is running in the "
-                   "background. Press **Look up entity** again in a minute to fetch the finished "
-                   "result from cache.")
-        return
-
-    st.session_state["entity_last"] = (url, payload)
-    _render_entity_result(url, payload)
-
-
-def _render_entity_result(url, payload):
-    report = payload.get("report") or {}
-    meta = payload.get("meta") or {}
-
-    # headline
-    rec = report.get("recommended_entity") or {}
-    if rec.get("legal_entity_name"):
-        st.success(f"**Recommended entity:** {rec.get('legal_entity_name')}"
-                   + (f"  ·  {rec.get('jurisdiction')}" if rec.get("jurisdiction") else "")
-                   + (f"  ·  {rec.get('regulatory_status')}" if rec.get("regulatory_status") else ""))
-    else:
-        st.warning("No entity confident enough to recommend (returned null by design).")
-
-    # meta strip
-    if meta:
-        bits = []
-        if meta.get("model"): bits.append(f"model `{meta['model']}`")
-        if meta.get("total_time_s") is not None: bits.append(f"{meta['total_time_s']}s")
-        if meta.get("cost_usd") is not None: bits.append(f"${meta['cost_usd']}")
-        if payload.get("from_cache"): bits.append("from cache")
-        if bits:
-            st.caption("  ·  ".join(bits))
-
-    # the PHP app ships a prebuilt HTML report — render it directly
-    embed = payload.get("embed_html")
-    if embed:
-        components.html(embed, height=650, scrolling=True)
-
-    with st.expander("Raw JSON"):
-        st.json(payload)
-    log = payload.get("progress_log")
-    if log:
-        with st.expander("Progress log"):
-            st.code("\n".join(str(x) for x in log) if isinstance(log, list) else str(log))
+    base = entity_client.ENTITY_PUBLIC_BASE
+    st.caption(f"[Open the full app in a new tab →]({base}/)")
+    # Embed the entity app's own interface (URL form + rendered report with the
+    # View Input / View Output panels) — the native experience, inside Data Engine.
+    components.iframe(f"{base}/", height=900, scrolling=True)
 
 
 # =============================================================================

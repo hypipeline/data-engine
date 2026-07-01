@@ -45,17 +45,22 @@ services:
       - ..:/data                 # read-write: this service writes the queue files
     command: ["python", "gap_analysis.py"]
 
-  # Entity-lookup PHP sidecar (Data Engine "entity" source). Internal only — reached by
-  # the api + web containers at http://entity/. Not published to the host in prod.
+  # Entity-lookup (Data Engine "entity" source) — the ORIGINAL Python app (FastAPI).
+  # Given a website URL it gathers register data (WHOIS, SEC EDGAR, Companies House,
+  # North Data, DE/Ontario via Browserbase) then Claude reasons it into a report.
+  # Internal; reached by api + web at http://entity:8000/. (php/ is legacy reference.)
   entity:
-    build: ../sources/entity/php
+    build: ../sources/entity/app
     restart: unless-stopped
     env_file:
-      - entity.secrets.env   # ANTHROPIC/OPENAI keys (gitignored; config.php reads from env)
+      - entity.secrets.env   # ANTHROPIC/OPENAI/BROWSERBASE/CH keys (gitignored)
+    environment:
+      PYTHONUNBUFFERED: "1"          # stream pipeline progress to docker logs
+      ENTITY_USE_BROWSER: "${ENTITY_USE_BROWSER:-0}"  # 1 = enable slow Browserbase register scrapers
     ports:
-      - "9090:80"          # local debugging only; remove/ignore in prod
+      - "9090:8000"        # local debugging only; internal port is 8000
     volumes:
-      - entity_cache:/var/www/html/cache   # persist paid lookup results across restarts
+      - entity_reports:/app/reports   # keep rendered report JSON across restarts
 
   # Streamlit web UI on http://localhost:8501
   web:
@@ -68,7 +73,8 @@ services:
     environment:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ENTITY_BASE_URL: http://entity
+      ENTITY_BASE_URL: http://entity:8000
+      ENTITY_PUBLIC_BASE: ${ENTITY_PUBLIC_BASE:-http://localhost:9090}
 
   api:
     build: .
@@ -82,8 +88,8 @@ services:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
       API_USER: ${API_USER:-mergr}
       API_PASS: ${API_PASS:-mergr}
-      ENTITY_BASE_URL: http://entity
+      ENTITY_BASE_URL: http://entity:8000
 
 volumes:
   mergr_pgdata:
-  entity_cache:
+  entity_reports:

@@ -49,3 +49,7 @@ __pycache__/
 .DS_Store
 .claude/
 mergr_scraper_rust/
+
+# entity Python app runtime output
+sources/entity/app/reports/
+sources/entity/app/__pycache__/
