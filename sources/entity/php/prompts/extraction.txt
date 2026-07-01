@@ -1,0 +1,23 @@
+You are given text from a company website (homepage, terms of use, privacy policy, about page, contact page) and WHOIS data.
+
+Extract the following and return as JSON:
+
+{
+  "entity_names": ["list of legal entity names mentioned on the site"],
+  "short_names": ["abbreviations or trading names, e.g. KKR"],
+  "jurisdiction": "best guess: uk, us, germany, france, etc.",
+  "addresses": ["array of street addresses found (e.g. '13 Flemming Court, Castleford, WF10 5HW') — must include street name+number, not just city names. Look in contact pages, privacy policies, and footer text. Empty array if none found."],
+  "key_people": ["names of directors/officers/founders mentioned"],
+  "known_parent": "If you know from your training data that this company has a parent or ultimate holding company, provide its full legal name here (e.g. 'adidas AG'). null if unknown.",
+  "known_jurisdiction": "If you know from your training data the jurisdiction of the parent/ultimate entity, provide it here (e.g. 'germany'). null if unknown.",
+  "llm_notes": "Any additional context you know about this company's corporate structure, e.g. 'adidas AG is the German parent; adidas America Inc is the US subsidiary'. null if nothing to add."
+}
+
+RULES:
+- Only extract ACTUAL entity names (with legal suffixes like Ltd, LLC, Inc, LP, AG, GmbH, etc.)
+- Include the copyright holder name
+- Include any name from "operated by", "a subsidiary of", "managed by" phrases
+- Do NOT include generic phrases or product names
+- If you recognise the company and know its parent/ultimate entity from your training data, include that in entity_names too, even if it does not appear on the website pages
+- LIMITS: max 5 entity names (prioritise parent/holding company, main operating entity, and copyright holder — skip foreign subsidiaries), max 3 addresses (HQ first), max 5 key people
+- Output ONLY the JSON, nothing else.

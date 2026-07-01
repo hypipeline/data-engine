@@ -33,6 +33,16 @@ match_results.json
 origryxd/
 origryxd-*/
 
+# --- entity-lookup source (self-contained app) ---
+# keep its test fixtures despite the global *.html rule (they're the porting oracle)
+!sources/entity/tests/fixtures/*.html
+# but never track its runtime artifacts
+sources/entity/php/cache/
+sources/entity/php/build.json
+sources/entity/php/node_modules/
+# recognized secrets externalised out of the repo (GitHub push protection)
+*.secrets.env
+
 # --- python / tooling / os ---
 __pycache__/
 *.pyc

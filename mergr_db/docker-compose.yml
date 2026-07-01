@@ -45,6 +45,18 @@ services:
       - ..:/data                 # read-write: this service writes the queue files
     command: ["python", "gap_analysis.py"]
 
+  # Entity-lookup PHP sidecar (Data Engine "entity" source). Internal only — reached by
+  # the api + web containers at http://entity/. Not published to the host in prod.
+  entity:
+    build: ../sources/entity/php
+    restart: unless-stopped
+    env_file:
+      - entity.secrets.env   # ANTHROPIC/OPENAI keys (gitignored; config.php reads from env)
+    ports:
+      - "9090:80"          # local debugging only; remove/ignore in prod
+    volumes:
+      - entity_cache:/var/www/html/cache   # persist paid lookup results across restarts
+
   # Streamlit web UI on http://localhost:8501
   web:
     build: .
@@ -56,6 +68,7 @@ services:
     environment:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ENTITY_BASE_URL: http://entity
 
   api:
     build: .
@@ -69,6 +82,8 @@ services:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
       API_USER: ${API_USER:-mergr}
       API_PASS: ${API_PASS:-mergr}
+      ENTITY_BASE_URL: http://entity
 
 volumes:
   mergr_pgdata:
+  entity_cache:

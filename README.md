@@ -1,11 +1,20 @@
 # Data Engine
 
-A multi-source data API. Each data source is namespaced under its own prefix
-(e.g. `/mergr/*`); new sources slot in as additional routers on the same app.
+A multi-source data platform. Each data source is namespaced under its own API prefix
+(e.g. `/mergr/*`, `/entity/*`) and appears as a top-level **view** in the shared
+dashboard (`?view=`). New sources slot in as additional routers + views on the same app.
 
-The first source is **Mergr** — a relationship database of private-equity firms,
-companies, and M&A transactions (with financials), scraped from mergr.com,
-stored in Postgres, and exposed via a JSON API plus a Streamlit explorer.
+## Sources
+- **Mergr** — a relationship database of private-equity firms, companies, and M&A
+  transactions (with financials), scraped from mergr.com, stored in Postgres, exposed
+  via a JSON API (`/mergr/*`) plus a Streamlit explorer. See `mergr_db/`.
+- **Entity Lookup** (`sources/entity/`) — given a company website URL, identifies the
+  optimal legal contracting entity (TopCo where verifiable), scores credit confidence,
+  and proves it with an evidence chain from official registers/regulators. It's an
+  LLM agent (Claude + live register scraping). Runs as a **PHP sidecar** container;
+  the Python API proxies it at `/entity/*` and the dashboard renders it as a view.
+  *(Strangler-fig: the PHP is being ported to Python module-by-module behind this
+  stable interface — see `sources/entity/PORTING.md`.)*
 
 ## Stack
 - **Postgres + pgvector** — the data store (`mergr_db/schema.sql`)

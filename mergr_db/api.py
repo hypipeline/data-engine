@@ -8,6 +8,7 @@ via mergr_money.py; domain normalization via domain_utils.py.
 import os
 import secrets
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -15,6 +16,7 @@ from psycopg2 import pool as pgpool
 
 from mergr_money import money_obj, mult_obj, money_str
 from domain_utils import website_to_domain
+import entity_client
 
 DSN = os.environ["DATABASE_URL"]
 API_USER = os.environ.get("API_USER", "mergr")
@@ -37,6 +39,9 @@ app = FastAPI(title="Data Engine API", version="1.0",
 
 # Mergr data source — all endpoints under /mergr/*, Basic-auth protected at the router level.
 mergr = APIRouter(prefix="/mergr", tags=["mergr"], dependencies=[Depends(auth)])
+
+# Entity-lookup data source — all endpoints under /entity/*, proxied to the PHP sidecar.
+entity = APIRouter(prefix="/entity", tags=["entity"], dependencies=[Depends(auth)])
 
 
 # ---- db helpers ------------------------------------------------------------
@@ -220,4 +225,30 @@ def domain_search(q: str = Query(..., description="A domain or full website URL"
                                {"d": d})}
 
 
+# ---- entity endpoints (proxied to the PHP sidecar) -------------------------
+@entity.get("/health")
+def entity_health():
+    return {"sidecar_up": entity_client.health(), "base": entity_client.ENTITY_BASE}
+
+
+@entity.get("/lookup")
+def entity_lookup(url: str = Query(..., description="Company website URL to resolve to a legal entity"),
+                  refresh: bool = Query(False, description="Bypass cache and re-run the lookup"),
+                  model: str = Query(None, description="Override the LLM model for this lookup"),
+                  max_wait: int = Query(180, le=280,
+                                        description="Seconds to block waiting for the result before returning 202")):
+    """
+    Resolve a company website URL to its optimal legal contracting entity, with a credit-
+    confidence score and a verifiable evidence chain. Blocks up to `max_wait`s while the
+    sidecar runs (LLM + live register scraping); if still running, returns 202 — poll again.
+    """
+    payload, status = entity_client.lookup(url, refresh=refresh, model=model, max_wait=max_wait)
+    if status == 400:
+        raise HTTPException(400, payload.get("error", "invalid url"))
+    if status == 202:
+        return JSONResponse(payload, status_code=202)
+    return payload
+
+
 app.include_router(mergr)
+app.include_router(entity)
