@@ -97,10 +97,13 @@ services:
     environment:
       CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
       ACME_EMAIL: "${ACME_EMAIL:-noreply@hyndlandpartners.com}"
+      AUTH_IMPORT: "${AUTH_IMPORT:-auth-off}"   # local: no login; prod overlay sets auth-on
     ports:
-      - "${DE_HTTP_PORT:-8091}:80"
+      - "127.0.0.1:${DE_HTTP_PORT:-8123}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./auth-off:/etc/caddy/auth-off:ro
+      - ./auth-on:/etc/caddy/auth-on:ro
       - caddy_data:/data
       - caddy_config:/config
 

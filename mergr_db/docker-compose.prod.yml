@@ -7,6 +7,7 @@ services:
     environment:
       CADDY_SITE_ADDRESS: "dataengine.hyndlandpartners.com"
       ACME_EMAIL: "craig.anderson@hyndlandpartners.com"
+      AUTH_IMPORT: "auth-on"          # prod requires login (admin / silver-maple-harbor)
     ports: !override
       - "80:80"
       - "443:443"

@@ -5,10 +5,9 @@
 # Single front door for the whole Data Engine. Site address is ":80" locally and the
 # public domain in prod (docker-compose.prod.yml sets CADDY_SITE_ADDRESS -> auto TLS).
 {$CADDY_SITE_ADDRESS} {
-	# One password gate over everything (dashboard + API + entity UI).
-	basic_auth {
-		admin $2a$14$EMuvZTGr8fvo/Ii.p28hZOEX.fem0UnPUNLSbzzOVI5TgRgJ2MNVK
-	}
+	# Auth is imported: locally AUTH_IMPORT is unset -> "auth-off" (no login, since the
+	# local port is bound to 127.0.0.1 only). Prod sets AUTH_IMPORT=auth-on -> basic_auth.
+	import {$AUTH_IMPORT:auth-off}
 
 	# Entity app UI (the streaming /live page) — ONLY reachable here, prefix stripped.
 	# There is no other way in: the entity container publishes no host port.
