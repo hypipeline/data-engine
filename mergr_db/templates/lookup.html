@@ -1,51 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Entity Lookup — Data Engine{% endblock %}
 {% block body %}
-<h1 class="page">Entity Lookup</h1>
-<p class="sub">Given a company website, identify the optimal legal contracting entity (TopCo where
-verifiable), score confidence, and prove it with a bidirectional evidence chain from official
-registers (SEC EDGAR, Companies House, North Data, OpenCorporates, DE/Ontario). Returns null rather than guess.</p>
-
 {% if not entity_up %}
 <p class="notice" style="border-left-color:var(--bad)">Entity Lookup service is not reachable. Is the <code>entity</code> container running?</p>
+{% else %}
+{# Embed the entity service's own v3b streaming page (colorized phases, expandable
+   sections, live report) — it renders the object-format SSE stream faithfully. #}
+<iframe src="/entity-app/live" title="Entity Lookup"
+        style="width:100%;height:calc(100vh - 96px);border:0;border-radius:10px;background:#fff;display:block"></iframe>
 {% endif %}
-
-<form class="toolbar" onsubmit="return go(event)">
-  <div class="field"><label>Company website URL</label>
-    <input type="text" id="url" placeholder="https://www.example.com/" style="min-width:360px" {{ 'disabled' if not entity_up }}></div>
-  <button type="submit" {{ 'disabled' if not entity_up }}>Look up entity</button>
-</form>
-
-<div id="meta" class="muted" style="margin:2px 0 10px;min-height:18px"></div>
-<div id="log" style="display:none"></div>
-<div id="report"></div>
-
-<script>
-const STREAM_BASE = {{ stream_base|tojson }};
-function line(t){
-  const l = document.getElementById('log'); l.style.display='block';
-  let cls=''; if(t.indexOf('[reasoning]')>=0) cls='r'; else if(/^\s*\[\d/.test(t)) cls='d'; else if(t.indexOf('ERROR')>=0) cls='e';
-  const s=document.createElement('span'); s.className=cls; s.textContent=t+'\n'; l.appendChild(s); l.scrollTop=l.scrollHeight;
-}
-function go(e){
-  e.preventDefault();
-  const u=document.getElementById('url').value.trim(); if(!u) return false;
-  const log=document.getElementById('log'); log.innerHTML=''; log.style.display='block';
-  document.getElementById('report').innerHTML='';
-  document.getElementById('meta').innerHTML='<span class="spin"></span> researching — querying registers &amp; regulators…';
-  line('Starting lookup for '+u+' …');
-  const es=new EventSource(STREAM_BASE+'/lookup/stream?url='+encodeURIComponent(u));
-  es.addEventListener('log', ev => line(JSON.parse(ev.data)));
-  es.addEventListener('result', ev => {
-    const d=JSON.parse(ev.data);
-    document.getElementById('report').innerHTML=d.html;
-    const m=d.meta||{};
-    document.getElementById('meta').innerHTML='Done · pipeline '+(m.pipeline_time_s||'?')+'s · reasoning '+(m.api_time_s||'?')+'s · $'+(m.sonnet_cost_usd||'?');
-    es.close();
-  });
-  es.addEventListener('error', ev => { try{ line('ERROR: '+JSON.parse(ev.data)); }catch(_){ line('ERROR: stream failed'); } document.getElementById('meta').innerHTML=''; es.close(); });
-  es.addEventListener('done', () => es.close());
-  return false;
-}
-</script>
 {% endblock %}
