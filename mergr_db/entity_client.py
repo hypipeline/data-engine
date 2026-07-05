@@ -17,9 +17,9 @@ import httpx
 
 # in-cluster base (api/web -> entity container)
 ENTITY_BASE = os.environ.get("ENTITY_BASE_URL", "http://entity:8000").rstrip("/")
-# browser-facing base for the embedded native UI (iframe); local debug port by default,
-# in prod a Caddy-routed path on the same origin.
-ENTITY_PUBLIC_BASE = os.environ.get("ENTITY_PUBLIC_BASE", "http://localhost:9090").rstrip("/")
+# browser-facing base for the embedded UI (iframe) — a same-origin path routed by Caddy
+# to the entity container. The entity app is reachable ONLY through this front door.
+ENTITY_PUBLIC_BASE = os.environ.get("ENTITY_PUBLIC_BASE", "/entity-app").rstrip("/")
 
 
 def health() -> bool:

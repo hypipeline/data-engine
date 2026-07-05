@@ -46,9 +46,8 @@ services:
     command: ["python", "gap_analysis.py"]
 
   # Entity-lookup (Data Engine "entity" source) — the ORIGINAL Python app (FastAPI).
-  # Given a website URL it gathers register data (WHOIS, SEC EDGAR, Companies House,
-  # North Data, DE/Ontario via Browserbase) then Claude reasons it into a report.
-  # Internal; reached by api + web at http://entity:8000/. (php/ is legacy reference.)
+  # INTERNAL ONLY: no host port. Reachable solely through the Caddy front door at
+  # /entity-app/* and by api/web at http://entity:8000/. (php/ is legacy reference.)
   entity:
     build: ../sources/entity/app
     restart: unless-stopped
@@ -57,16 +56,13 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"          # stream pipeline progress to docker logs
       ENTITY_USE_BROWSER: "${ENTITY_USE_BROWSER:-0}"  # 1 = enable slow Browserbase register scrapers
-    ports:
-      - "9090:8000"        # local debugging only; internal port is 8000
     volumes:
       - entity_reports:/app/reports   # keep rendered report JSON across restarts
 
-  # Streamlit web UI on http://localhost:8501
+  # Streamlit dashboard — INTERNAL; served via Caddy at "/".
   web:
     build: .
-    ports:
-      - "8501:8501"
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -74,13 +70,13 @@ services:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ENTITY_BASE_URL: http://entity:8000
-      ENTITY_PUBLIC_BASE: ${ENTITY_PUBLIC_BASE:-http://localhost:9090}
+      ENTITY_PUBLIC_BASE: ${ENTITY_PUBLIC_BASE:-/entity-app}   # same-origin path via Caddy
 
+  # FastAPI JSON API — INTERNAL; served via Caddy under /mergr, /entity, /health, /docs.
   api:
     build: .
     command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
-    ports:
-      - "8000:8000"
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -90,6 +86,25 @@ services:
       API_PASS: ${API_PASS:-mergr}
       ENTITY_BASE_URL: http://entity:8000
 
+  # THE single front door. Everything is reached through this one port — the dashboard,
+  # the API, and the entity app (at /entity-app/*). Nothing else is published to the host.
+  # Local: http://localhost:8080 (site ":80"). Prod overlays domain + TLS via docker-compose.prod.yml.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [api, web, entity]
+    environment:
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
+      ACME_EMAIL: "${ACME_EMAIL:-noreply@hyndlandpartners.com}"
+    ports:
+      - "${DE_HTTP_PORT:-8088}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   mergr_pgdata:
   entity_reports:
+  caddy_data:
+  caddy_config:

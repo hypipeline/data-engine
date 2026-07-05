@@ -34,5 +34,13 @@ then Claude (`claude-sonnet-4-6`) reasons over the gathered data into a structur
   North Data) covers US/UK/EU public + registered entities well.
 - **No result caching** — every lookup re-runs (~$0.12, ~70s). Add a cache (Postgres
   `entity.lookups`) to reuse results + unlock a lookup-history view + Mergr enrichment.
-- **Prod cutover:** put `entity.secrets.env` on the box; route `/entity` (API) and the
-  embedded `/live` UI through Caddy; merge branch → main.
+- **Prod cutover (single-port monolith):** the whole app now runs behind ONE Caddy front
+  door (committed `mergr_db/Caddyfile` + `docker-compose.yml`; prod domain/TLS/ports via
+  `docker-compose.prod.yml`). api/web/entity publish no host ports; the entity app is only
+  reachable at `/entity-app/*`. Cutover on the box, in order:
+  1. `rm ~/data-engine/mergr_db/docker-compose.override.yml ~/data-engine/mergr_db/Caddyfile`
+     (the old box-local files — they now conflict with the committed ones; git reset would fail).
+  2. Ensure `~/data-engine/mergr_db/entity.secrets.env` exists (gitignored; ANTHROPIC/OPENAI/
+     BROWSERBASE/CH keys).
+  3. Merge branch → main. The deploy workflow now runs `docker compose -f docker-compose.yml
+     -f docker-compose.prod.yml up` and reloads Caddy. Auth: `admin` / `silver-maple-harbor`.

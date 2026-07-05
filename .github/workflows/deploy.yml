@@ -30,18 +30,26 @@ jobs:
         run: |
           set -euo pipefail
           cd "$HOME/data-engine/mergr_db"
-          docker compose up -d --build
+          # prod overlay adds the public domain + TLS + 80/443 to the single Caddy front door
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+          # Caddyfile is a bind mount — a content change won't recreate the container, so
+          # reload it explicitly (falls back to a restart if the admin API reload fails).
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T caddy \
+            caddy reload --config /etc/caddy/Caddyfile 2>/dev/null \
+            || docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
           docker image prune -f
 
       - name: Health check
         run: |
           set -euo pipefail
+          cd "$HOME/data-engine/mergr_db"
+          # api is internal-only now — check it inside the container network
           for i in $(seq 1 20); do
-            if curl -fs http://localhost:8000/health >/dev/null 2>&1; then
+            if docker compose exec -T api python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=5).status==200 else 1)" 2>/dev/null; then
               echo "API healthy after ${i} attempt(s)"; exit 0
             fi
             sleep 3
           done
           echo "::error::API health check failed after redeploy"
-          cd "$HOME/data-engine/mergr_db" && docker compose logs --tail=40 api
+          docker compose logs --tail=40 api
           exit 1

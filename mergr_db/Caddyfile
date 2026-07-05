@@ -1,0 +1,29 @@
+{
+	email {$ACME_EMAIL:noreply@hyndlandpartners.com}
+}
+
+# Single front door for the whole Data Engine. Site address is ":80" locally and the
+# public domain in prod (docker-compose.prod.yml sets CADDY_SITE_ADDRESS -> auto TLS).
+{$CADDY_SITE_ADDRESS} {
+	# One password gate over everything (dashboard + API + entity UI).
+	basic_auth {
+		admin $2a$14$Rac4VeApTYujOmFS5sXDZutE9XoWR1Z/sTTt2t98y7XA3uCj71RqS
+	}
+
+	# Entity app UI (the streaming /live page) — ONLY reachable here, prefix stripped.
+	# There is no other way in: the entity container publishes no host port.
+	handle_path /entity-app/* {
+		reverse_proxy entity:8000
+	}
+
+	# Data Engine JSON API.
+	@api path /mergr/* /entity/* /health /docs /redoc /openapi.json
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	# Dashboard (Streamlit) — everything else, websockets included.
+	handle {
+		reverse_proxy web:8501
+	}
+}

@@ -1,0 +1,12 @@
+# Production overlay. On the box, deploy with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Adds the public domain + TLS (auto Let's Encrypt) and opens 80/443. Everything else
+# (internal-only api/web/entity, routing, auth) comes from docker-compose.yml + Caddyfile.
+services:
+  caddy:
+    environment:
+      CADDY_SITE_ADDRESS: "dataengine.hyndlandpartners.com"
+      ACME_EMAIL: "craig.anderson@hyndlandpartners.com"
+    ports: !override
+      - "80:80"
+      - "443:443"

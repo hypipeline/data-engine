@@ -559,13 +559,13 @@ async def live(url: str = ""):
 <div id="report"></div>
 <script>
 function go(e){{ if(e) e.preventDefault(); var u=document.getElementById('url').value.trim(); if(!u) return;
-  history.replaceState(null,'', '/live?url='+encodeURIComponent(u)); start(u); }}
+  history.replaceState(null,'', 'live?url='+encodeURIComponent(u)); start(u); }}
 function line(t){{ var l=document.getElementById('log'); var cls=''; if(t.indexOf('[reasoning]')>=0)cls='r'; else if(/^\\s*\\[\\d/.test(t))cls='d';
   l.classList.remove('muted'); l.innerHTML += '<span class="'+cls+'">'+t.replace(/</g,'&lt;')+'</span>\\n'; l.scrollTop=l.scrollHeight; }}
 function start(u){{
   document.getElementById('log').innerHTML=''; document.getElementById('report').innerHTML=''; document.getElementById('meta').innerHTML='';
   line('Starting lookup for '+u+' ...');
-  var es=new EventSource('/lookup/stream?url='+encodeURIComponent(u));
+  var es=new EventSource('lookup/stream?url='+encodeURIComponent(u));
   es.addEventListener('log', function(ev){{ line(JSON.parse(ev.data)); }});
   es.addEventListener('result', function(ev){{ var d=JSON.parse(ev.data); document.getElementById('report').innerHTML=d.html;
     var m=d.meta||{{}}; document.getElementById('meta').innerHTML='pipeline '+(m.pipeline_time_s||'?')+'s · reasoning '+(m.api_time_s||'?')+'s · $'+(m.sonnet_cost_usd||'?');
