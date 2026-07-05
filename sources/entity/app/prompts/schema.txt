@@ -1,0 +1,46 @@
+Schema:
+{
+  "input_url": "string",
+  "date": "YYYY-MM-DD",
+  "report_id": "string",
+  "recommended_entity": {
+    "legal_entity_name": "string",
+    "source": "string",
+    "source_url": "string",
+    "jurisdiction_country": "string (ISO 3166-1 alpha-2, e.g. US, GB, DE)",
+    "jurisdiction_state": "string|null (US state postal code e.g. DE, NY, CA — null for non-US)",
+    "jurisdiction_description": "string (human-readable, e.g. Delaware, United States)",
+    "registry_id": "string|null (exact filing/company number from the registry)",
+    "regulatory_status": "string|null",
+    "address": "string|null",
+    "relationship_to_website_entity": "string|null",
+    "former_names": [{"name":"string","from":"string","to":"string","source":"string","source_url":"string"}]
+  } | null,
+  "website_entity": { same shape } | null,
+  "confidence": "high|medium|low|insufficient",
+  "note": "Plain English summary with caveats",
+  "evidence_forward": [
+    {"step":"string","description":"string","source":"string","source_url":"string|null","quality":"verified|inferred|unavailable"}
+  ],
+  "evidence_reverse": [
+    {"step":"Name Match|Address Match|People Match|Domain in Filings","description":"string","source":"string","source_url":"string|null","quality":"string","strength":"strong|moderate|weak|none"}
+  ],
+  "substance_score": 0-100,
+  "substance_band": "high|medium|low|insufficient",
+  "substance_factors": [
+    {"description":"string","result":"pass|fail|unknown","source_url":"string|null"}
+  ],
+  "corporate_structure": {
+    "legal_entity_name":"string","jurisdiction":"string|null","source_url":"string|null",
+    "is_recommended":true,"role":"string|null",
+    "children":[{ same shape, recursive }]
+  } | null,
+  "key_people": [{"name":"string","role":"string","source_url":"string|null"}],
+  "contractable_affiliates": [
+    {"legal_entity_name":"string","jurisdiction_country":"string|null","jurisdiction_state":"string|null","registry_id":"string|null","role":"string (e.g. 'US operating subsidiary', 'Fund IV vehicle', 'UK regulated entity')","verify_url":"string|null"}
+  ],
+  "other_entities": [
+    {"legal_entity_name":"string","jurisdiction_country":"string|null","jurisdiction_state":"string|null","registry_id":"string|null","why_not_recommended":"string","verify_url":"string|null"}
+  ],
+  "sources_used": [{"name":"string","url":"string|null"}]
+}
