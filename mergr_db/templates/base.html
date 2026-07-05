@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Data Engine{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="dot"></span> Data Engine</a>
+    <nav class="nav">
+      <a href="/"            class="{{ 'active' if active=='overview' }}">Overview</a>
+      <a href="/firms"       class="{{ 'active' if active=='firms' }}">Firms</a>
+      <a href="/companies"   class="{{ 'active' if active=='companies' }}">Companies</a>
+      <a href="/transactions"class="{{ 'active' if active=='transactions' }}">Transactions</a>
+      <a href="/domain"      class="{{ 'active' if active=='domain' }}">Domain</a>
+      <a href="/vector"      class="{{ 'active' if active=='vector' }}">Vector</a>
+      <a href="/settings"    class="{{ 'active' if active=='settings' }}">Settings</a>
+      <span class="sep"></span>
+      <a href="/lookup" class="cta {{ 'active' if active=='lookup' }}">Entity Lookup</a>
+    </nav>
+  </header>
+  <main class="wrap">
+    {% block body %}{% endblock %}
+  </main>
+</body>
+</html>

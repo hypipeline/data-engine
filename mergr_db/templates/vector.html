@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable %}
+{% block title %}Vector search — Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Vector search</h1>
+<p class="sub">Semantic search over company descriptions / firm criteria.</p>
+{% if not enabled %}
+  <p class="notice">Set <code>OPENAI_API_KEY</code> and backfill the embedding columns to enable this.</p>
+{% else %}
+<form class="toolbar" method="get">
+  <div class="field"><label>Describe what you're looking for</label>
+    <input type="text" name="q" value="{{ q }}" style="min-width:340px"></div>
+  <div class="field"><label>Search in</label>
+    <select name="target">
+      <option value="companies" {{ 'selected' if target=='companies' }}>companies</option>
+      <option value="firms" {{ 'selected' if target=='firms' }}>firms</option>
+    </select></div>
+  <button type="submit">Search</button>
+</form>
+{% if rows is not none %}
+  {% if target == 'firms' %}
+    {{ datatable([('firm_id','ID',true,false),('name_h','Firm',false,true),('investor_type','Type',false,false),('score_f','Score',true,false)], rows) }}
+  {% else %}
+    {{ datatable([('company_id','ID',true,false),('name_h','Company',false,true),('sector','Sector',false,false),('city','City',false,false),('score_f','Score',true,false)], rows) }}
+  {% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}

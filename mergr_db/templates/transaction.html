@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable, rawfields %}
+{% block title %}Transaction {{ tid }} — Data Engine{% endblock %}
+{% block body %}
+<div class="crumb"><a href="/transactions">← Transactions</a></div>
+<h1 class="page">🤝 Transaction {{ tid }} <span class="muted" style="font-weight:400;font-size:15px">· {{ raw.get('transaction_type','') }} · {{ raw.get('date','') }}</span></h1>
+<p class="sub">
+  <strong>Target:</strong> {{ tgt_h|safe }}
+  {% if tgt.get('sector') %} · {{ tgt.sector }}{% endif %}
+  {% if tgt.get('location') %} · {{ tgt.location }}{% endif %}
+</p>
+{% if tgt.get('description') %}<div class="prose"><p>{{ tgt.description }}</p></div>{% endif %}
+
+<h2 class="sec">Financials <span class="muted" style="font-weight:400">(values in millions)</span></h2>
+<div class="metrics">
+  <div class="metric"><div class="k">Deal value</div><div class="v">{{ fin.deal_value or '—' }}</div></div>
+  <div class="metric"><div class="k">Revenue</div><div class="v">{{ fin.revenue or '—' }}</div></div>
+  <div class="metric"><div class="k">EBITDA</div><div class="v">{{ fin.ebitda or '—' }}</div></div>
+  <div class="metric"><div class="k">EV / Revenue</div><div class="v">{{ fin.ev_revenue or '—' }}</div></div>
+  <div class="metric"><div class="k">EV / EBITDA</div><div class="v">{{ fin.ev_ebitda or '—' }}</div></div>
+</div>
+{% if not fin.scraped %}<p class="muted">Financials not yet detail-scraped for this deal (or none disclosed).</p>{% endif %}
+
+<h2 class="sec">Parties</h2>
+{{ datatable([('role','Role',false,false),('entity_type','Entity type',false,false),
+  ('name_h','Name',false,true),('sub_type','Sub-type',false,false)], parties) }}
+
+<h2 class="sec">All scraped fields</h2>
+{{ rawfields(scalars, nested) }}
+{% endblock %}

@@ -514,7 +514,9 @@ async def lookup_stream(url: str):
                 if kind == "log":
                     yield f"event: log\ndata: {json.dumps(payload)}\n\n"
                 elif kind == "result":
-                    html = _render_report_card(payload["report"])
+                    from report_schema import _CSS
+                    # ship the card's CSS with it so it styles correctly wherever it's injected
+                    html = f"<style>{_CSS}</style>" + _render_report_card(payload["report"])
                     yield "event: result\ndata: " + json.dumps(
                         {"html": html, "meta": payload["meta"]}) + "\n\n"
                 elif kind == "error":

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable %}
+{% block title %}Transactions — Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Transactions</h1>
+<form class="toolbar" method="get">
+  <div class="field"><label>Type contains</label><input type="text" name="type" value="{{ type }}"></div>
+  <div class="field"><label>Year (YYYY)</label><input type="text" name="year" value="{{ year }}" style="min-width:120px"></div>
+  <label class="check"><input type="checkbox" name="fin" value="1" {{ 'checked' if fin }}> Only deals with financials</label>
+  <button type="submit">Filter</button>
+  {% if type or year or fin %}<a class="btn ghost" href="/transactions">Clear</a>{% endif %}
+</form>
+{% include "_pager.html" %}
+{{ datatable([
+  ('tx_h','ID',true,true),('date','Date',false,false),('transaction_type','Type',false,false),
+  ('target_h','Target',false,true),('deal_value_f','Deal value',true,false),
+  ('ebitda_f','EBITDA',true,false),('ev_ebitda_f','EV/EBITDA',true,false)], rows) }}
+{% include "_pager.html" %}
+{% endblock %}

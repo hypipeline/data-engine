@@ -59,9 +59,10 @@ services:
     volumes:
       - entity_reports:/app/reports   # keep rendered report JSON across restarts
 
-  # Streamlit dashboard — INTERNAL; served via Caddy at "/".
+  # Unified web UI (FastAPI + Jinja2) — INTERNAL; served via Caddy at "/".
   web:
     build: .
+    command: ["uvicorn", "webui:app", "--host", "0.0.0.0", "--port", "8501"]
     restart: unless-stopped
     depends_on:
       db:
@@ -97,7 +98,7 @@ services:
       CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-:80}"
       ACME_EMAIL: "${ACME_EMAIL:-noreply@hyndlandpartners.com}"
     ports:
-      - "${DE_HTTP_PORT:-8088}:80"
+      - "${DE_HTTP_PORT:-8091}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

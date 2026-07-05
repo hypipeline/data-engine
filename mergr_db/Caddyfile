@@ -7,7 +7,7 @@
 {$CADDY_SITE_ADDRESS} {
 	# One password gate over everything (dashboard + API + entity UI).
 	basic_auth {
-		admin $2a$14$Rac4VeApTYujOmFS5sXDZutE9XoWR1Z/sTTt2t98y7XA3uCj71RqS
+		admin $2a$14$EMuvZTGr8fvo/Ii.p28hZOEX.fem0UnPUNLSbzzOVI5TgRgJ2MNVK
 	}
 
 	# Entity app UI (the streaming /live page) — ONLY reachable here, prefix stripped.

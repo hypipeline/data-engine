@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable %}
+{% block title %}Companies — Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Companies</h1>
+<form class="toolbar" method="get">
+  <div class="field"><label>Search by name</label>
+    <input type="search" name="q" value="{{ q }}" placeholder="blank = all, most investors first"></div>
+  <button type="submit">Search</button>
+  {% if q %}<a class="btn ghost" href="/companies">Clear</a>{% endif %}
+</form>
+{% include "_pager.html" %}
+{{ datatable([
+  ('company_id','ID',true,false),('name_h','Company',false,true),('sector','Sector',false,false),
+  ('city','City',false,false),('established','Est.',false,false),('investor_count','Investors',true,false)], rows) }}
+{% include "_pager.html" %}
+{% endblock %}

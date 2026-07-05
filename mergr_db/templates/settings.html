@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Settings — Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Settings — currency conversion rates</h1>
+<p class="sub">USD per 1 unit of each currency — used for the USD-normalised deal highlights.
+Rates currently <strong>as of {{ asof }}</strong>.</p>
+{% if saved %}<p class="notice" style="border-left-color:var(--good)">Saved {{ saved }} rates. USD-normalised highlights updated.</p>{% endif %}
+<form method="post" action="/settings">
+  <div class="toolbar">
+    <div class="field"><label>Set 'as of' date</label><input type="date" name="as_of" value="{{ today }}"></div>
+    <button type="submit">💾 Save rates</button>
+  </div>
+  <div class="tbl-wrap" style="max-width:520px"><table class="tbl">
+    <thead><tr><th>Currency</th><th class="num">USD per unit</th></tr></thead>
+    <tbody>
+    {% for r in rates %}
+      <tr>
+        <td><code>{{ r.currency }}</code></td>
+        <td class="num"><input type="text" name="rate_{{ r.currency }}" value="{{ r.usd_per_unit if r.usd_per_unit is not none else '' }}" style="min-width:120px;text-align:right"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</form>
+{% endblock %}

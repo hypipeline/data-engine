@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable, rawfields, highlights %}
+{% block title %}{{ raw.get('name','Company') }} — Data Engine{% endblock %}
+{% block body %}
+<div class="crumb"><a href="/companies">← Companies</a></div>
+<h1 class="page">🏢 {{ raw.get('name','?') }} <span class="muted" style="font-weight:400;font-size:15px">· company {{ cid }}</span></h1>
+<p class="sub">
+  {% if raw.get('ticker') %}<span class="pill">{{ raw.ticker }}</span> {% endif %}
+  {% if raw.get('stock_exchange') %}{{ raw.stock_exchange }} · {% endif %}
+  {% if raw.get('website') %}<a href="{{ raw.website }}" target="_blank">Website ↗</a>{% endif %}
+</p>
+{% if raw.get('description') %}<div class="prose"><p>{{ raw.description }}</p></div>{% endif %}
+
+<div class="metrics">
+  <div class="metric"><div class="k">Revenue</div><div class="v">{{ revenue_f or '—' }}</div></div>
+  <div class="metric"><div class="k">Employees</div><div class="v">{{ raw.get('employees') or '—' }}</div></div>
+  <div class="metric"><div class="k">Total buys</div><div class="v">{{ raw.get('total_buys') or '—' }}</div></div>
+  <div class="metric"><div class="k">Total sells</div><div class="v">{{ raw.get('total_sells') or '—' }}</div></div>
+  <div class="metric"><div class="k">Investors</div><div class="v">{{ raw.get('investor_count') or '—' }}</div></div>
+</div>
+
+{% if revenue_history %}
+<h2 class="sec">Revenue history <span class="muted" style="font-weight:400">(in {{ scale_ab }} {{ ccy }})</span></h2>
+{{ datatable([('year','Year',false,false),('revenue_f','Revenue',true,false)], revenue_history) }}
+{% endif %}
+
+{{ highlights(hl_buy, 'as buyer') }}
+{{ highlights(hl_sell, 'as vendor') }}
+
+<h2 class="sec">As transaction target</h2>
+{{ datatable([('tx_h','Txn',true,true),('date','Date',false,false),('transaction_type','Type',false,false),
+  ('deal_value_f','Deal value',true,false),('revenue_f','Revenue',true,false),('ebitda_f','EBITDA',true,false),
+  ('ev_ebitda_f','EV/EBITDA',true,false)], target) }}
+
+<h2 class="sec">As acquirer / seller</h2>
+{{ datatable([('tx_h','Txn',true,true),('date','Date',false,false),('role','Role',false,false),
+  ('target_h','Target',false,true),('deal_value_f','Deal value',true,false),('ebitda_f','EBITDA',true,false),
+  ('ev_ebitda_f','EV/EBITDA',true,false)], deals) }}
+
+<h2 class="sec">All scraped fields</h2>
+{{ rawfields(scalars, nested) }}
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import datatable %}
+{% block title %}Domain search — Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Domain search</h1>
+<p class="sub">Find firms <strong>and</strong> companies by domain. Paste a domain or a full website URL — both normalise to the same domain key.</p>
+<form class="toolbar" method="get">
+  <div class="field"><label>Domain or website</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="e.g. harvest.fr  or  https://www.harvest.fr/about" style="min-width:340px"></div>
+  <button type="submit">Search</button>
+</form>
+{% if dom %}
+  <p class="muted">Matching on domain: <code>{{ dom }}</code></p>
+  <h2 class="sec">Firms ({{ firms|length }})</h2>
+  {{ datatable([('firm_id','ID',true,false),('name_h','Firm',false,true),('investor_type','Type',false,false),('website','Website',false,false)], firms) }}
+  <h2 class="sec">Companies ({{ comps|length }})</h2>
+  {{ datatable([('company_id','ID',true,false),('name_h','Company',false,true),('sector','Sector',false,false),('city','City',false,false),('website','Website',false,false)], comps) }}
+  {% if not firms and not comps %}<p class="notice">No firm or company found with domain <code>{{ dom }}</code>.</p>{% endif %}
+{% elif q %}
+  <p class="notice">Couldn't parse a domain from that input.</p>
+{% endif %}
+{% endblock %}

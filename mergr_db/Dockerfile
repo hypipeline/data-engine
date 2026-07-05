@@ -5,7 +5,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
+COPY templates ./templates
+COPY static ./static
 
-# Default command runs the Streamlit UI; the loader/gap services override it.
+# Default command runs the unified web UI; the api/loader/gap services override it.
 EXPOSE 8501
-CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+CMD ["uvicorn", "webui:app", "--host", "0.0.0.0", "--port", "8501"]

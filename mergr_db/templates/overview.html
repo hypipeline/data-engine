@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Data Engine — Overview{% endblock %}
+{% block body %}
+<h1 class="page">Mergr — Relationship Explorer</h1>
+<p class="sub">Private-equity firms, operating companies, and M&amp;A transactions with financials.</p>
+
+<div class="cards">
+  <a class="card" href="/firms"><div class="k">Firms</div><div class="v">{{ "{:,}".format(counts.firms) }}</div><div class="m">browse firms →</div></a>
+  <a class="card" href="/companies"><div class="k">Companies</div><div class="v">{{ "{:,}".format(counts.companies) }}</div><div class="m">browse companies →</div></a>
+  <a class="card" href="/transactions"><div class="k">Transactions</div><div class="v">{{ "{:,}".format(counts.transactions) }}</div><div class="m">browse transactions →</div></a>
+  <a class="card" href="/transactions"><div class="k">Parties</div><div class="v">{{ "{:,}".format(counts.parties) }}</div><div class="m">acquirers &amp; sellers →</div></a>
+</div>
+
+<h2 class="sec">Data completeness (gap analysis)</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <thead><tr><th>Entity type</th><th class="num">Have</th><th class="num">Missing</th></tr></thead>
+  <tbody>
+  {% for g in gap %}<tr><td>{{ g.entity_type }}</td><td class="num">{{ "{:,}".format(g.have) }}</td><td class="num">{{ "{:,}".format(g.missing) }}</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+
+<h2 class="sec">Transactions per year</h2>
+<div class="bars">
+  {% for y in years %}<div class="bar" style="height:{{ y.pct }}%" title="{{ y.year }}: {{ '{:,}'.format(y.n) }}"></div>{% endfor %}
+</div>
+<div class="chart-x"><span>{{ years[0].year if years }}</span><span>{{ years[-1].year if years }}</span></div>
+{% endblock %}

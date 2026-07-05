@@ -1,0 +1,9 @@
+{% if pager.pages > 1 %}
+<div class="pager">
+  <a class="{{ 'disabled' if not pager.prev_qs }}" href="{{ ('?' + pager.prev_qs) if pager.prev_qs else '#' }}">← Prev</a>
+  <span>Page {{ pager.page }} of {{ "{:,}".format(pager.pages) }} · {{ "{:,}".format(pager.start) }}–{{ "{:,}".format(pager.end) }} of {{ "{:,}".format(pager.total) }}</span>
+  <a class="{{ 'disabled' if not pager.next_qs }}" href="{{ ('?' + pager.next_qs) if pager.next_qs else '#' }}">Next →</a>
+</div>
+{% else %}
+<p class="muted">{{ "{:,}".format(pager.total) }} result(s).</p>
+{% endif %}

@@ -1,0 +1,67 @@
+{# cols: list of (key, label, num_bool, safe_bool) #}
+{% macro datatable(cols, rows) %}
+  {% if rows %}
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>{% for c in cols %}<th class="{{ 'num' if c[2] }}">{{ c[1] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}<tr>
+      {% for c in cols %}
+        {% set v = r.get(c[0]) %}
+        <td class="{{ 'num' if c[2] }}">
+          {%- if v is none or v == '' -%}<span class="dash">—</span>
+          {%- elif c[3] -%}{{ v|safe }}
+          {%- else -%}{{ v }}
+          {%- endif -%}
+        </td>
+      {% endfor %}
+    </tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="muted">No rows.</p>{% endif %}
+{% endmacro %}
+
+{# raw scraped fields: scalars table + nested tables #}
+{% macro rawfields(scalars, nested) %}
+  {% if scalars %}
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for s in scalars %}<tr><td class="muted">{{ s.field }}</td><td>{{ s.value if s.value is not none else '' }}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% for k, v in nested.items() %}
+    <h2 class="sec">{{ k }}</h2>
+    {% if v and v[0] is mapping %}
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>{% for col in v[0].keys() %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in v %}<tr>{% for col in v[0].keys() %}<td>{{ row.get(col) if row.get(col) is not none else '' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table></div>
+    {% else %}<pre class="notice">{{ v }}</pre>{% endif %}
+  {% endfor %}
+{% endmacro %}
+
+{# deal highlights block (buyer/vendor) #}
+{% macro highlights(hl, label) %}
+  <h2 class="sec">Deal highlights — {{ label }}</h2>
+  {% if hl.empty %}
+    <p class="muted">No deals with disclosed financials.</p>
+  {% else %}
+    {% if hl.ev %}<p>Highest EV/EBITDA: <strong>{{ hl.ev.mult }}</strong> · {{ hl.ev.deal_h|safe }}</p>{% endif %}
+    {% if hl.dv %}
+      <p class="muted" style="margin:10px 0 4px">Largest deal value, by currency</p>
+      {{ datatable([('ccy','Currency',false,false),('largest','Largest',true,false),('deal_h','Deal',false,true)], hl.dv) }}
+    {% endif %}
+    {% if hl.eb %}
+      <p class="muted" style="margin:10px 0 4px">Largest EBITDA, by currency</p>
+      {{ datatable([('ccy','Currency',false,false),('largest','Largest',true,false),('deal_h','Deal',false,true)], hl.eb) }}
+    {% endif %}
+    {% if hl.udv or hl.ueb %}
+      <p class="muted" style="margin:12px 0 4px">USD-normalised — largest overall (via editable FX rates)</p>
+      <div class="metrics">
+        {% if hl.udv %}<div class="metric"><div class="k">Largest deal (≈USD)</div><div class="v">{{ hl.udv.usd }}</div><div class="k">{{ hl.udv.note }}</div></div>{% endif %}
+        {% if hl.ueb %}<div class="metric"><div class="k">Largest EBITDA (≈USD)</div><div class="v">{{ hl.ueb.usd }}</div><div class="k">{{ hl.ueb.note }}</div></div>{% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+{% endmacro %}
