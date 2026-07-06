@@ -265,7 +265,17 @@ def api_validate(entity_name: str = "", registry_id: str = "", country: str = ""
     status_ok = (registry_status or '').lower() in ('active', 'unknown')
     reg_id_ok = (raw_data or {}).get('registry_id_match') is not False
 
+    # link back out to the actual public register (shown on the validation result page)
+    registry_url = None
+    if source == 'Companies House' and registry_id:
+        registry_url = f"https://find-and-update.company-information.service.gov.uk/company/{registry_id}"
+    elif source == 'NorthData':
+        registry_url = (raw_data or {}).get('url')
+    elif source == 'Bizapedia':
+        registry_url = (raw_data or {}).get('BizapediaUrl') or (raw_data or {}).get('Url')
+
     base = {"registry_name": registry_name, "registry_status": registry_status, "source": source,
+            "registry_url": registry_url,
             "name_match": name_match, "registry_id_match": reg_id_ok,
             "name_normalised": {"input": norm_llm, "registry": norm_reg}, "raw": raw_data,
             "is_branch": is_branch, "is_fictitious": is_fictitious}

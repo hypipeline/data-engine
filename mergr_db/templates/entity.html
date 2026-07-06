@@ -152,9 +152,20 @@ function rvInfo(st){
   return {cls:cls,label:lab};
 }
 function row(label, valueHtml){ return '<div class="report-row"><span class="report-label">'+label+'</span><span class="report-value">'+valueHtml+'</span></div>'; }
-// interlink: the port emits validation_url='/validate.php?...' for US entities;
-// route it to the native Registry Validation tool (opens prefilled + auto-runs).
-function valUrl(u){ return (u && u.indexOf('/validate.php')===0) ? ('/entity/tools/validate'+u.slice(13)) : u; }
+// interlink: a "Registry Verified" badge opens the native Registry Validation tool
+// (prefilled + auto-runs), NOT the external register. US entities already carry a
+// /validate.php?... url from the port; for GB/EU we build the tool link from the
+// entity's own fields (name, registry_id, jurisdiction_country/state).
+function toolHref(o, url){
+  if(url && url.indexOf('/validate.php')===0) return '/entity/tools/validate'+url.slice(13);
+  if(o && o.registry_id && o.jurisdiction_country){
+    return '/entity/tools/validate?entity_name='+encodeURIComponent(o.legal_entity_name||'')
+      +'&registry_id='+encodeURIComponent(o.registry_id)
+      +'&country='+encodeURIComponent(o.jurisdiction_country)
+      +'&state='+encodeURIComponent(o.jurisdiction_state||'');
+  }
+  return url||null;   // last resort: whatever url we had
+}
 function renderReport(rep, meta, url){
   rep = rep||{}; meta = meta||{};
   var ent = rep.recommended_entity; var name = (ent && ent.legal_entity_name) || 'No match found';
@@ -165,9 +176,9 @@ function renderReport(rep, meta, url){
     metaHtml += '<span>'+esc(ent.jurisdiction_description||ent.jurisdiction||'')+'</span>';
     if(ent.registry_id) metaHtml += '<span>'+esc(ent.registry_id)+'</span>';
     var rv = rep.registry_validation;
-    if(rv){ var i=rvInfo(rv.status||''); var ttl=esc(rv.message||'');
-      metaHtml += rv.validation_url
-        ? '<a href="'+esc(valUrl(rv.validation_url))+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
+    if(rv){ var i=rvInfo(rv.status||''); var ttl=esc(rv.message||''); var rvh=toolHref(ent, rv.validation_url);
+      metaHtml += rvh
+        ? '<a href="'+esc(rvh)+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
         : '<span class="badge '+i.cls+'" title="'+ttl+'">'+esc(i.label)+'</span>'; }
     if(rep.validation_warning) metaHtml += '<span class="badge badge-insufficient" title="'+esc(rep.validation_warning)+'">⚠ Validation Failed</span>';
   }
@@ -208,16 +219,17 @@ function renderReport(rep, meta, url){
   if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>';
     ca.forEach(function(a){
       var line = '<div class="evidence-item"><strong>'+esc(a.legal_entity_name||'')+'</strong>';
+      var ah = toolHref(a, a.validation_url);
       if(a.registry_validated){
-        line += a.validation_url
-          ? ' <a href="'+esc(valUrl(a.validation_url))+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
+        line += ah
+          ? ' <a href="'+esc(ah)+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
           : ' <span class="badge badge-high">Registry Verified</span>';
       } else {
         var fl = {inactive:'Inactive in Registry',
                   name_mismatch:'Registry Name Mismatch'+(a.registry_name?' ("'+esc(a.registry_name)+'")':''),
                   not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status||'']||'Validation Failed';
-        line += a.validation_url
-          ? ' <a href="'+esc(valUrl(a.validation_url))+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
+        line += ah
+          ? ' <a href="'+esc(ah)+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
           : ' <span class="badge badge-insufficient">'+fl+'</span>';
       }
       if(a.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(a.jurisdiction_country)+(a.jurisdiction_state?'/'+esc(a.jurisdiction_state):'')+'</span>';

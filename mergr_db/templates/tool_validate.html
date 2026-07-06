@@ -83,7 +83,7 @@ function validate(e){
     q('vbadge').textContent=d.result?'PASS':'FAIL';
     q('vmsg').textContent=d.message||'';
     var det='';
-    if(d.source) det+='<dt>Source</dt><dd>'+esc(d.source)+'</dd>';
+    if(d.source) det+='<dt>Source</dt><dd>'+esc(d.source)+(d.registry_url?' · <a href="'+esc(d.registry_url)+'" target="_blank">View on register →</a>':'')+'</dd>';
     if(d.registry_name) det+='<dt>Registry Name</dt><dd>'+esc(d.registry_name)+'</dd>';
     if(d.registry_status) det+='<dt>Registry Status</dt><dd>'+esc(d.registry_status)+'</dd>';
     if(d.status) det+='<dt>Validation Status</dt><dd>'+esc(d.status)+'</dd>';
