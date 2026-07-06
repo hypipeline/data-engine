@@ -90,9 +90,12 @@ async def lookup_stream(url: str, refresh: bool = False):
             print(f"[cache] read failed: {e}"); cached = None
         if cached:
             async def hit():
-                note = {"time": 0.0, "phase": "done",
-                        "message": f"Loaded from cache (cached {cached.get('cached_at')})", "detail": None}
-                yield f"event: log\ndata: {json.dumps(note)}\n\n"
+                banner = {"time": 0.0, "phase": "phase",
+                          "message": f"↑ Loaded from cache — original run at {cached.get('cached_at')}", "detail": None}
+                yield f"event: log\ndata: {json.dumps(banner)}\n\n"
+                # replay the full stored progress log so the whole original run is visible
+                for entry in (cached.get('progress_log') or []):
+                    yield "event: log\ndata: " + json.dumps(entry, default=str) + "\n\n"
                 yield "event: result\ndata: " + json.dumps(cached, default=str) + "\n\n"
                 yield "event: done\ndata: {}\n\n"
             return StreamingResponse(hit(), media_type="text/event-stream", headers=_SSE_HEADERS)
