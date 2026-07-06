@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Entity Lookup — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* Entity Lookup component styles (ported from the entity app; page-scoped) */
+  .search-form { display:flex; gap:12px; max-width:800px; margin:6px 0 20px; }
+  .search-input { flex:1; padding:12px 16px; font-size:15px; border:2px solid #e0e0e0; border-radius:8px; outline:none; background:#fff; color:#1a1d24; min-width:0; }
+  .search-input:focus { border-color:#4a90d9; }
+  .search-btn { padding:12px 28px; background:#4a90d9; color:#fff; border:none; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; }
+  .search-btn:hover { background:#3a7bc8; }
+  .meta-line { font-size:13px; color:#666; margin:4px 0 14px; min-height:18px; }
+  .report-card { background:#fff; border-radius:12px; border:2px solid #e0e0e0; overflow:hidden; max-width:900px; margin-bottom:20px; }
+  .report-card.conf-high { border-color:#27ae60; } .report-card.conf-medium { border-color:#f39c12; }
+  .report-card.conf-low { border-color:#e67e22; } .report-card.conf-insufficient { border-color:#e74c3c; }
+  .report-header { padding:24px; border-bottom:1px solid #f0f0f0; }
+  .report-entity { font-size:22px; font-weight:700; color:#1a1a2e; }
+  .report-meta { display:flex; gap:16px; margin-top:10px; font-size:13px; color:#666; flex-wrap:wrap; align-items:center; }
+  .report-meta span, .report-meta a { display:inline-flex; align-items:center; gap:4px; }
+  .cost-badge { background:#d4edda; color:#155724; padding:2px 8px; border-radius:4px; font-weight:700; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge-high { background:#d4edda; color:#155724; } .badge-medium { background:#fff3cd; color:#856404; }
+  .badge-low { background:#ffeeba; color:#856404; } .badge-insufficient { background:#f8d7da; color:#721c24; }
+  .badge-neutral { background:#e2e3e5; color:#383d41; }
+  .report-body { padding:24px; }
+  .report-section { margin-bottom:20px; }
+  .report-section h3 { font-size:13px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .report-row { display:flex; padding:4px 0; font-size:14px; }
+  .report-label { width:140px; color:#888; flex-shrink:0; }
+  .report-value { color:#333; }
+  .report-note { font-size:13px; color:#555; line-height:1.6; background:#f8f8fc; padding:12px; border-radius:6px; }
+  .evidence-item { font-size:13px; padding:6px 0; border-bottom:1px solid #f5f5f5; }
+  .evidence-item:last-child { border-bottom:none; }
+  .evidence-step { font-weight:600; }
+  .evidence-link { color:#4a90d9; text-decoration:none; }
+  .report-timing { margin-top:20px; padding-top:16px; border-top:1px solid #eee; font-size:12px; color:#888; line-height:1.7; }
+  .progress-log { margin-top:8px; background:#fff; border-radius:12px; border:1px solid #e0e0e0; overflow:hidden; max-width:900px; }
+  .progress-log-header { padding:14px 20px; font-size:14px; font-weight:600; border-bottom:1px solid #e0e0e0; background:#f8f8fc; }
+  .progress-log-body { padding:0; max-height:640px; overflow-y:auto; }
+  .log-entry { display:flex; gap:10px; padding:6px 20px; border-bottom:1px solid #f5f5f5; font-size:12px; font-family:'SF Mono','Fira Code',monospace; line-height:1.6; }
+  .log-time { color:#888; width:50px; flex-shrink:0; text-align:right; }
+  .log-phase { width:90px; flex-shrink:0; font-weight:600; text-transform:uppercase; font-size:10px; padding-top:2px; }
+  .log-phase-start{color:#4a90d9;} .log-phase-phase{color:#1a1a2e;} .log-phase-fetch{color:#8b5cf6;}
+  .log-phase-extract{color:#d97706;} .log-phase-llm{color:#d97706;} .log-phase-registry{color:#059669;}
+  .log-phase-google{color:#be185d;} .log-phase-ch{color:#059669;} .log-phase-sec{color:#0369a1;}
+  .log-phase-edgar{color:#6d28d9;} .log-phase-delaware{color:#b45309;} .log-phase-bizapedia{color:#0891b2;}
+  .log-phase-northdata{color:#be185d;} .log-phase-crossref{color:#0d9488;} .log-phase-validate{color:#7c3aed;}
+  .log-phase-brightdata{color:#e67e22;} .log-phase-done{color:#27ae60;} .log-phase-warning{color:#dc2626;}
+  .log-json { background:#1e1e2e; color:#a6e3a1; padding:10px 14px; border-radius:6px; font-size:11.5px; line-height:1.5; margin:6px 0 2px; overflow-x:auto; white-space:pre; }
+  .log-msg { color:#333; flex:1; word-break:break-word; white-space:pre-wrap; }
+  .log-phase-header { background:#f0f0f5; padding:8px 20px; font-size:13px; font-weight:700; color:#1a1a2e; border-bottom:1px solid #e0e0e0; border-top:1px solid #e0e0e0; letter-spacing:.3px; }
+  .log-expandable { margin-top:4px; }
+  .log-expandable summary { cursor:pointer; font-size:11px; color:#4a90d9; font-weight:600; }
+  .log-expandable pre { margin-top:4px; padding:10px 12px; background:#1a1a2e; color:#c9d1d9; border-radius:6px; font-size:11px; line-height:1.5; overflow-x:auto; max-height:400px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; }
+  .http-2xx{color:#16a34a;font-weight:700;} .http-3xx{color:#2563eb;font-weight:700;} .http-4xx{color:#dc2626;font-weight:700;}
+  .http-5xx{color:#7c3aed;font-weight:700;} .http-0{color:#991b1b;font-weight:700;} .tag-browserbase{color:#d97706;font-weight:700;}
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid #ddd; border-top-color:#4a90d9; border-radius:50%; animation:sp .7s linear infinite; vertical-align:middle; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+{% endblock %}
+{% block body %}
+<h1 class="page">Entity Lookup</h1>
+<p class="sub">Identify the contracting legal entity from a company website.</p>
+<form class="search-form" onsubmit="return go(event)">
+  <input class="search-input" id="url" type="text" placeholder="https://www.example.com/" value="{{ initial_url }}">
+  <label style="display:flex;align-items:center;gap:6px;color:#666;font-size:13px;white-space:nowrap"><input type="checkbox" id="refresh"> Refresh</label>
+  <button class="search-btn" type="submit">Look Up</button>
+</form>
+<div class="meta-line" id="meta"></div>
+<div id="report"></div>
+<div class="progress-log" id="logwrap" style="display:none">
+  <div class="progress-log-header">Progress Log</div>
+  <div class="progress-log-body" id="elog"></div>
+</div>
+<div id="history" style="margin-top:26px"></div>
+<script>
+var INITIAL_URL = {{ initial_url|tojson }};
+var EBASE = '/entity-app';               // same-origin path -> entity container (via Caddy)
+var DOMAIN_URL = {};                      // domain -> exact looked-up url (from history)
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function colorize(msg){
+  msg = msg || '';
+  msg = msg.replace(/```json\s*([\s\S]*?)```|(\{[\s\S]*\}|\[[\s\S]*\])/g, function(m, a, b){
+    var raw = a || b; try { var d = JSON.parse(raw); return '<pre class="log-json">'+esc(JSON.stringify(d,null,2))+'</pre>'; } catch(e){ return esc(m); }
+  });
+  if (msg.indexOf('<pre class="log-json">') === -1) msg = esc(msg);
+  msg = msg.replace(/HTTP (\d{3})/g, function(m,c){ c=+c; var cls = c>=500?'http-5xx':c>=400?'http-4xx':c>=300?'http-3xx':c>=200?'http-2xx':'http-0'; return '<span class="'+cls+'">HTTP '+c+'</span>'; });
+  msg = msg.replace(/\b(Bright Data|Browserbase|Web Unlocker|Wayback)\b/g, '<span class="tag-browserbase">$1</span>');
+  return msg;
+}
+function renderExpandable(detail){
+  if(!detail || !detail.expandable || !detail.sections) return '';
+  var h = '<div class="log-expandable">';
+  detail.sections.forEach(function(s){
+    var label = esc(s.label||'Details'); var raw = s.content||''; var content;
+    try { content = esc(JSON.stringify(JSON.parse(raw), null, 2)); } catch(e){ content = esc(raw); }
+    h += '<details><summary>'+label+'</summary><pre class="log-json">'+content+'</pre></details>';
+  });
+  return h + '</div>';
+}
+function renderEntry(e){
+  if(e.phase === 'phase') return '<div class="log-phase-header">'+esc(e.message)+'</div>';
+  var t = (Math.round((e.time||0)*10)/10).toFixed(1);
+  var ph = esc(e.phase);
+  return '<div class="log-entry"><span class="log-time">'+t+'s</span>'
+    + '<span class="log-phase log-phase-'+ph+'">'+ph+'</span>'
+    + '<span class="log-msg">'+colorize(e.message)+renderExpandable(e.detail)+'</span></div>';
+}
+function nf(n){ n = Number(n||0); return n.toLocaleString('en-US'); }
+function r1(n){ return (Math.round((Number(n)||0)*10)/10).toFixed(1); }
+function money(n){ return '$'+(Number(n)||0).toFixed(2); }
+function rvInfo(st){
+  var cls = st==='verified'?'badge-high':st==='name_match_bad_status'?'badge-low':'badge-insufficient';
+  var lab = {verified:'Registry Verified',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
+             fictitious_name:'Fictitious Name',branch_registration:'Branch Registration'}[st]||'Not Found in Registry';
+  return {cls:cls,label:lab};
+}
+function row(label, valueHtml){ return '<div class="report-row"><span class="report-label">'+label+'</span><span class="report-value">'+valueHtml+'</span></div>'; }
+function renderReport(rep, meta, url){
+  rep = rep||{}; meta = meta||{};
+  var ent = rep.recommended_entity; var name = (ent && ent.legal_entity_name) || 'No match found';
+  var conf = rep.confidence || 'insufficient';
+  var cost = meta.cost_usd || 0;
+  var metaHtml = '';
+  if(ent){
+    metaHtml += '<span>'+esc(ent.jurisdiction_description||ent.jurisdiction||'')+'</span>';
+    if(ent.registry_id) metaHtml += '<span>'+esc(ent.registry_id)+'</span>';
+    var rv = rep.registry_validation;
+    if(rv){ var i=rvInfo(rv.status||''); var ttl=esc(rv.message||'');
+      metaHtml += rv.validation_url
+        ? '<a href="'+esc(rv.validation_url)+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
+        : '<span class="badge '+i.cls+'" title="'+ttl+'">'+esc(i.label)+'</span>'; }
+    if(rep.validation_warning) metaHtml += '<span class="badge badge-insufficient" title="'+esc(rep.validation_warning)+'">⚠ Validation Failed</span>';
+  }
+  metaHtml += '<span class="cost-badge">'+money(cost)+'</span>';
+  metaHtml += '<span>'+r1(meta.total_time_s)+'s</span>';
+  metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
+  if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
+  metaHtml += '<a href="'+EBASE+'/api/lookup?url='+encodeURIComponent(url||'')+'" target="_blank" class="evidence-link">View API</a>';
+
+  var body = '';
+  if(rep.note) body += '<div class="report-section"><div class="report-note">'+esc(rep.note)+'</div></div>';
+  if(ent){
+    body += '<div class="report-section"><h3>Entity Details</h3>'
+      + row('Name', esc(ent.legal_entity_name))
+      + row('Jurisdiction', esc(ent.jurisdiction_description||ent.jurisdiction||'—'))
+      + row('Registry ID', esc(ent.registry_id||'—')+(ent.jurisdiction_state?' ('+esc(ent.jurisdiction_state)+')':''))
+      + row('Address', esc(ent.address||'—'))
+      + row('Source', '<a href="'+esc(ent.source_url||'#')+'" target="_blank" class="evidence-link">'+esc(ent.source||'—')+'</a>')
+      + '</div>';
+  }
+  var fe = rep.evidence_forward||[];
+  if(fe.length){ var s='<div class="report-section"><h3>Forward Evidence ('+fe.length+')</h3>';
+    fe.forEach(function(ev){ s += '<div class="evidence-item"><span class="evidence-step">'+esc(ev.step||'')+'</span>'
+      + '<span> — '+esc(ev.description||'')+'</span>'
+      + (ev.source_url?' <a href="'+esc(ev.source_url)+'" target="_blank" class="evidence-link">[src]</a>':'')+'</div>'; });
+    body += s+'</div>'; }
+  var re = rep.evidence_reverse||[];
+  if(re.length){ var s='<div class="report-section"><h3>Reverse Validation ('+re.length+')</h3>';
+    re.forEach(function(ev){ var str=ev.strength||'none'; s += '<div class="evidence-item"><span class="evidence-step">'+esc(ev.step||'')+'</span>'
+      + ' <span class="badge badge-'+esc(str)+'">'+esc(ev.strength||'—')+'</span>'
+      + '<span> — '+esc(ev.description||'')+'</span></div>'; });
+    body += s+'</div>'; }
+  var kp = rep.key_people||[];
+  if(kp.length){ var s='<div class="report-section"><h3>Key People ('+kp.length+')</h3>';
+    kp.forEach(function(p){ s += '<div class="evidence-item">'+esc(p.name||'')+' — '+esc(p.role||'')+'</div>'; });
+    body += s+'</div>'; }
+  var ca = rep.contractable_affiliates||[];
+  if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>';
+    ca.forEach(function(a){
+      var line = '<div class="evidence-item"><strong>'+esc(a.legal_entity_name||'')+'</strong>';
+      if(a.registry_validated){
+        line += a.validation_url
+          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
+          : ' <span class="badge badge-high">Registry Verified</span>';
+      } else {
+        var fl = {inactive:'Inactive in Registry',
+                  name_mismatch:'Registry Name Mismatch'+(a.registry_name?' ("'+esc(a.registry_name)+'")':''),
+                  not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status||'']||'Validation Failed';
+        line += a.validation_url
+          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
+          : ' <span class="badge badge-insufficient">'+fl+'</span>';
+      }
+      if(a.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(a.jurisdiction_country)+(a.jurisdiction_state?'/'+esc(a.jurisdiction_state):'')+'</span>';
+      if(a.registry_id) line += ' <span style="color:#666;"> — #'+esc(a.registry_id)+'</span>';
+      if(a.validation_source) line += ' <span style="color:#666;font-size:0.85em;"> ('+esc(a.validation_source)+')</span>';
+      if(a.role) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+esc(a.role)+'</div>';
+      s += line+'</div>';
+    });
+    body += s+'</div>'; }
+  var oe = rep.other_entities||[];
+  if(oe.length){ var s='<div class="report-section"><h3>Other Entities Considered ('+oe.length+')</h3>';
+    oe.forEach(function(o){
+      var line='<div class="evidence-item"><strong>'+esc(o.legal_entity_name||'')+'</strong>';
+      if(o.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(o.jurisdiction_country)+(o.jurisdiction_state?'/'+esc(o.jurisdiction_state):'')+'</span>';
+      if(o.registry_id) line += ' <span style="color:#666;"> — #'+esc(o.registry_id)+'</span>';
+      if(o.why_not_recommended) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+esc(o.why_not_recommended)+'</div>';
+      if(o.verify_url) line += ' <a href="'+esc(o.verify_url)+'" target="_blank" class="evidence-link" style="margin-left:1em;">[verify]</a>';
+      s += line+'</div>';
+    });
+    body += s+'</div>'; }
+  var pt = meta.phase_times||{};
+  var timing = 'Completed in '+r1(meta.total_time_s)+'s (fetch: '+r1(pt.fetch)+'s, extract: '+r1(pt.extraction)
+    + 's, registries: '+r1(pt.registries)+'s, analysis: '+r1(pt.analysis)+'s'
+    + (pt.reanalysis?', reanalysis: '+r1(pt.reanalysis)+'s':'')+')'
+    + ' | Cost: '+money(cost)+' ('+nf(meta.input_tokens)+' input + '+nf(meta.output_tokens)+' output tokens)';
+  var ac = meta.api_calls||{}; var parts=[];
+  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
+  if(parts.length) timing += ' | API calls: '+esc(parts.join(', '));
+  body += '<div class="report-timing">'+timing+'</div>';
+
+  var main = '<div class="report-card conf-'+esc(conf)+'"><div class="report-header">'
+    + '<div class="report-entity">'+esc(name)+' <span class="badge badge-'+esc(conf)+'">'+esc(conf)+'</span></div>'
+    + '<div class="report-meta">'+metaHtml+'</div></div>'
+    + '<div class="report-body">'+body+'</div></div>';
+
+  if(rep.original_report){
+    var orep=rep.original_report; var oent=orep.recommended_entity; var oconf=orep.confidence||'insufficient';
+    var oname=(oent&&oent.legal_entity_name)||'No match found';
+    var ometa='';
+    if(oent){
+      ometa += '<span>'+esc(oent.jurisdiction_description||'')+'</span>';
+      if(oent.registry_id) ometa += '<span>'+esc(oent.registry_id)+'</span>';
+      var orv=orep.registry_validation;
+      if(orv){ var oi=rvInfo(orv.status||''); ometa += '<span class="badge '+oi.cls+'" title="'+esc(orv.message||'')+'">'+esc(oi.label)+'</span>'; }
+    }
+    var obody='';
+    if(orep.note) obody += '<div class="report-section"><div class="report-note">'+esc(orep.note)+'</div></div>';
+    if(oent){ obody += '<div class="report-section"><h3>Entity Details</h3>'
+      + row('Name', esc(oent.legal_entity_name))
+      + row('Registry ID', esc(oent.registry_id||'—')+(oent.jurisdiction_state?' ('+esc(oent.jurisdiction_state)+')':''))
+      + row('Source', esc(oent.source||'—'))
+      + '</div>'; }
+    main += '<div class="report-card conf-'+esc(oconf)+'" style="opacity:0.7;margin-top:16px;"><div class="report-header">'
+      + '<div class="report-entity"><span style="font-size:11px;text-transform:uppercase;color:#999;letter-spacing:1px;">Original Analysis (before re-analysis)</span><br>'
+      + esc(oname)+' <span class="badge badge-'+esc(oconf)+'">'+esc(oconf)+'</span></div>'
+      + '<div class="report-meta">'+ometa+'</div></div>'
+      + '<div class="report-body">'+obody+'</div></div>';
+  }
+  return main;
+}
+
+// --- routing helpers ------------------------------------------------------
+function domainOf(u){
+  u=(u||'').trim(); if(!/^[a-z]+:\/\//i.test(u)) u='http://'+u;
+  try{ return new URL(u).hostname.toLowerCase().replace(/^www\./,''); }
+  catch(e){ return (u||'').toLowerCase().replace(/^[a-z]+:\/\//i,'').replace(/^www\./,'').split('/')[0]; }
+}
+function currentPathDomain(){ var m=location.pathname.match(/^\/entity\/(.+)$/); return m?decodeURIComponent(m[1]).replace(/\/+$/,''):null; }
+
+function runLookup(u, push){
+  u=(u||'').trim(); if(!u) return;
+  document.getElementById('url').value=u;
+  if(push){
+    var dom=domainOf(u), path='/entity/'+encodeURIComponent(dom);
+    if(currentPathDomain()===dom) history.replaceState({url:u},'',path); else history.pushState({url:u},'',path);
+  }
+  document.getElementById('elog').innerHTML=''; document.getElementById('report').innerHTML='';
+  document.getElementById('logwrap').style.display='block';
+  document.getElementById('meta').innerHTML='<span class="spin"></span> researching…';
+  var rf=(document.getElementById('refresh')&&document.getElementById('refresh').checked)?'&refresh=1':'';
+  var es=new EventSource(EBASE+'/lookup/stream?url='+encodeURIComponent(u)+rf);
+  es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('elog'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
+  es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, r.meta||{}, u);
+    var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); });
+  es.addEventListener('error', function(ev){ try{ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Error: '+esc(JSON.parse(ev.data))+'</span>'; }catch(_){ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Stream error</span>'; } es.close(); });
+  es.addEventListener('done', function(){ es.close(); });
+}
+function go(e){ if(e) e.preventDefault(); runLookup(document.getElementById('url').value, true); return false; }
+function openLookup(url){ var rf=document.getElementById('refresh'); if(rf) rf.checked=false; window.scrollTo(0,0); runLookup(url, true); }
+function clearView(){ document.getElementById('url').value=''; document.getElementById('report').innerHTML='';
+  document.getElementById('elog').innerHTML=''; document.getElementById('logwrap').style.display='none'; document.getElementById('meta').innerHTML=''; }
+
+// back/forward: reflect the URL the browser navigated to
+window.addEventListener('popstate', function(){
+  var dom=currentPathDomain();
+  if(dom){ runLookup(DOMAIN_URL[dom]||('https://'+dom), false); } else { clearView(); }
+});
+
+var CONF2={high:['#d4edda','#155724'],medium:['#fff3cd','#856404'],low:['#ffeeba','#856404'],insufficient:['#f8d7da','#721c24']};
+function fmtWhen(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+function loadHistory(){
+  fetch(EBASE+'/history').then(function(r){return r.json();}).then(function(d){
+    var rows=(d&&d.lookups)||[]; var h=document.getElementById('history');
+    rows.forEach(function(x){ if(x.url) DOMAIN_URL[x.domain||domainOf(x.url)]=x.url; });
+    if(!rows.length){ h.innerHTML=''; return; }
+    var out='<div style="font-size:13px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent lookups ('+rows.length+')</div>';
+    out+='<div style="border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;max-width:960px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f8f8fc;color:#888;text-align:left"><th style="padding:8px 14px;font-weight:600">Website</th><th style="padding:8px 14px;font-weight:600">Entity</th><th style="padding:8px 14px;font-weight:600">Conf</th><th style="padding:8px 14px;font-weight:600;text-align:right">Cost</th><th style="padding:8px 14px;font-weight:600;white-space:nowrap">When</th></tr></thead><tbody>';
+    rows.forEach(function(x){
+      var cb=CONF2[x.confidence]||CONF2.insufficient;
+      var badge=x.confidence?'<span style="display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:'+cb[0]+';color:'+cb[1]+'">'+esc(x.confidence)+'</span>':'';
+      var arg=JSON.stringify(x.url).replace(/"/g,'&quot;');
+      out+='<tr style="border-top:1px solid #f0f0f0;cursor:pointer" onmouseover="this.style.background=\'#f6f9ff\'" onmouseout="this.style.background=\'\'" onclick="openLookup('+arg+')">'
+        +'<td style="padding:8px 14px;color:#4a90d9">'+esc(x.domain||x.url)+'</td>'
+        +'<td style="padding:8px 14px">'+esc(x.entity_name||'—')+(x.jurisdiction?' <span style="color:#aaa">· '+esc(x.jurisdiction)+'</span>':'')+'</td>'
+        +'<td style="padding:8px 14px">'+badge+'</td>'
+        +'<td style="padding:8px 14px;text-align:right;color:#888">'+(x.cost_usd!=null?'$'+x.cost_usd:'')+'</td>'
+        +'<td style="padding:8px 14px;color:#888;white-space:nowrap">'+esc(fmtWhen(x.created_at))+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
+    h.innerHTML=out;
+  }).catch(function(){});
+}
+loadHistory();
+if(INITIAL_URL){ runLookup(INITIAL_URL, false); }   // deep-link: URL already correct, don't push
+</script>
+{% endblock %}

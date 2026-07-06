@@ -46,6 +46,9 @@ def query(sql, params=None, one=False):
             cur.execute(sql, params or {})
             rows = [dict(r) for r in cur.fetchall()] if cur.description else []
         conn.commit()
+    except Exception:
+        conn.rollback()            # don't return a poisoned (aborted) conn to the pool
+        raise
     finally:
         POOL.putconn(conn)
     return (rows[0] if rows else None) if one else rows
@@ -57,6 +60,9 @@ def execute(sql, params=None):
         with conn.cursor() as cur:
             cur.execute(sql, params or {})
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         POOL.putconn(conn)
 
@@ -446,8 +452,26 @@ def vector(request: Request, q: str = "", target: str = "companies"):
 
 
 # ---------------------------------------------------------------- entity lookup
+# Native page (no iframe). The streaming UI streams same-origin from the entity
+# container via /entity-app/* (Caddy) and drives real /entity/<domain> URLs.
 @app.get("/entity", response_class=HTMLResponse)
-def lookup(request: Request):
-    return render(request, "lookup.html", "lookup",
-                  entity_up=entity_client.health(),
-                  stream_base=entity_client.ENTITY_PUBLIC_BASE)
+def entity(request: Request):
+    return render(request, "entity.html", "entity", initial_url="")
+
+
+@app.get("/entity/{domain:path}", response_class=HTMLResponse)
+def entity_lookup(request: Request, domain: str):
+    """Deep-link to a past lookup: resolve <domain> -> the exact URL that was looked
+    up (from the shared entity.lookups cache), so it replays instantly on load."""
+    from domain_utils import website_to_domain
+    dom = website_to_domain(domain) or (domain or "").strip().lower().strip("/")
+    initial = ("https://" + dom) if dom else ""      # cold deep-link: run it fresh
+    if dom:
+        try:
+            r = query("SELECT url FROM entity.lookups WHERE domain=%(d)s "
+                      "ORDER BY created_at DESC LIMIT 1", {"d": dom}, one=True)
+            if r and r.get("url"):
+                initial = r["url"]                    # exact URL -> cache hit / replay
+        except Exception:
+            pass                                      # cache table absent -> fall back
+    return render(request, "entity.html", "entity", initial_url=initial)
