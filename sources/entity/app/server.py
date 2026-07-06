@@ -167,6 +167,29 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8">
   .search-btn:hover { background:#3a7bc8; }
   .meta-line { font-size:13px; color:#666; margin:4px 0 14px; min-height:18px; }
   .report-card { background:#fff; border-radius:12px; border:2px solid #e0e0e0; overflow:hidden; max-width:900px; margin-bottom:20px; }
+  .report-card.conf-high { border-color:#27ae60; } .report-card.conf-medium { border-color:#f39c12; }
+  .report-card.conf-low { border-color:#e67e22; } .report-card.conf-insufficient { border-color:#e74c3c; }
+  .report-header { padding:24px; border-bottom:1px solid #f0f0f0; }
+  .report-entity { font-size:22px; font-weight:700; color:#1a1a2e; }
+  .report-meta { display:flex; gap:16px; margin-top:10px; font-size:13px; color:#666; flex-wrap:wrap; align-items:center; }
+  .report-meta span, .report-meta a { display:inline-flex; align-items:center; gap:4px; }
+  .cost-badge { background:#d4edda; color:#155724; padding:2px 8px; border-radius:4px; font-weight:700; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge-high { background:#d4edda; color:#155724; } .badge-medium { background:#fff3cd; color:#856404; }
+  .badge-low { background:#ffeeba; color:#856404; } .badge-insufficient { background:#f8d7da; color:#721c24; }
+  .badge-neutral { background:#e2e3e5; color:#383d41; }
+  .report-body { padding:24px; }
+  .report-section { margin-bottom:20px; }
+  .report-section h3 { font-size:13px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .report-row { display:flex; padding:4px 0; font-size:14px; }
+  .report-label { width:140px; color:#888; flex-shrink:0; }
+  .report-value { color:#333; }
+  .report-note { font-size:13px; color:#555; line-height:1.6; background:#f8f8fc; padding:12px; border-radius:6px; }
+  .evidence-item { font-size:13px; padding:6px 0; border-bottom:1px solid #f5f5f5; }
+  .evidence-item:last-child { border-bottom:none; }
+  .evidence-step { font-weight:600; }
+  .evidence-link { color:#4a90d9; text-decoration:none; }
+  .report-timing { margin-top:20px; padding-top:16px; border-top:1px solid #eee; font-size:12px; color:#888; line-height:1.7; }
   .progress-log { margin-top:8px; background:#fff; border-radius:12px; border:1px solid #e0e0e0; overflow:hidden; max-width:900px; }
   .progress-log-header { padding:14px 20px; font-size:14px; font-weight:600; border-bottom:1px solid #e0e0e0; background:#f8f8fc; }
   .progress-log-body { padding:0; max-height:640px; overflow-y:auto; }
@@ -237,26 +260,152 @@ function renderEntry(e){
     + '<span class="log-phase log-phase-'+ph+'">'+ph+'</span>'
     + '<span class="log-msg">'+colorize(e.message)+renderExpandable(e.detail)+'</span></div>';
 }
-var CONF = {high:'#27ae60',medium:'#f39c12',low:'#e67e22',insufficient:'#e74c3c'};
-var CBG = {high:['#d4edda','#155724'],medium:['#fff3cd','#856404'],low:['#ffeeba','#856404'],insufficient:['#f8d7da','#721c24']};
-function renderReport(rep, url){
-  var ent = rep.recommended_entity; var name = ent && ent.legal_entity_name || 'No match found';
-  var conf = rep.confidence || 'insufficient'; var border = CONF[conf]||CONF.insufficient; var cb = CBG[conf]||CBG.insufficient;
-  var rows='';
-  if(ent){ var f = {'Jurisdiction': ent.jurisdiction_description||ent.jurisdiction||'—',
-    'Registry ID': (ent.registry_id||'—')+(ent.jurisdiction_state?' ('+ent.jurisdiction_state+')':''),
-    'Address': ent.address||'—','Source': ent.source||'—'};
-    for(var k in f) rows += '<div style="display:flex;padding:4px 0;font-size:14px;"><span style="width:140px;color:#888;flex-shrink:0;">'+k+'</span><span style="color:#333;">'+esc(f[k])+'</span></div>'; }
-  var note = rep.note ? '<div style="font-size:13px;color:#555;line-height:1.6;background:#f8f8fc;padding:12px;border-radius:6px;margin-bottom:16px;">'+esc(rep.note)+'</div>' : '';
-  var rv = rep.registry_validation, rvBadge='';
-  if(rv){ var st=rv.status||''; var lab={verified:'Registry Verified',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',fictitious_name:'Fictitious Name',branch_registration:'Branch Registration'}[st]||'Not Found in Registry';
-    var col = st==='verified'?['#d4edda','#155724']:st==='name_match_bad_status'?['#ffeeba','#856404']:['#f8d7da','#721c24'];
-    rvBadge='<span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;background:'+col[0]+';color:'+col[1]+';margin-left:6px;">'+esc(lab)+'</span>'; }
-  return '<div class="report-card" style="border-color:'+border+';"><div style="padding:20px;border-bottom:1px solid #f0f0f0;">'
-    + '<div style="font-size:20px;font-weight:700;color:#1a1a2e;">'+esc(name)
-    + ' <span style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;background:'+cb[0]+';color:'+cb[1]+';">'+esc(conf)+'</span>'+rvBadge+'</div></div>'
-    + '<div style="padding:20px;">'+note+rows+'</div></div>';
+// number_format(n) with thousands separators (PHP number_format($n))
+function nf(n){ n = Number(n||0); return n.toLocaleString('en-US'); }
+function r1(n){ return (Math.round((Number(n)||0)*10)/10).toFixed(1); }
+function money(n){ return '$'+(Number(n)||0).toFixed(2); }
+// registry_validation status -> {cls,label}. Faithful to the PHP match() maps.
+function rvInfo(st){
+  var cls = st==='verified'?'badge-high':st==='name_match_bad_status'?'badge-low':'badge-insufficient';
+  var lab = {verified:'Registry Verified',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
+             fictitious_name:'Fictitious Name',branch_registration:'Branch Registration'}[st]||'Not Found in Registry';
+  return {cls:cls,label:lab};
 }
+// One report-card (used for the main report and the dimmed original-analysis card).
+function renderReport(rep, meta, url){
+  rep = rep||{}; meta = meta||{};
+  var ent = rep.recommended_entity; var name = (ent && ent.legal_entity_name) || 'No match found';
+  var conf = rep.confidence || 'insufficient';
+  var cost = meta.cost_usd || 0;
+
+  // ── header meta line ─────────────────────────────────────────────
+  var metaHtml = '';
+  if(ent){
+    metaHtml += '<span>'+esc(ent.jurisdiction_description||ent.jurisdiction||'')+'</span>';
+    if(ent.registry_id) metaHtml += '<span>'+esc(ent.registry_id)+'</span>';
+    var rv = rep.registry_validation;
+    if(rv){ var i=rvInfo(rv.status||''); var ttl=esc(rv.message||'');
+      metaHtml += rv.validation_url
+        ? '<a href="'+esc(rv.validation_url)+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
+        : '<span class="badge '+i.cls+'" title="'+ttl+'">'+esc(i.label)+'</span>'; }
+    if(rep.validation_warning) metaHtml += '<span class="badge badge-insufficient" title="'+esc(rep.validation_warning)+'">⚠ Validation Failed</span>';
+  }
+  metaHtml += '<span class="cost-badge">'+money(cost)+'</span>';
+  metaHtml += '<span>'+r1(meta.total_time_s)+'s</span>';
+  metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
+  if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
+  metaHtml += '<a href="api/lookup?url='+encodeURIComponent(url||'')+'" target="_blank" class="evidence-link">View API</a>';
+
+  // ── body sections ────────────────────────────────────────────────
+  var body = '';
+  if(rep.note) body += '<div class="report-section"><div class="report-note">'+esc(rep.note)+'</div></div>';
+  if(ent){
+    body += '<div class="report-section"><h3>Entity Details</h3>'
+      + row('Name', esc(ent.legal_entity_name))
+      + row('Jurisdiction', esc(ent.jurisdiction_description||ent.jurisdiction||'—'))
+      + row('Registry ID', esc(ent.registry_id||'—')+(ent.jurisdiction_state?' ('+esc(ent.jurisdiction_state)+')':''))
+      + row('Address', esc(ent.address||'—'))
+      + row('Source', '<a href="'+esc(ent.source_url||'#')+'" target="_blank" class="evidence-link">'+esc(ent.source||'—')+'</a>')
+      + '</div>';
+  }
+  // Forward Evidence
+  var fe = rep.evidence_forward||[];
+  if(fe.length){ var s='<div class="report-section"><h3>Forward Evidence ('+fe.length+')</h3>';
+    fe.forEach(function(ev){ s += '<div class="evidence-item"><span class="evidence-step">'+esc(ev.step||'')+'</span>'
+      + '<span> — '+esc(ev.description||'')+'</span>'
+      + (ev.source_url?' <a href="'+esc(ev.source_url)+'" target="_blank" class="evidence-link">[src]</a>':'')+'</div>'; });
+    body += s+'</div>'; }
+  // Reverse Validation
+  var re = rep.evidence_reverse||[];
+  if(re.length){ var s='<div class="report-section"><h3>Reverse Validation ('+re.length+')</h3>';
+    re.forEach(function(ev){ var str=ev.strength||'none'; s += '<div class="evidence-item"><span class="evidence-step">'+esc(ev.step||'')+'</span>'
+      + ' <span class="badge badge-'+esc(str)+'">'+esc(ev.strength||'—')+'</span>'
+      + '<span> — '+esc(ev.description||'')+'</span></div>'; });
+    body += s+'</div>'; }
+  // Key People
+  var kp = rep.key_people||[];
+  if(kp.length){ var s='<div class="report-section"><h3>Key People ('+kp.length+')</h3>';
+    kp.forEach(function(p){ s += '<div class="evidence-item">'+esc(p.name||'')+' — '+esc(p.role||'')+'</div>'; });
+    body += s+'</div>'; }
+  // Contractable Affiliates
+  var ca = rep.contractable_affiliates||[];
+  if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>';
+    ca.forEach(function(a){
+      var line = '<div class="evidence-item"><strong>'+esc(a.legal_entity_name||'')+'</strong>';
+      if(a.registry_validated){
+        line += a.validation_url
+          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
+          : ' <span class="badge badge-high">Registry Verified</span>';
+      } else {
+        var fl = {inactive:'Inactive in Registry',
+                  name_mismatch:'Registry Name Mismatch'+(a.registry_name?' ("'+esc(a.registry_name)+'")':''),
+                  not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status||'']||'Validation Failed';
+        line += a.validation_url
+          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
+          : ' <span class="badge badge-insufficient">'+fl+'</span>';
+      }
+      if(a.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(a.jurisdiction_country)+(a.jurisdiction_state?'/'+esc(a.jurisdiction_state):'')+'</span>';
+      if(a.registry_id) line += ' <span style="color:#666;"> — #'+esc(a.registry_id)+'</span>';
+      if(a.validation_source) line += ' <span style="color:#666;font-size:0.85em;"> ('+esc(a.validation_source)+')</span>';
+      if(a.role) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+esc(a.role)+'</div>';
+      s += line+'</div>';
+    });
+    body += s+'</div>'; }
+  // Other Entities Considered
+  var oe = rep.other_entities||[];
+  if(oe.length){ var s='<div class="report-section"><h3>Other Entities Considered ('+oe.length+')</h3>';
+    oe.forEach(function(o){
+      var line='<div class="evidence-item"><strong>'+esc(o.legal_entity_name||'')+'</strong>';
+      if(o.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(o.jurisdiction_country)+(o.jurisdiction_state?'/'+esc(o.jurisdiction_state):'')+'</span>';
+      if(o.registry_id) line += ' <span style="color:#666;"> — #'+esc(o.registry_id)+'</span>';
+      if(o.why_not_recommended) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+esc(o.why_not_recommended)+'</div>';
+      if(o.verify_url) line += ' <a href="'+esc(o.verify_url)+'" target="_blank" class="evidence-link" style="margin-left:1em;">[verify]</a>';
+      s += line+'</div>';
+    });
+    body += s+'</div>'; }
+  // Timing / cost / api-calls footer
+  var pt = meta.phase_times||{};
+  var timing = 'Completed in '+r1(meta.total_time_s)+'s (fetch: '+r1(pt.fetch)+'s, extract: '+r1(pt.extraction)
+    + 's, registries: '+r1(pt.registries)+'s, analysis: '+r1(pt.analysis)+'s'
+    + (pt.reanalysis?', reanalysis: '+r1(pt.reanalysis)+'s':'')+')'
+    + ' | Cost: '+money(cost)+' ('+nf(meta.input_tokens)+' input + '+nf(meta.output_tokens)+' output tokens)';
+  var ac = meta.api_calls||{}; var parts=[];
+  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
+  if(parts.length) timing += ' | API calls: '+esc(parts.join(', '));
+  body += '<div class="report-timing">'+timing+'</div>';
+
+  var main = '<div class="report-card conf-'+esc(conf)+'"><div class="report-header">'
+    + '<div class="report-entity">'+esc(name)+' <span class="badge badge-'+esc(conf)+'">'+esc(conf)+'</span></div>'
+    + '<div class="report-meta">'+metaHtml+'</div></div>'
+    + '<div class="report-body">'+body+'</div></div>';
+
+  // ── Original Analysis card (before re-analysis) ──────────────────
+  if(rep.original_report){
+    var orep=rep.original_report; var oent=orep.recommended_entity; var oconf=orep.confidence||'insufficient';
+    var oname=(oent&&oent.legal_entity_name)||'No match found';
+    var ometa='';
+    if(oent){
+      ometa += '<span>'+esc(oent.jurisdiction_description||'')+'</span>';
+      if(oent.registry_id) ometa += '<span>'+esc(oent.registry_id)+'</span>';
+      var orv=orep.registry_validation;
+      if(orv){ var oi=rvInfo(orv.status||''); ometa += '<span class="badge '+oi.cls+'" title="'+esc(orv.message||'')+'">'+esc(oi.label)+'</span>'; }
+    }
+    var obody='';
+    if(orep.note) obody += '<div class="report-section"><div class="report-note">'+esc(orep.note)+'</div></div>';
+    if(oent){ obody += '<div class="report-section"><h3>Entity Details</h3>'
+      + row('Name', esc(oent.legal_entity_name))
+      + row('Registry ID', esc(oent.registry_id||'—')+(oent.jurisdiction_state?' ('+esc(oent.jurisdiction_state)+')':''))
+      + row('Source', esc(oent.source||'—'))
+      + '</div>'; }
+    main += '<div class="report-card conf-'+esc(oconf)+'" style="opacity:0.7;margin-top:16px;"><div class="report-header">'
+      + '<div class="report-entity"><span style="font-size:11px;text-transform:uppercase;color:#999;letter-spacing:1px;">Original Analysis (before re-analysis)</span><br>'
+      + esc(oname)+' <span class="badge badge-'+esc(oconf)+'">'+esc(oconf)+'</span></div>'
+      + '<div class="report-meta">'+ometa+'</div></div>'
+      + '<div class="report-body">'+obody+'</div></div>';
+  }
+  return main;
+}
+function row(label, valueHtml){ return '<div class="report-row"><span class="report-label">'+label+'</span><span class="report-value">'+valueHtml+'</span></div>'; }
 function go(e){
   if(e) e.preventDefault();
   var u=document.getElementById('url').value.trim(); if(!u) return false;
@@ -267,7 +416,7 @@ function go(e){
   var rf=(document.getElementById('refresh')&&document.getElementById('refresh').checked)?'&refresh=1':'';
   var es=new EventSource('lookup/stream?url='+encodeURIComponent(u)+rf);
   es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('log'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
-  es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, u);
+  es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, r.meta||{}, u);
     var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); });
   es.addEventListener('error', function(ev){ try{ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Error: '+esc(JSON.parse(ev.data))+'</span>'; }catch(_){ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Stream error</span>'; } es.close(); });
   es.addEventListener('done', function(){ es.close(); });
