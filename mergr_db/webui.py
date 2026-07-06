@@ -28,6 +28,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Data Engine UI")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(HERE, "templates"))
+# Cache-buster for the stylesheet: mtime of app.css -> ?v=... so browsers always
+# refetch when the CSS changes (otherwise a stale cached app.css hides new styles).
+try:
+    templates.env.globals["asset_ver"] = str(int(os.path.getmtime(
+        os.path.join(HERE, "static", "app.css"))))
+except OSError:
+    templates.env.globals["asset_ver"] = "0"
 PAGE_SIZE = 50
 
 
