@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Company Search — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* Company Search (Bizapedia) — page-scoped, light theme */
+  .back-link { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .back-link:hover { color:var(--text); }
+  .search-form { display:flex; gap:12px; max-width:820px; margin:6px 0 8px; flex-wrap:wrap; align-items:center; }
+  .search-input { flex:1; min-width:260px; padding:11px 14px; font-size:15px; border:1px solid var(--border-2); border-radius:var(--radius-sm); outline:none; background:var(--panel); color:var(--text); }
+  .search-input:focus { border-color:var(--accent); }
+  .state-input { width:120px; padding:11px 14px; font-size:15px; border:1px solid var(--border-2); border-radius:var(--radius-sm); outline:none; background:var(--panel); color:var(--text); text-transform:uppercase; }
+  .state-input:focus { border-color:var(--accent); }
+  .search-btn { padding:11px 26px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; cursor:pointer; }
+  .search-btn:hover { background:var(--accent-2); }
+  .meta-line { font-size:13px; color:var(--muted); margin:8px 0 16px; min-height:18px; }
+  .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:8px 0 18px; max-width:900px; }
+  .empty-box { color:var(--muted); font-size:14px; padding:14px 0; }
+
+  .co-card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px; max-width:900px; }
+  .co-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .co-name { font-size:17px; font-weight:700; color:var(--text); }
+  .co-aka { font-size:12px; color:var(--muted); margin-top:2px; }
+  .co-sub { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:13px; color:var(--muted); align-items:center; }
+  .co-sub .kv b { color:var(--text); font-weight:600; }
+  .file-number { font-family:'SF Mono','Fira Code',monospace; font-size:12.5px; }
+
+  .badge { display:inline-block; padding:2px 9px; border-radius:4px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .badge-active { background:#d4edda; color:#155724; }
+  .badge-inactive { background:#f8d7da; color:#721c24; }
+  .badge-unknown { background:#e2e8f0; color:#475569; }
+
+  .co-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; margin-top:14px; padding-top:14px; border-top:1px solid var(--border); font-size:13px; }
+  .co-grid dt { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:2px; }
+  .co-grid dd { margin:0 0 10px; color:var(--text); line-height:1.5; }
+  .co-grid dd .light { color:var(--muted); }
+
+  .co-actions { margin-top:12px; }
+  .validate-link { display:inline-block; font-size:13px; font-weight:600; color:var(--accent-2); }
+  .validate-link:hover { text-decoration:underline; }
+  @media (max-width:640px){ .co-grid { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+{% block body %}
+<a class="back-link" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Company Search</h1>
+<p class="sub">Search US business entities via the Bizapedia registry. Jump straight to Registry Validation from any hit.</p>
+
+<form class="search-form" onsubmit="return go(event)">
+  <input class="search-input" id="q" type="text" placeholder="Company name…" autocomplete="off">
+  <input class="state-input" id="state" type="text" placeholder="State" maxlength="2" autocomplete="off" title="Optional 2-letter US state (e.g. CA)">
+  <button class="search-btn" type="submit">Search</button>
+</form>
+
+<div class="meta-line" id="meta"></div>
+<div id="results"></div>
+
+<script>
+var EBASE = '/entity-app';   // same-origin path prefix -> entity backend
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function statusClass(status){
+  var s = (status||'').toLowerCase();
+  if(s.indexOf('active') !== -1 && s.indexOf('inactive') === -1) return 'badge-active';
+  if(s.indexOf('dissolved')!==-1 || s.indexOf('inactive')!==-1 || s.indexOf('terminated')!==-1
+     || s.indexOf('revoked')!==-1 || s.indexOf('cancelled')!==-1 || s.indexOf('withdrawn')!==-1) return 'badge-inactive';
+  return 'badge-unknown';
+}
+
+function joinFilter(parts){ return parts.filter(function(x){ return x && String(x).trim(); }).join(', '); }
+
+function addrBlock(line1, line2, city, st, zip){
+  var loc = joinFilter([city, st, zip]);
+  return joinFilter([line1, line2, loc]);
+}
+
+function renderCompany(r){
+  r = r || {};
+  var name = r.EntityName || '(unnamed entity)';
+  var status = r.FilingStatus || 'Unknown';
+  var akas = joinFilter([r.OtherEntityName1, r.OtherEntityName2, r.OtherEntityName3]);
+
+  var principalAddr = addrBlock(r.PrincipalAddressLine1, r.PrincipalAddressLine2,
+    r.PrincipalAddressCity, r.PrincipalAddressState, r.PrincipalAddressPostalCode);
+  var mailingAddr = addrBlock(r.MailingAddressLine1, r.MailingAddressLine2,
+    r.MailingAddressCity, r.MailingAddressState, r.MailingAddressPostalCode);
+  var agentAddr = addrBlock(r.RegisteredAgentAddressLine1, r.RegisteredAgentAddressLine2,
+    r.RegisteredAgentCity, r.RegisteredAgentState, r.RegisteredAgentPostalCode);
+
+  var jur = r.FilingJurisdictionName || r.FilingJurisdictionPostalAbbreviation || '';
+  var domJur = r.DomesticJurisdictionName || r.DomesticJurisdictionPostalAbbreviation || '';
+  var filingDate = (r.FilingDate && r.FilingDate.Date ? String(r.FilingDate.Date).slice(0,10) : '');
+
+  var principals = r.Principals || [];
+
+  // Validate link -> Registry Validation tool, prefilled
+  var vState = r.FilingJurisdictionPostalAbbreviation || r.DomesticJurisdictionPostalAbbreviation || '';
+  var vParams = 'entity_name=' + encodeURIComponent(r.EntityName || '')
+    + '&registry_id=' + encodeURIComponent(r.FileNumber || '')
+    + '&country=US'
+    + '&state=' + encodeURIComponent(vState || '');
+  var validateHref = '/entity/tools/validate?' + vParams;
+
+  var h = '<div class="co-card">';
+  h += '<div class="co-head"><span class="co-name">' + esc(name) + '</span>'
+     + '<span class="badge ' + statusClass(status) + '">' + esc(status) + '</span></div>';
+  if(akas) h += '<div class="co-aka">aka: ' + esc(akas) + '</div>';
+
+  h += '<div class="co-sub">';
+  if(r.EntityType) h += '<span class="kv">' + esc(r.EntityType) + '</span>';
+  if(jur) h += '<span class="kv">Jurisdiction: <b>' + esc(jur) + '</b></span>';
+  if(domJur) h += '<span class="kv">Domestic: <b>' + esc(domJur) + '</b></span>';
+  if(r.FileNumber) h += '<span class="kv">File #: <b class="file-number">' + esc(r.FileNumber) + '</b></span>';
+  if(filingDate) h += '<span class="kv">Filed: <b>' + esc(filingDate) + '</b></span>';
+  h += '</div>';
+
+  var grid = '';
+  if(principalAddr) grid += '<div><dt>Principal Address</dt><dd>' + esc(principalAddr) + '</dd></div>';
+  if(mailingAddr)   grid += '<div><dt>Mailing Address</dt><dd>' + esc(mailingAddr) + '</dd></div>';
+  if(r.RegisteredAgentName || agentAddr){
+    grid += '<div><dt>Registered Agent</dt><dd>' + esc(r.RegisteredAgentName || '—')
+          + (agentAddr ? '<br><span class="light">' + esc(agentAddr) + '</span>' : '') + '</dd></div>';
+  }
+  var contact = joinFilter([r.PrimaryPhone, r.PrimaryEmail, r.PrimaryDomainName]);
+  if(contact) grid += '<div><dt>Contact</dt><dd>' + esc(contact) + '</dd></div>';
+  if(r.BusinessDescription) grid += '<div><dt>Description</dt><dd>' + esc(r.BusinessDescription) + '</dd></div>';
+  if(principals.length){
+    var pl = principals.map(function(p){
+      var t = p.Titles ? ' — ' + esc(p.Titles) : '';
+      return esc(p.PrincipalName || '') + t;
+    }).join('<br>');
+    grid += '<div><dt>Principals / Officers</dt><dd>' + pl + '</dd></div>';
+  }
+  if(grid) h += '<dl class="co-grid">' + grid + '</dl>';
+
+  h += '<div class="co-actions"><a class="validate-link" href="' + esc(validateHref) + '">Validate →</a></div>';
+  h += '</div>';
+  return h;
+}
+
+function render(data){
+  var meta = document.getElementById('meta');
+  var out = document.getElementById('results');
+  data = data || {};
+  if(data.error){
+    meta.textContent = '';
+    out.innerHTML = '<div class="error-box">' + esc(data.error) + '</div>';
+    return;
+  }
+  var results = data.results || [];
+  if(!results.length){
+    meta.textContent = '';
+    out.innerHTML = '<div class="empty-box">No companies found for "' + esc(data.query || '') + '".</div>';
+    return;
+  }
+  var stateNote = data.state ? ' in ' + esc(String(data.state).toUpperCase()) : '';
+  meta.innerHTML = '<b>' + results.length + '</b> result' + (results.length === 1 ? '' : 's')
+    + ' for "' + esc(data.query || '') + '"' + stateNote;
+  out.innerHTML = results.map(renderCompany).join('');
+}
+
+function runSearch(q, state, push){
+  q = (q||'').trim();
+  state = (state||'').trim().toUpperCase();
+  if(!q){ return; }
+  document.getElementById('q').value = q;
+  document.getElementById('state').value = state;
+
+  var params = new URLSearchParams();
+  params.set('q', q);
+  if(state) params.set('state', state);
+  if(push){ history.replaceState(null, '', '?' + params.toString()); }
+
+  document.getElementById('meta').innerHTML = 'Searching…';
+  document.getElementById('results').innerHTML = '';
+
+  fetch(EBASE + '/api/company-search?' + params.toString())
+    .then(function(r){ return r.json(); })
+    .then(render)
+    .catch(function(err){
+      document.getElementById('meta').textContent = '';
+      document.getElementById('results').innerHTML =
+        '<div class="error-box">Request failed: ' + esc(err && err.message ? err.message : err) + '</div>';
+    });
+}
+
+function go(e){
+  if(e) e.preventDefault();
+  runSearch(document.getElementById('q').value, document.getElementById('state').value, true);
+  return false;
+}
+
+// Prefill from ?q= / ?state= and auto-submit
+(function(){
+  var sp = new URLSearchParams(location.search);
+  var q = sp.get('q') || '';
+  var state = sp.get('state') || '';
+  document.getElementById('q').value = q;
+  document.getElementById('state').value = state.toUpperCase();
+  if(q) runSearch(q, state, false);
+  else document.getElementById('q').focus();
+})();
+</script>
+{% endblock %}

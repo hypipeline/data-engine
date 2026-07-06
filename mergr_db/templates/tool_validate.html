@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Registry Validation — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .tool-back { font-size:13px; color:var(--link); display:inline-block; margin-bottom:14px; }
+  .v-form { max-width:620px; }
+  .v-form .fg { margin-bottom:14px; }
+  .v-form label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:5px; }
+  .v-form input, .v-form select { width:100%; padding:9px 11px; border:1px solid var(--border-2); border-radius:7px; font-size:14px; background:#fff; color:var(--text); font-family:inherit; }
+  .v-form input:focus, .v-form select:focus { outline:none; border-color:#4a90d9; box-shadow:0 0 0 2px rgba(74,144,217,.18); }
+  .v-form .row { display:flex; gap:12px; } .v-form .row .fg { flex:1; } .v-form .state { max-width:120px; }
+  .v-btn { padding:10px 24px; background:#4a90d9; color:#fff; border:none; border-radius:7px; font-size:14px; font-weight:600; cursor:pointer; }
+  .v-btn:hover { background:#3a7bc8; } .v-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .v-result { margin-top:20px; padding:16px; border-radius:8px; font-size:14px; max-width:620px; display:none; }
+  .v-result.pass { background:#d4edda; border:1px solid #a3d9a5; } .v-result.fail { background:#f8d7da; border:1px solid #f5c6cb; }
+  .v-result .vbadge { display:inline-block; padding:2px 10px; border-radius:4px; font-weight:700; font-size:13px; margin-bottom:8px; color:#fff; }
+  .v-result.pass .vbadge { background:#28a745; } .v-result.fail .vbadge { background:#dc3545; }
+  .v-msg { margin-bottom:10px; color:#333; }
+  .v-details { font-size:12px; color:#555; } .v-details dt { font-weight:600; margin-top:6px; } .v-details dd { margin:0; }
+  .v-raw-toggle { font-size:12px; color:#4a90d9; cursor:pointer; margin-top:10px; display:inline-block; }
+  .v-raw { display:none; margin-top:8px; background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:300px; overflow:auto; }
+  .v-owners { margin-top:12px; } .v-owners h4 { font-size:12px; text-transform:uppercase; color:#666; margin:0 0 6px; }
+  .v-owner { font-size:13px; padding:6px 0; border-top:1px solid #eab;}
+  .v-owner a { color:#4a90d9; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="tool-back" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Registry Validation</h1>
+<p class="sub">Verify an entity by name + registry ID against the official register (US · Bizapedia, GB · Companies House, EU · NorthData).</p>
+<form class="v-form" id="vform" onsubmit="return validate(event)">
+  <div class="fg"><label>Entity Name</label><input type="text" name="entity_name" id="f_name" placeholder="e.g. APPLE INC."></div>
+  <div class="fg"><label>Registry ID</label><input type="text" name="registry_id" id="f_id" placeholder="e.g. 806592 or HRB 6684" required></div>
+  <div class="row">
+    <div class="fg"><label>Country</label>
+      <select name="country" id="f_country" required>
+        <option value="">Select…</option>
+        <option value="US">US</option>
+        <option value="GB">GB</option>
+        <optgroup label="Europe (NorthData)">
+          <option value="DE">DE</option><option value="NL">NL</option><option value="FR">FR</option>
+          <option value="AT">AT</option><option value="CH">CH</option><option value="BE">BE</option>
+          <option value="LU">LU</option><option value="IT">IT</option><option value="ES">ES</option>
+          <option value="DK">DK</option><option value="SE">SE</option><option value="NO">NO</option>
+          <option value="FI">FI</option><option value="PL">PL</option><option value="CZ">CZ</option><option value="IE">IE</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="fg state"><label>State</label><input type="text" name="state" id="f_state" placeholder="CA" maxlength="2"></div>
+  </div>
+  <button class="v-btn" type="submit">Validate</button>
+</form>
+<div class="v-result" id="vresult">
+  <div class="vbadge" id="vbadge"></div>
+  <div class="v-msg" id="vmsg"></div>
+  <dl class="v-details" id="vdetails"></dl>
+  <div class="v-owners" id="vowners"></div>
+  <span class="v-raw-toggle" onclick="var r=document.getElementById('vraw'); r.style.display=r.style.display==='none'?'block':'none';">Show raw data</span>
+  <div class="v-raw" id="vraw"></div>
+</div>
+<script>
+var EBASE='/entity-app';
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function q(n){ return document.getElementById(n); }
+
+function ownerLink(o){
+  var qs='entity_name='+encodeURIComponent(o.EntityName||'')+'&registry_id='+encodeURIComponent(o.FileNumber||'')
+    +'&country=US&state='+encodeURIComponent(o.FilingJurisdiction||o.DomesticJurisdiction||'');
+  return '/entity/tools/validate?'+qs;
+}
+function validate(e){
+  if(e) e.preventDefault();
+  var name=q('f_name').value.trim(), id=q('f_id').value.trim(), country=q('f_country').value, state=q('f_state').value.trim();
+  if(!id||!country) return false;
+  var params='entity_name='+encodeURIComponent(name)+'&registry_id='+encodeURIComponent(id)+'&country='+encodeURIComponent(country)+'&state='+encodeURIComponent(state);
+  history.replaceState(null,'','?'+params);
+  var btn=q('vform').querySelector('button'); btn.disabled=true; btn.textContent='Validating…';
+  var res=q('vresult'); res.style.display='none';
+  fetch(EBASE+'/api/validate?'+params).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Validate';
+    if(d.error){ res.style.display='block'; res.className='v-result fail'; q('vbadge').textContent='ERROR'; q('vmsg').textContent=d.error; q('vdetails').innerHTML=''; q('vowners').innerHTML=''; q('vraw').textContent=''; return; }
+    res.style.display='block'; res.className='v-result '+(d.result?'pass':'fail');
+    q('vbadge').textContent=d.result?'PASS':'FAIL';
+    q('vmsg').textContent=d.message||'';
+    var det='';
+    if(d.source) det+='<dt>Source</dt><dd>'+esc(d.source)+'</dd>';
+    if(d.registry_name) det+='<dt>Registry Name</dt><dd>'+esc(d.registry_name)+'</dd>';
+    if(d.registry_status) det+='<dt>Registry Status</dt><dd>'+esc(d.registry_status)+'</dd>';
+    if(d.status) det+='<dt>Validation Status</dt><dd>'+esc(d.status)+'</dd>';
+    if('name_match' in d) det+='<dt>Name Match</dt><dd>'+(d.name_match?'✓':'✗')+'</dd>';
+    if('registry_id_match' in d) det+='<dt>Registry ID Match</dt><dd>'+(d.registry_id_match?'✓':'✗')+'</dd>';
+    if(d.name_normalised) det+='<dt>Normalised Input</dt><dd>'+esc(d.name_normalised.input)+'</dd><dt>Normalised Registry</dt><dd>'+esc(d.name_normalised.registry)+'</dd>';
+    q('vdetails').innerHTML=det;
+    // Fictitious-name → owning-entity suggestions (interlinked back into this tool)
+    var ow='';
+    if(d.owner_registry_results && d.owner_registry_results.length){
+      ow='<h4>Owning entity candidates</h4>';
+      d.owner_registry_results.forEach(function(o){
+        ow+='<div class="v-owner"><strong>'+esc(o.EntityName)+'</strong> — #'+esc(o.FileNumber)+' ('+esc(o.FilingJurisdiction||o.DomesticJurisdiction||'')+') '+esc(o.FilingStatus||'')+' · '+esc(o.EntityType||'')
+          +' <a href="'+ownerLink(o)+'">Validate →</a></div>';
+      });
+    }
+    q('vowners').innerHTML=ow;
+    q('vraw').textContent=d.raw?JSON.stringify(d.raw,null,2):'No raw data'; q('vraw').style.display='none';
+  }).catch(function(err){
+    btn.disabled=false; btn.textContent='Validate';
+    res.style.display='block'; res.className='v-result fail'; q('vbadge').textContent='ERROR'; q('vmsg').textContent=String(err); q('vdetails').innerHTML='';
+  });
+  return false;
+}
+// prefill from query (interlink from a report / company search) + auto-submit
+(function(){
+  var p=new URLSearchParams(location.search);
+  if(p.get('entity_name')) q('f_name').value=p.get('entity_name');
+  var id=p.get('registry_id')||p.get('file_number'); if(id) q('f_id').value=id;
+  var c=p.get('country')|| (p.get('state')?'US':''); if(c) q('f_country').value=c;
+  if(p.get('state')) q('f_state').value=p.get('state');
+  if(id) validate(null);
+})();
+</script>
+{% endblock %}

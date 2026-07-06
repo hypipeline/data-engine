@@ -55,23 +55,59 @@
   .http-5xx{color:#7c3aed;font-weight:700;} .http-0{color:#991b1b;font-weight:700;} .tag-browserbase{color:#d97706;font-weight:700;}
   .spin { display:inline-block; width:12px; height:12px; border:2px solid #ddd; border-top-color:#4a90d9; border-radius:50%; animation:sp .7s linear infinite; vertical-align:middle; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  /* two-column layout with tools sidebar */
+  .entity-layout { display:flex; gap:28px; align-items:flex-start; }
+  .entity-main { flex:1; min-width:0; }
+  .entity-side { width:300px; flex-shrink:0; }
+  @media (max-width:900px){ .entity-layout { flex-direction:column; } .entity-side { width:100%; } }
+  .side-block { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; box-shadow:var(--shadow); }
+  .side-h { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:0 0 12px; font-weight:700; }
+  .tool-link { display:flex; gap:11px; align-items:center; padding:9px; border-radius:8px; text-decoration:none; color:var(--text); }
+  .tool-link:hover { background:var(--bg-3); text-decoration:none; }
+  .tool-ic { width:32px; height:32px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex-shrink:0; }
+  .ic-b { background:#4a90d9; } .ic-tm { background:#7c3aed; } .ic-v { background:#27ae60; }
+  .tl-name { display:block; font-size:13.5px; font-weight:600; }
+  .tl-desc { display:block; font-size:11.5px; color:var(--muted); }
+  .side-stats { display:flex; gap:10px; }
+  .side-stat { flex:1; background:var(--bg-2); border-radius:7px; padding:10px; text-align:center; }
+  .ss-v { font-size:17px; font-weight:700; color:var(--text); }
+  .ss-l { font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:.5px; }
 </style>
 {% endblock %}
 {% block body %}
-<h1 class="page">Entity Lookup</h1>
-<p class="sub">Identify the contracting legal entity from a company website.</p>
-<form class="search-form" onsubmit="return go(event)">
-  <input class="search-input" id="url" type="text" placeholder="https://www.example.com/" value="{{ initial_url }}">
-  <label style="display:flex;align-items:center;gap:6px;color:#666;font-size:13px;white-space:nowrap"><input type="checkbox" id="refresh"> Refresh</label>
-  <button class="search-btn" type="submit">Look Up</button>
-</form>
-<div class="meta-line" id="meta"></div>
-<div id="report"></div>
-<div class="progress-log" id="logwrap" style="display:none">
-  <div class="progress-log-header">Progress Log</div>
-  <div class="progress-log-body" id="elog"></div>
+<div class="entity-layout">
+  <div class="entity-main">
+    <h1 class="page">Entity Lookup</h1>
+    <p class="sub">Identify the contracting legal entity from a company website.</p>
+    <form class="search-form" onsubmit="return go(event)">
+      <input class="search-input" id="url" type="text" placeholder="https://www.example.com/" value="{{ initial_url }}">
+      <label style="display:flex;align-items:center;gap:6px;color:#666;font-size:13px;white-space:nowrap"><input type="checkbox" id="refresh"> Refresh</label>
+      <button class="search-btn" type="submit">Look Up</button>
+    </form>
+    <div class="meta-line" id="meta"></div>
+    <div id="report"></div>
+    <div class="progress-log" id="logwrap" style="display:none">
+      <div class="progress-log-header">Progress Log</div>
+      <div class="progress-log-body" id="elog"></div>
+    </div>
+    <div id="history" style="margin-top:26px"></div>
+  </div>
+  <aside class="entity-side">
+    <div class="side-block">
+      <h3 class="side-h">Tools</h3>
+      <a class="tool-link" href="/entity/tools/company"><span class="tool-ic ic-b">B</span><span><span class="tl-name">Company Search</span><span class="tl-desc">US state registries · Bizapedia</span></span></a>
+      <a class="tool-link" href="/entity/tools/trademark"><span class="tool-ic ic-tm">TM</span><span><span class="tl-name">Trademark Search</span><span class="tl-desc">US trademarks by name or owner</span></span></a>
+      <a class="tool-link" href="/entity/tools/validate"><span class="tool-ic ic-v">&#x2713;</span><span><span class="tl-name">Registry Validation</span><span class="tl-desc">Verify entity by name + registry ID</span></span></a>
+    </div>
+    <div class="side-block">
+      <h3 class="side-h">History</h3>
+      <div class="side-stats">
+        <div class="side-stat"><div class="ss-v" id="stat-count">0</div><div class="ss-l">Lookups</div></div>
+        <div class="side-stat"><div class="ss-v" id="stat-cost">$0.00</div><div class="ss-l">Total</div></div>
+      </div>
+    </div>
+  </aside>
 </div>
-<div id="history" style="margin-top:26px"></div>
 <script>
 var INITIAL_URL = {{ initial_url|tojson }};
 var EBASE = '/entity-app';               // same-origin path -> entity container (via Caddy)
@@ -116,6 +152,9 @@ function rvInfo(st){
   return {cls:cls,label:lab};
 }
 function row(label, valueHtml){ return '<div class="report-row"><span class="report-label">'+label+'</span><span class="report-value">'+valueHtml+'</span></div>'; }
+// interlink: the port emits validation_url='/validate.php?...' for US entities;
+// route it to the native Registry Validation tool (opens prefilled + auto-runs).
+function valUrl(u){ return (u && u.indexOf('/validate.php')===0) ? ('/entity/tools/validate'+u.slice(13)) : u; }
 function renderReport(rep, meta, url){
   rep = rep||{}; meta = meta||{};
   var ent = rep.recommended_entity; var name = (ent && ent.legal_entity_name) || 'No match found';
@@ -128,7 +167,7 @@ function renderReport(rep, meta, url){
     var rv = rep.registry_validation;
     if(rv){ var i=rvInfo(rv.status||''); var ttl=esc(rv.message||'');
       metaHtml += rv.validation_url
-        ? '<a href="'+esc(rv.validation_url)+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
+        ? '<a href="'+esc(valUrl(rv.validation_url))+'" target="_blank" class="badge '+i.cls+'" title="'+ttl+'" style="text-decoration:none;">'+esc(i.label)+'</a>'
         : '<span class="badge '+i.cls+'" title="'+ttl+'">'+esc(i.label)+'</span>'; }
     if(rep.validation_warning) metaHtml += '<span class="badge badge-insufficient" title="'+esc(rep.validation_warning)+'">⚠ Validation Failed</span>';
   }
@@ -171,14 +210,14 @@ function renderReport(rep, meta, url){
       var line = '<div class="evidence-item"><strong>'+esc(a.legal_entity_name||'')+'</strong>';
       if(a.registry_validated){
         line += a.validation_url
-          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
+          ? ' <a href="'+esc(valUrl(a.validation_url))+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
           : ' <span class="badge badge-high">Registry Verified</span>';
       } else {
         var fl = {inactive:'Inactive in Registry',
                   name_mismatch:'Registry Name Mismatch'+(a.registry_name?' ("'+esc(a.registry_name)+'")':''),
                   not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status||'']||'Validation Failed';
         line += a.validation_url
-          ? ' <a href="'+esc(a.validation_url)+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
+          ? ' <a href="'+esc(valUrl(a.validation_url))+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
           : ' <span class="badge badge-insufficient">'+fl+'</span>';
       }
       if(a.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(a.jurisdiction_country)+(a.jurisdiction_state?'/'+esc(a.jurisdiction_state):'')+'</span>';
@@ -283,6 +322,9 @@ function loadHistory(){
   fetch(EBASE+'/history').then(function(r){return r.json();}).then(function(d){
     var rows=(d&&d.lookups)||[]; var h=document.getElementById('history');
     rows.forEach(function(x){ if(x.url) DOMAIN_URL[x.domain||domainOf(x.url)]=x.url; });
+    var tot=0; rows.forEach(function(x){ tot+=Number(x.cost_usd||0); });
+    var sc=document.getElementById('stat-count'), sco=document.getElementById('stat-cost');
+    if(sc) sc.textContent=rows.length; if(sco) sco.textContent='$'+tot.toFixed(2);
     if(!rows.length){ h.innerHTML=''; return; }
     var out='<div style="font-size:13px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent lookups ('+rows.length+')</div>';
     out+='<div style="border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;max-width:960px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f8f8fc;color:#888;text-align:left"><th style="padding:8px 14px;font-weight:600">Website</th><th style="padding:8px 14px;font-weight:600">Entity</th><th style="padding:8px 14px;font-weight:600">Conf</th><th style="padding:8px 14px;font-weight:600;text-align:right">Cost</th><th style="padding:8px 14px;font-weight:600;white-space:nowrap">When</th></tr></thead><tbody>';

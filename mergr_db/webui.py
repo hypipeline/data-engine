@@ -459,6 +459,23 @@ def entity(request: Request):
     return render(request, "entity.html", "entity", initial_url="")
 
 
+# Sidebar tools (must precede /entity/{domain} so they aren't swallowed by it).
+# Each is a thin UI over the entity app's /entity-app/api/* endpoints.
+@app.get("/entity/tools/company", response_class=HTMLResponse)
+def tool_company(request: Request):
+    return render(request, "tool_company.html", "entity")
+
+
+@app.get("/entity/tools/trademark", response_class=HTMLResponse)
+def tool_trademark(request: Request):
+    return render(request, "tool_trademark.html", "entity")
+
+
+@app.get("/entity/tools/validate", response_class=HTMLResponse)
+def tool_validate(request: Request):
+    return render(request, "tool_validate.html", "entity")
+
+
 @app.get("/entity/{domain:path}", response_class=HTMLResponse)
 def entity_lookup(request: Request, domain: str):
     """Deep-link to a past lookup: resolve <domain> -> the exact URL that was looked

@@ -20,7 +20,12 @@ from urllib.parse import urlparse
 
 from config import load_config
 from agent import EntityLookup
+from tools import LookupTools
 import cache
+
+# Countries validated via NorthData (faithful to validate.php).
+NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
+                       'SE', 'NO', 'FI', 'PL', 'CZ', 'IE']
 
 app = FastAPI(title="Entity Lookup v3b")
 CONFIG = load_config()
@@ -149,6 +154,160 @@ async def lookup_api(request: Request):
 
     await loop.run_in_executor(None, run)
     return JSONResponse(result_holder.get('r', {}))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Sidebar tools — thin JSON endpoints over existing LookupTools methods.
+# Faithful ports of php/bizapedia.php, php/bizapedia_tm.php, php/validate.php.
+# Reached same-origin at /entity-app/api/* via Caddy.
+# ══════════════════════════════════════════════════════════════════════════
+def _tools() -> LookupTools:
+    return LookupTools(CONFIG)
+
+
+@app.get("/api/company-search")
+def api_company_search(q: str = "", state: str = ""):
+    """Bizapedia US state-registry company search (port of bizapedia.php)."""
+    q = (q or "").strip()
+    if not q:
+        return JSONResponse({"query": q, "state": state, "results": [], "error": None})
+    try:
+        results = _tools().search_bizapedia(q)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"query": q, "state": state, "results": [], "error": str(e)})
+    st = (state or "").strip().upper()
+    if st:
+        results = [r for r in results
+                   if (r.get('FilingJurisdictionPostalAbbreviation') or '').upper() == st
+                   or (r.get('DomesticJurisdictionPostalAbbreviation') or '').upper() == st]
+    return JSONResponse({"query": q, "state": st, "results": results,
+                         "error": None if results else f'No companies found for "{q}".'})
+
+
+@app.get("/api/trademark-search")
+def api_trademark_search(q: str = "", mode: str = "name"):
+    """Bizapedia US trademark search by mark name or owner (port of bizapedia_tm.php)."""
+    q = (q or "").strip()
+    mode = mode if mode in ("name", "owner") else "name"
+    if not q:
+        return JSONResponse({"query": q, "mode": mode, "results": [], "error": None})
+    try:
+        out = _tools().search_trademarks(q, mode)
+    except Exception as e:  # noqa: BLE001
+        out = {"results": [], "error": str(e)}
+    return JSONResponse({"query": q, "mode": mode, **out})
+
+
+@app.get("/api/validate")
+def api_validate(entity_name: str = "", registry_id: str = "", country: str = "", state: str = ""):
+    """Registry validation (port of validate.php Phase-7 logic). name+registry_id+country[+state]."""
+    entity_name = (entity_name or "").strip()
+    registry_id = (registry_id or "").strip()
+    country = (country or "").strip().upper()
+    state = (state or "").strip().upper()
+    if not registry_id or not country:
+        return JSONResponse({"error": "registry_id and country are required"})
+
+    t = _tools()
+    registry_name = registry_status = source = raw_data = None
+    is_branch = is_fictitious = False
+    domestic_state = fictitious_owner = None
+
+    # US → Bizapedia
+    if country == 'US' and state:
+        biz = t.lookup_bizapedia_by_file_number(registry_id, state)
+        if biz:
+            registry_name = biz.get('EntityName')
+            registry_status = biz.get('FilingStatus')
+            source = 'Bizapedia'
+            raw_data = biz
+            entity_type = (biz.get('EntityType') or '').upper()
+            domestic_state = biz.get('DomesticJurisdictionPostalAbbreviation')
+            if 'FOREIGN' in entity_type or 'OUT OF STATE' in entity_type:
+                is_branch = True
+            if 'FICTITIOUS' in entity_type:
+                is_fictitious = True
+                for p in (biz.get('Principals') or []):
+                    if (p.get('Titles') or '').lower() == 'owner' and p.get('PrincipalName'):
+                        fictitious_owner = p['PrincipalName']
+                        break
+
+    # UK → Companies House
+    if country == 'GB' and not registry_name:
+        ch = t.lookup_companies_house_by_number(registry_id)
+        if ch:
+            registry_name = ch.get('company_name')
+            registry_status = ch.get('company_status')
+            source = 'Companies House'
+            raw_data = ch
+
+    # Europe → NorthData
+    if country in NORTHDATA_COUNTRIES and not registry_name:
+        nd = t.validate_northdata_entity(entity_name, registry_id, country)
+        if nd:
+            full = re.sub(r'\s*\([^)]*\)\s*$', '', nd.get('name') or '')
+            parts = [x.strip() for x in full.split(',')]
+            registry_name = ', '.join(parts[:-2]) if len(parts) >= 3 else parts[0]
+            registry_status = nd.get('status') or 'unknown'
+            source = 'NorthData'
+            raw_data = nd
+            if not nd.get('country_match'):
+                registry_name = None
+
+    if not registry_name:
+        return JSONResponse({"result": False, "status": "not_found",
+                             "message": f'Registry ID "{registry_id}" not found in ' + (source or 'registry'),
+                             "source": source, "raw": raw_data})
+
+    norm_llm = re.sub(r'[^A-Z0-9 ]', '', entity_name.upper())
+    norm_reg = re.sub(r'[^A-Z0-9 ]', '', (registry_name or '').upper())
+    name_match = (not entity_name) or norm_llm == norm_reg
+    status_ok = (registry_status or '').lower() in ('active', 'unknown')
+    reg_id_ok = (raw_data or {}).get('registry_id_match') is not False
+
+    base = {"registry_name": registry_name, "registry_status": registry_status, "source": source,
+            "name_match": name_match, "registry_id_match": reg_id_ok,
+            "name_normalised": {"input": norm_llm, "registry": norm_reg}, "raw": raw_data,
+            "is_branch": is_branch, "is_fictitious": is_fictitious}
+    if is_branch:
+        base["domestic_state"] = domestic_state
+    if is_fictitious:
+        base["fictitious_owner"] = fictitious_owner
+
+    if not name_match:
+        return JSONResponse({**base, "result": False, "status": "name_mismatch",
+                             "message": f'Name mismatch: input "{entity_name}" but registry has "{registry_name}"'})
+    if not reg_id_ok:
+        return JSONResponse({**base, "result": False, "status": "registry_id_mismatch",
+                             "message": f'Entity "{registry_name}" found in {source} but registry ID "{registry_id}" not found on page'})
+    if is_fictitious:
+        owner_msg = f" Owner: {fictitious_owner}." if fictitious_owner else ""
+        owner_lookup = None
+        if fictitious_owner and country == 'US' and state:
+            owner_results = t.search_bizapedia(fictitious_owner)
+            if owner_results:
+                owner_lookup = [{
+                    'EntityName': r.get('EntityName') or '',
+                    'FileNumber': r.get('FileNumber') or '',
+                    'FilingStatus': r.get('FilingStatus') or '',
+                    'EntityType': r.get('EntityType') or '',
+                    'FilingJurisdiction': r.get('FilingJurisdictionPostalAbbreviation') or '',
+                    'DomesticJurisdiction': r.get('DomesticJurisdictionPostalAbbreviation') or '',
+                } for r in owner_results if 'FICTITIOUS' not in (r.get('EntityType') or '').upper()]
+        extra = {"result": False, "status": "fictitious_name",
+                 "message": f"This is a fictitious name (trade name) registration, not a legal entity.{owner_msg} Look up the owning entity instead."}
+        if owner_lookup is not None:
+            extra["owner_registry_results"] = owner_lookup
+        return JSONResponse({**base, **extra})
+    if is_branch:
+        return JSONResponse({**base, "result": False, "status": "branch_registration",
+                             "message": f"This is a branch (Foreign) registration in {state}. Home jurisdiction is {domestic_state}. Use the domestic filing instead."})
+    if not status_ok:
+        return JSONResponse({**base, "result": False, "status": "name_match_bad_status",
+                             "message": f'Name and registry ID match but status is "{registry_status}" (not active) in {source}'})
+    return JSONResponse({**base, "result": True, "status": "verified",
+                         "message": f'Verified: "{registry_name}" is {registry_status} in {source}'
+                                    + (" (registry ID confirmed on page)" if source == 'NorthData' else "")})
 
 
 PAGE = r"""<!doctype html><html><head><meta charset="utf-8">

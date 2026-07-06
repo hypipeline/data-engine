@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Trademark Search — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* Trademark Search (Bizapedia) — page-scoped, light theme */
+  .back-link { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .back-link:hover { color:var(--text); }
+  .search-form { display:flex; gap:12px; max-width:820px; margin:6px 0 8px; flex-wrap:wrap; align-items:center; }
+  .search-input { flex:1; min-width:260px; padding:11px 14px; font-size:15px; border:1px solid var(--border-2); border-radius:var(--radius-sm); outline:none; background:var(--panel); color:var(--text); }
+  .search-input:focus { border-color:var(--accent); }
+  .search-btn { padding:11px 26px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; cursor:pointer; }
+  .search-btn:hover { background:var(--accent-2); }
+
+  .mode-toggle { display:flex; border:1px solid var(--border-2); border-radius:var(--radius-sm); overflow:hidden; }
+  .mode-toggle label { padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer; background:var(--panel); color:var(--muted); user-select:none; }
+  .mode-toggle input { display:none; }
+  .mode-toggle input:checked + label { background:var(--accent); color:#fff; }
+
+  .meta-line { font-size:13px; color:var(--muted); margin:8px 0 16px; min-height:18px; }
+  .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:8px 0 18px; max-width:900px; }
+  .empty-box { color:var(--muted); font-size:14px; padding:14px 0; }
+
+  .tm-card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px; max-width:900px; }
+  .tm-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .tm-mark { font-size:17px; font-weight:700; color:var(--text); }
+  .tm-owner { margin-top:6px; font-size:14px; color:var(--text); }
+  .tm-owner .light { color:var(--muted); }
+  .tm-addr { font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .tm-sub { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:13px; color:var(--muted); align-items:center; }
+  .tm-sub .kv b { color:var(--text); font-weight:600; }
+  .serial { font-family:'SF Mono','Fira Code',monospace; font-size:12.5px; }
+
+  .badge { display:inline-block; padding:2px 9px; border-radius:4px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .badge-active { background:#d4edda; color:#155724; }
+  .badge-inactive { background:#f8d7da; color:#721c24; }
+  .badge-unknown { background:#e2e8f0; color:#475569; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="back-link" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Trademark Search</h1>
+<p class="sub">Search US trademarks by mark name or owner via the Bizapedia registry.</p>
+
+<form class="search-form" onsubmit="return go(event)">
+  <input class="search-input" id="q" type="text" placeholder="Search trademarks…" autocomplete="off">
+  <div class="mode-toggle">
+    <input type="radio" name="mode" value="name" id="mode-name" checked>
+    <label for="mode-name">By Mark Name</label>
+    <input type="radio" name="mode" value="owner" id="mode-owner">
+    <label for="mode-owner">By Owner</label>
+  </div>
+  <button class="search-btn" type="submit">Search</button>
+</form>
+
+<div class="meta-line" id="meta"></div>
+<div id="results"></div>
+
+<script>
+var EBASE = '/entity-app';   // same-origin path prefix -> entity backend
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function statusClass(status){
+  var s = (status||'').toLowerCase();
+  if(s.indexOf('registered') !== -1 && s.indexOf('not') === -1) return 'badge-active';
+  if(s.indexOf('abandoned')!==-1 || s.indexOf('cancelled')!==-1 || s.indexOf('dead')!==-1
+     || s.indexOf('expired')!==-1) return 'badge-inactive';
+  return 'badge-unknown';
+}
+
+function joinFilter(parts){ return parts.filter(function(x){ return x && String(x).trim(); }).join(', '); }
+function dateOf(v){ return (v && v.Date) ? String(v.Date).slice(0,10) : ''; }
+
+function getMode(){
+  var el = document.querySelector('input[name="mode"]:checked');
+  return el ? el.value : 'name';
+}
+function setMode(m){
+  var el = document.getElementById(m === 'owner' ? 'mode-owner' : 'mode-name');
+  if(el) el.checked = true;
+}
+
+function renderTrademark(r){
+  r = r || {};
+  var mark = r.MarkIdentification || '(no mark text)';
+  var status = r.StatusDescription || 'Unknown';
+  var ownerAddr = joinFilter([
+    r.OwnerAddressLine1, r.OwnerAddressLine2,
+    joinFilter([r.OwnerAddressCity, r.OwnerAddressState, r.OwnerAddressPostalCode])
+  ]);
+  var filed = dateOf(r.FilingDate);
+  var registered = dateOf(r.RegistrationDate);
+  var ownerState = r.OwnerNationalityStateName || r.OwnerNationalityState || '';
+
+  var h = '<div class="tm-card">';
+  h += '<div class="tm-head"><span class="tm-mark">' + esc(mark) + '</span>'
+     + '<span class="badge ' + statusClass(status) + '">' + esc(status) + '</span></div>';
+
+  if(r.OwnerName || ownerAddr){
+    h += '<div class="tm-owner"><span class="light">Owner:</span> ' + esc(r.OwnerName || '—') + '</div>';
+    if(ownerAddr) h += '<div class="tm-addr">' + esc(ownerAddr) + '</div>';
+  }
+
+  h += '<div class="tm-sub">';
+  if(r.SerialNumber) h += '<span class="kv">Serial #: <b class="serial">' + esc(r.SerialNumber) + '</b></span>';
+  if(r.RegistrationNumber) h += '<span class="kv">Reg #: <b class="serial">' + esc(r.RegistrationNumber) + '</b></span>';
+  if(filed) h += '<span class="kv">Filed: <b>' + esc(filed) + '</b></span>';
+  if(registered) h += '<span class="kv">Registered: <b>' + esc(registered) + '</b></span>';
+  if(ownerState) h += '<span class="kv">State: <b>' + esc(ownerState) + '</b></span>';
+  if(r.OwnerPartyTypeName) h += '<span class="kv">' + esc(r.OwnerPartyTypeName) + '</span>';
+  h += '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+function render(data){
+  var meta = document.getElementById('meta');
+  var out = document.getElementById('results');
+  data = data || {};
+  if(data.error){
+    meta.textContent = '';
+    out.innerHTML = '<div class="error-box">' + esc(data.error) + '</div>';
+    return;
+  }
+  var results = data.results || [];
+  if(!results.length){
+    meta.textContent = '';
+    out.innerHTML = '<div class="empty-box">No trademarks found for "' + esc(data.query || '') + '".</div>';
+    return;
+  }
+  var modeNote = (data.mode === 'owner') ? ' (by owner)' : ' (by mark name)';
+  meta.innerHTML = '<b>' + results.length + '</b> result' + (results.length === 1 ? '' : 's')
+    + ' for "' + esc(data.query || '') + '"' + modeNote;
+  out.innerHTML = results.map(renderTrademark).join('');
+}
+
+function runSearch(q, mode, push){
+  q = (q||'').trim();
+  mode = (mode === 'owner') ? 'owner' : 'name';
+  if(!q){ return; }
+  document.getElementById('q').value = q;
+  setMode(mode);
+
+  var params = new URLSearchParams();
+  params.set('q', q);
+  params.set('mode', mode);
+  if(push){ history.replaceState(null, '', '?' + params.toString()); }
+
+  document.getElementById('meta').innerHTML = 'Searching…';
+  document.getElementById('results').innerHTML = '';
+
+  fetch(EBASE + '/api/trademark-search?' + params.toString())
+    .then(function(r){ return r.json(); })
+    .then(render)
+    .catch(function(err){
+      document.getElementById('meta').textContent = '';
+      document.getElementById('results').innerHTML =
+        '<div class="error-box">Request failed: ' + esc(err && err.message ? err.message : err) + '</div>';
+    });
+}
+
+function go(e){
+  if(e) e.preventDefault();
+  runSearch(document.getElementById('q').value, getMode(), true);
+  return false;
+}
+
+// Prefill from ?q= / ?mode= and auto-submit
+(function(){
+  var sp = new URLSearchParams(location.search);
+  var q = sp.get('q') || '';
+  var mode = sp.get('mode') || 'name';
+  document.getElementById('q').value = q;
+  setMode(mode);
+  if(q) runSearch(q, mode, false);
+  else document.getElementById('q').focus();
+})();
+</script>
+{% endblock %}

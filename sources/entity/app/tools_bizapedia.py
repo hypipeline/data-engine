@@ -193,6 +193,34 @@ class BizapediaMixin:
         self.log.append({'tool': 'bizapedia_tm', 'input': owner_name, 'output': result})
         return result
 
+    def search_trademarks(self, query: str, mode: str = 'name') -> dict:
+        """Bizapedia trademark search by mark name (mode='name') or owner (mode='owner').
+        Faithful to bizapedia_tm.php; returns {'results': [...], 'error': str|None}."""
+        self.api_calls['bizapedia'] += 1
+        params = {'ep': 'LT', 'k': self.BIZAPEDIA_API_KEY}
+        if mode == 'owner':
+            params['tm'] = ''
+            params['tmo'] = query
+        else:
+            params['tm'] = query
+            params['tmo'] = ''
+        try:
+            r = requests.get(BIZAPEDIA_REST_URL, params=params, timeout=30)
+            http_code = r.status_code
+            response = r.text
+        except requests.RequestException:
+            http_code = 0
+            response = None
+        if http_code != 200 or not response:
+            return {'results': [], 'error': f"HTTP {http_code} — no response from Bizapedia API."}
+        data = _json_decode(response)
+        if not data or not data.get('Success'):
+            return {'results': [], 'error': 'API error: ' + ((data.get('ErrorMessage') if data else None) or 'unknown')}
+        results = data.get('Trademarks') or []
+        if not results:
+            return {'results': [], 'error': f'No trademarks found for "{query}".'}
+        return {'results': results, 'error': None}
+
     # ── result ranking/dedup helpers (PHP static methods, ~L3508-3623) ──────
     def bizapedia_type_rank(self, type_str):
         upper = (type_str or '').upper()
