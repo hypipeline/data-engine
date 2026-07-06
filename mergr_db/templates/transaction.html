@@ -2,7 +2,7 @@
 {% from "_macros.html" import datatable, rawfields %}
 {% block title %}Transaction {{ tid }} — Data Engine{% endblock %}
 {% block body %}
-<div class="crumb"><a href="/transactions">← Transactions</a></div>
+<div class="crumb"><a href="/mergr/transactions">← Transactions</a></div>
 <h1 class="page">🤝 Transaction {{ tid }} <span class="muted" style="font-weight:400;font-size:15px">· {{ raw.get('transaction_type','') }} · {{ raw.get('date','') }}</span></h1>
 <p class="sub">
   <strong>Target:</strong> {{ tgt_h|safe }}

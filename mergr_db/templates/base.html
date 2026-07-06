@@ -10,16 +10,24 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/"><span class="dot"></span> Data Engine</a>
+    {% if tool %}
+      <span class="topsep">/</span>
+      <span class="toolname">{{ 'Mergr' if tool=='mergr' else 'Entity Lookup' }}</span>
+    {% endif %}
     <nav class="nav">
-      <a href="/"            class="{{ 'active' if active=='overview' }}">Overview</a>
-      <a href="/firms"       class="{{ 'active' if active=='firms' }}">Firms</a>
-      <a href="/companies"   class="{{ 'active' if active=='companies' }}">Companies</a>
-      <a href="/transactions"class="{{ 'active' if active=='transactions' }}">Transactions</a>
-      <a href="/domain"      class="{{ 'active' if active=='domain' }}">Domain</a>
-      <a href="/vector"      class="{{ 'active' if active=='vector' }}">Vector</a>
-      <a href="/settings"    class="{{ 'active' if active=='settings' }}">Settings</a>
-      <span class="sep"></span>
-      <a href="/lookup" class="cta {{ 'active' if active=='lookup' }}">Entity Lookup</a>
+      {% if tool == 'mergr' %}
+        <a href="/mergr"              class="{{ 'active' if active=='overview' }}">Overview</a>
+        <a href="/mergr/firms"        class="{{ 'active' if active=='firms' }}">Firms</a>
+        <a href="/mergr/companies"    class="{{ 'active' if active=='companies' }}">Companies</a>
+        <a href="/mergr/transactions" class="{{ 'active' if active=='transactions' }}">Transactions</a>
+        <a href="/mergr/domain"       class="{{ 'active' if active=='domain' }}">Domain</a>
+        <a href="/mergr/vector"       class="{{ 'active' if active=='vector' }}">Vector</a>
+        <a href="/mergr/settings"     class="{{ 'active' if active=='settings' }}">Settings</a>
+      {% endif %}
+      <span class="grow"></span>
+      {# tool switcher — jump between the tools of Data Engine #}
+      <a href="/mergr"  class="tool {{ 'on' if tool=='mergr' }}">Mergr</a>
+      <a href="/entity" class="tool {{ 'on' if tool=='entity' }}">Entity Lookup</a>
     </nav>
   </header>
   <main class="wrap">

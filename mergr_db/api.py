@@ -34,7 +34,9 @@ def auth(cred: HTTPBasicCredentials = Depends(security)):
         raise HTTPException(401, "unauthorized", headers={"WWW-Authenticate": "Basic"})
 
 
-app = FastAPI(title="Data Engine API", version="1.0",
+# root_path=/api: the Caddy front door serves this app under /api/* (prefix stripped),
+# so Swagger docs (/api/docs) and /api/openapi.json resolve correctly behind the proxy.
+app = FastAPI(title="Data Engine API", version="1.0", root_path="/api",
               description="Data Engine — multi-source data API. Mergr endpoints are namespaced under /mergr.")
 
 # Mergr data source — all endpoints under /mergr/*, Basic-auth protected at the router level.

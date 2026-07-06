@@ -15,13 +15,15 @@
 		reverse_proxy entity:8000
 	}
 
-	# Data Engine JSON API.
-	@api path /mergr/* /entity/* /health /docs /redoc /openapi.json
-	handle @api {
+	# Data Engine JSON API (+ its Swagger docs) under /api/*, prefix stripped.
+	# The api container runs with root_path=/api so /api/docs + /api/openapi.json resolve.
+	# The human URLs /mergr/* and /entity are owned by the web UI (below).
+	handle_path /api/* {
 		reverse_proxy api:8000
 	}
 
-	# Dashboard (Streamlit) — everything else, websockets included.
+	# Data Engine web UI — the hub (/), the Mergr tool (/mergr/*), and the
+	# Entity Lookup tool (/entity). Everything else, websockets included.
 	handle {
 		reverse_proxy web:8501
 	}

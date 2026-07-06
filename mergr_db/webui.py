@@ -97,14 +97,27 @@ def esc(s):
 
 
 def link(prefix, id_, text):
-    """HTML anchor to an internal detail page; returns plain text if id missing."""
+    """HTML anchor to a Mergr detail page (namespaced under /mergr); plain text if id missing."""
     if id_ is None or text is None or (isinstance(text, float)):
         return esc(text)
-    return f'<a href="{prefix}{int(id_)}">{esc(text)}</a>'
+    return f'<a href="/mergr{prefix}{int(id_)}">{esc(text)}</a>'
+
+
+# Which top-level tool a page belongs to — drives the tool-scoped topbar in base.html.
+_MERGR_ACTIVES = {"overview", "firms", "companies", "transactions", "domain", "vector", "settings"}
+
+
+def _tool_for(active):
+    if active in _MERGR_ACTIVES:
+        return "mergr"
+    if active in {"lookup", "entity"}:
+        return "entity"
+    return None            # hub / home — no tool chrome
 
 
 def render(request, name, active, **ctx):
-    return templates.TemplateResponse(name, {"request": request, "active": active, **ctx})
+    return templates.TemplateResponse(
+        name, {"request": request, "active": active, "tool": _tool_for(active), **ctx})
 
 
 def fmt_deal_rows(rows):
@@ -125,6 +138,16 @@ def health():
 
 
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request):
+    """Data Engine hub — presents the tools (Mergr, Entity Lookup) as peers."""
+    counts = query("SELECT (SELECT count(*) FROM firms) firms, "
+                   "(SELECT count(*) FROM companies) companies, "
+                   "(SELECT count(*) FROM transactions) transactions", one=True)
+    return render(request, "home.html", "home",
+                  counts=counts, entity_up=entity_client.health())
+
+
+@app.get("/mergr", response_class=HTMLResponse)
 def overview(request: Request):
     counts = query("SELECT (SELECT count(*) FROM firms) firms, "
                    "(SELECT count(*) FROM companies) companies, "
@@ -161,7 +184,7 @@ def _pager(total, page, base_qs):
             "next_qs": urlencode({**base_qs, "page": page + 1}) if page < pages else None}
 
 
-@app.get("/firms", response_class=HTMLResponse)
+@app.get("/mergr/firms", response_class=HTMLResponse)
 def firms(request: Request, q: str = ""):
     page = _page(request)
     where, p = ("WHERE name ILIKE %(t)s", {"t": f"%{q}%"}) if q else ("", {})
@@ -177,7 +200,7 @@ def firms(request: Request, q: str = ""):
                   pager=_pager(total, page, {"q": q}))
 
 
-@app.get("/companies", response_class=HTMLResponse)
+@app.get("/mergr/companies", response_class=HTMLResponse)
 def companies(request: Request, q: str = ""):
     page = _page(request)
     where, p = ("WHERE name ILIKE %(t)s", {"t": f"%{q}%"}) if q else ("", {})
@@ -193,7 +216,7 @@ def companies(request: Request, q: str = ""):
                   pager=_pager(total, page, {"q": q}))
 
 
-@app.get("/transactions", response_class=HTMLResponse)
+@app.get("/mergr/transactions", response_class=HTMLResponse)
 def transactions(request: Request, type: str = "", year: str = "", fin: str = ""):
     page = _page(request)
     where, p = [], {}
@@ -262,7 +285,7 @@ def raw_fields(raw, skip=()):
 
 
 # ---------------------------------------------------------------- detail: company
-@app.get("/company/{cid}", response_class=HTMLResponse)
+@app.get("/mergr/company/{cid}", response_class=HTMLResponse)
 def company(request: Request, cid: int):
     rec = query("SELECT raw, revenue_currency, revenue_scale FROM companies WHERE company_id=%(id)s",
                 {"id": cid}, one=True)
@@ -295,7 +318,7 @@ def company(request: Request, cid: int):
 
 
 # ---------------------------------------------------------------- detail: firm
-@app.get("/firm/{fid}", response_class=HTMLResponse)
+@app.get("/mergr/firm/{fid}", response_class=HTMLResponse)
 def firm(request: Request, fid: int):
     rec = query("SELECT raw FROM firms WHERE firm_id=%(id)s", {"id": fid}, one=True)
     if not rec:
@@ -317,7 +340,7 @@ def firm(request: Request, fid: int):
 
 
 # ---------------------------------------------------------------- detail: transaction
-@app.get("/transaction/{tid}", response_class=HTMLResponse)
+@app.get("/mergr/transaction/{tid}", response_class=HTMLResponse)
 def transaction(request: Request, tid: int):
     r = query("""SELECT raw, deal_value, deal_value_currency, revenue, revenue_currency,
                       ebitda, ebitda_currency, ev_revenue, ev_ebitda, financials_scraped_at
@@ -343,7 +366,7 @@ def transaction(request: Request, tid: int):
 
 
 # ---------------------------------------------------------------- domain
-@app.get("/domain", response_class=HTMLResponse)
+@app.get("/mergr/domain", response_class=HTMLResponse)
 def domain(request: Request, q: str = ""):
     from domain_utils import website_to_domain
     dom = website_to_domain(q) if q else ""
@@ -359,7 +382,7 @@ def domain(request: Request, q: str = ""):
 
 
 # ---------------------------------------------------------------- settings (FX)
-@app.get("/settings", response_class=HTMLResponse)
+@app.get("/mergr/settings", response_class=HTMLResponse)
 def settings(request: Request, saved: str = ""):
     rates = query("SELECT currency, usd_per_unit FROM fx_rates ORDER BY currency")
     asof = query("SELECT max(as_of) m FROM fx_rates", one=True)["m"]
@@ -368,7 +391,7 @@ def settings(request: Request, saved: str = ""):
                   today=datetime.date.today().isoformat(), saved=saved)
 
 
-@app.post("/settings")
+@app.post("/mergr/settings")
 async def settings_save(request: Request, as_of: str = Form(...)):
     form = await request.form()
     n = 0
@@ -384,11 +407,11 @@ async def settings_save(request: Request, as_of: str = Form(...)):
             execute("UPDATE fx_rates SET usd_per_unit=%s, as_of=%s, updated_at=now() WHERE currency=%s",
                     (v, as_of, ccy))
             n += 1
-    return RedirectResponse(f"/settings?saved={n}", status_code=303)
+    return RedirectResponse(f"/mergr/settings?saved={n}", status_code=303)
 
 
 # ---------------------------------------------------------------- vector search
-@app.get("/vector", response_class=HTMLResponse)
+@app.get("/mergr/vector", response_class=HTMLResponse)
 def vector(request: Request, q: str = "", target: str = "companies"):
     enabled = bool(os.environ.get("OPENAI_API_KEY"))
     rows = None
@@ -416,7 +439,7 @@ def vector(request: Request, q: str = "", target: str = "companies"):
 
 
 # ---------------------------------------------------------------- entity lookup
-@app.get("/lookup", response_class=HTMLResponse)
+@app.get("/entity", response_class=HTMLResponse)
 def lookup(request: Request):
     return render(request, "lookup.html", "lookup",
                   entity_up=entity_client.health(),

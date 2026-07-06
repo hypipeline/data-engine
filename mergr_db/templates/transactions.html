@@ -8,7 +8,7 @@
   <div class="field"><label>Year (YYYY)</label><input type="text" name="year" value="{{ year }}" style="min-width:120px"></div>
   <label class="check"><input type="checkbox" name="fin" value="1" {{ 'checked' if fin }}> Only deals with financials</label>
   <button type="submit">Filter</button>
-  {% if type or year or fin %}<a class="btn ghost" href="/transactions">Clear</a>{% endif %}
+  {% if type or year or fin %}<a class="btn ghost" href="/mergr/transactions">Clear</a>{% endif %}
 </form>
 {% include "_pager.html" %}
 {{ datatable([

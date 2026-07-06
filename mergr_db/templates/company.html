@@ -2,7 +2,7 @@
 {% from "_macros.html" import datatable, rawfields, highlights %}
 {% block title %}{{ raw.get('name','Company') }} — Data Engine{% endblock %}
 {% block body %}
-<div class="crumb"><a href="/companies">← Companies</a></div>
+<div class="crumb"><a href="/mergr/companies">← Companies</a></div>
 <h1 class="page">🏢 {{ raw.get('name','?') }} <span class="muted" style="font-weight:400;font-size:15px">· company {{ cid }}</span></h1>
 <p class="sub">
   {% if raw.get('ticker') %}<span class="pill">{{ raw.ticker }}</span> {% endif %}

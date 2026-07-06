@@ -7,7 +7,7 @@
   <div class="field"><label>Search by name</label>
     <input type="search" name="q" value="{{ q }}" placeholder="blank = all, most investors first"></div>
   <button type="submit">Search</button>
-  {% if q %}<a class="btn ghost" href="/companies">Clear</a>{% endif %}
+  {% if q %}<a class="btn ghost" href="/mergr/companies">Clear</a>{% endif %}
 </form>
 {% include "_pager.html" %}
 {{ datatable([

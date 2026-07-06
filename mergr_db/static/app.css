@@ -54,8 +54,43 @@ a:hover { text-decoration: underline; }
 .nav a:hover { color: var(--text); background: var(--bg-3); text-decoration: none; }
 .nav a.active { color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .nav .sep { width: 1px; height: 20px; background: var(--border-2); margin: 0 6px; }
+.nav .grow { flex: 1; }
 .nav a.cta { color: var(--accent-ink); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 .nav a.cta:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+/* topbar tool context + switcher */
+.topsep { color: var(--faint); font-weight: 400; }
+.toolname { font-weight: 700; font-size: 14px; color: var(--text); letter-spacing: .2px; }
+.nav a.tool {
+  color: var(--muted); font-weight: 600; font-size: 13px;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border-2);
+}
+.nav a.tool:hover { color: var(--text); background: var(--bg-3); border-color: var(--border-2); }
+.nav a.tool.on {
+  color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---- hub: tool cards ---- */
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 8px; }
+.tool-card {
+  display: flex; flex-direction: column; gap: 12px; min-height: 200px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 22px 24px; text-decoration: none; color: inherit; transition: border-color .12s, background .12s;
+}
+.tool-card:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--border-2)); background: var(--bg-3); text-decoration: none; }
+.tool-card-h { display: flex; align-items: baseline; gap: 12px; }
+.tool-card-title { font-size: 21px; font-weight: 750; letter-spacing: -.2px; color: var(--text); }
+.tool-card-tag {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); background: var(--bg-3); border: 1px solid var(--border-2);
+  padding: 2px 8px; border-radius: 999px;
+}
+.tool-card-tag.ok { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.tool-card-tag.down { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.tool-card-desc { color: var(--muted); margin: 0; line-height: 1.55; }
+.tool-card-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: auto; color: var(--muted); font-size: 13px; }
+.tool-card-stats b { color: var(--text); font-weight: 700; }
+.tool-card-cta { color: var(--accent-2); font-weight: 600; font-size: 13.5px; }
 
 /* ---- layout ---- */
 .wrap { max-width: 1240px; margin: 0 auto; padding: 26px 22px 80px; }
