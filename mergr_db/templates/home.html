@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Data Engine{% endblock %}
+{% block body %}
+<h1 class="page">Data Engine</h1>
+<p class="sub">A multi-tool data platform. Choose a tool to get started.</p>
+
+<div class="tool-grid">
+  <a class="tool-card" href="/mergr">
+    <div class="tool-card-h">
+      <span class="tool-card-title">Mergr</span>
+      <span class="tool-card-tag">M&amp;A intelligence</span>
+    </div>
+    <p class="tool-card-desc">Private-equity firms, operating companies, and M&amp;A transactions
+       with financials, relationships, and vector search.</p>
+    <div class="tool-card-stats">
+      <span><b>{{ "{:,}".format(counts.firms) }}</b> firms</span>
+      <span><b>{{ "{:,}".format(counts.companies) }}</b> companies</span>
+      <span><b>{{ "{:,}".format(counts.transactions) }}</b> transactions</span>
+    </div>
+    <span class="tool-card-cta">Open Mergr →</span>
+  </a>
+
+  <a class="tool-card" href="/entity">
+    <div class="tool-card-h">
+      <span class="tool-card-title">Entity Lookup</span>
+      <span class="tool-card-tag">Entity resolution</span>
+      {% if not entity_up %}<span class="tool-card-tag down">offline</span>{% endif %}
+    </div>
+    <p class="tool-card-desc">Resolve a company website to its optimal legal contracting entity
+       (TopCo where verifiable), scored and proven with a bidirectional registry evidence chain.</p>
+    <div class="tool-card-stats">
+      <span>Website&nbsp;→&nbsp;<b>legal entity</b></span>
+      <span>evidence chain + confidence</span>
+    </div>
+    <span class="tool-card-cta">Open Entity Lookup →</span>
+  </a>
+</div>
+{% endblock %}

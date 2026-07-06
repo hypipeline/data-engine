@@ -58,3 +58,6 @@ sources/entity/app/__pycache__/
 mergr_explore.py
 mergr_test_*.py
 mergr_*.json
+
+# web UI Jinja templates are source, not scraped HTML — keep despite the global *.html rule
+!mergr_db/templates/*.html
