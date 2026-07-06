@@ -51,13 +51,14 @@ services:
   entity:
     build: ../sources/entity/app
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - entity.secrets.env   # ANTHROPIC/OPENAI/BROWSERBASE/CH keys (gitignored)
     environment:
       PYTHONUNBUFFERED: "1"          # stream pipeline progress to docker logs
-      ENTITY_USE_BROWSER: "${ENTITY_USE_BROWSER:-0}"  # 1 = enable slow Browserbase register scrapers
-    volumes:
-      - entity_reports:/app/reports   # keep rendered report JSON across restarts
+      DATABASE_URL: postgres://mergr:mergr@db:5432/mergr   # result cache (entity.lookups)
 
   # Unified web UI (FastAPI + Jinja2) — INTERNAL; served via Caddy at "/".
   web:

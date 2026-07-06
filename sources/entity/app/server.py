@@ -15,11 +15,27 @@ import threading
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
+import re
+from urllib.parse import urlparse
+
 from config import load_config
 from agent import EntityLookup
+import cache
 
 app = FastAPI(title="Entity Lookup v3b")
 CONFIG = load_config()
+
+
+@app.on_event("startup")
+def _startup():
+    try:
+        cache.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[cache] schema init skipped: {e}")
+
+
+def _domain(url: str) -> str:
+    return re.sub(r'^www\.', '', (urlparse(url).hostname or ''))
 
 
 def _run_lookup(url: str, q: "queue.Queue"):
@@ -28,6 +44,10 @@ def _run_lookup(url: str, q: "queue.Queue"):
     try:
         agent = EntityLookup(CONFIG, progress_callback=progress)
         result = agent.run(url)
+        try:
+            cache.save(url, _domain(url), CONFIG.get('model'), result)
+        except Exception as e:  # noqa: BLE001
+            print(f"[cache] save failed: {e}")
         q.put(("result", result))
     except Exception as e:  # noqa: BLE001
         import traceback
@@ -41,8 +61,26 @@ def health():
     return {"ok": True}
 
 
+_SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
 @app.get("/lookup/stream")
-async def lookup_stream(url: str):
+async def lookup_stream(url: str, refresh: bool = False):
+    # instant-on-hit: return the most recent cached result unless refresh=1
+    if not refresh:
+        try:
+            cached = cache.get_latest(url, CONFIG.get('model'))
+        except Exception as e:  # noqa: BLE001
+            print(f"[cache] read failed: {e}"); cached = None
+        if cached:
+            async def hit():
+                note = {"time": 0.0, "phase": "done",
+                        "message": f"Loaded from cache (cached {cached.get('cached_at')})", "detail": None}
+                yield f"event: log\ndata: {json.dumps(note)}\n\n"
+                yield "event: result\ndata: " + json.dumps(cached, default=str) + "\n\n"
+                yield "event: done\ndata: {}\n\n"
+            return StreamingResponse(hit(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
     q: "queue.Queue" = queue.Queue()
     threading.Thread(target=_run_lookup, args=(url, q), daemon=True).start()
 
@@ -68,15 +106,27 @@ async def lookup_stream(url: str):
 async def lookup_api(request: Request):
     body = await request.json()
     url = body.get("url", "")
+    refresh = bool(body.get("refresh"))
     if not url:
         return JSONResponse({"error": "url is required"}, status_code=400)
-    q: "queue.Queue" = queue.Queue()
+    if not refresh:
+        try:
+            cached = cache.get_latest(url, CONFIG.get('model'))
+        except Exception:  # noqa: BLE001
+            cached = None
+        if cached:
+            return JSONResponse(cached)
     loop = asyncio.get_event_loop()
     result_holder = {}
 
     def run():
         agent = EntityLookup(CONFIG, progress_callback=None)
-        result_holder['r'] = agent.run(url)
+        r = agent.run(url)
+        try:
+            cache.save(url, _domain(url), CONFIG.get('model'), r)
+        except Exception as e:  # noqa: BLE001
+            print(f"[cache] save failed: {e}")
+        result_holder['r'] = r
 
     await loop.run_in_executor(None, run)
     return JSONResponse(result_holder.get('r', {}))
@@ -125,6 +175,7 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8">
 <div class="content">
   <form class="search-form" onsubmit="return go(event)">
     <input class="search-input" id="url" type="text" placeholder="https://www.example.com/" value="__URL__">
+    <label style="display:flex;align-items:center;gap:6px;color:#666;font-size:13px;white-space:nowrap"><input type="checkbox" id="refresh"> Refresh</label>
     <button class="search-btn" type="submit">Look Up</button>
   </form>
   <div class="meta-line" id="meta"></div>
@@ -193,7 +244,8 @@ function go(e){
   document.getElementById('log').innerHTML=''; document.getElementById('report').innerHTML='';
   document.getElementById('logwrap').style.display='block';
   document.getElementById('meta').innerHTML='<span class="spin"></span> researching…';
-  var es=new EventSource('lookup/stream?url='+encodeURIComponent(u));
+  var rf=(document.getElementById('refresh')&&document.getElementById('refresh').checked)?'&refresh=1':'';
+  var es=new EventSource('lookup/stream?url='+encodeURIComponent(u)+rf);
   es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('log'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
   es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, u);
     var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); });
