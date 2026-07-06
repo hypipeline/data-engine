@@ -155,10 +155,10 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Entity Lookup</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f7; color:#333; }
-  .header { background:#1a1a2e; color:#fff; padding:20px 28px; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#ffffff; color:#333; }
+  .header { background:#ffffff; color:#1a1a2e; padding:20px 28px; border-bottom:1px solid #e4e7ec; }
   .header h1 { font-size:20px; font-weight:600; }
-  .header p { font-size:13px; color:#8a8aaf; margin-top:4px; }
+  .header p { font-size:13px; color:#5c6675; margin-top:4px; }
   .content { padding:24px 28px; }
   .search-form { display:flex; gap:12px; max-width:800px; margin-bottom:20px; }
   .search-input { flex:1; padding:12px 16px; font-size:15px; border:2px solid #e0e0e0; border-radius:8px; outline:none; }
