@@ -53,3 +53,8 @@ mergr_scraper_rust/
 # entity Python app runtime output
 sources/entity/app/reports/
 sources/entity/app/__pycache__/
+
+# ad-hoc mergr scraper scratch (not part of the app)
+mergr_explore.py
+mergr_test_*.py
+mergr_*.json
