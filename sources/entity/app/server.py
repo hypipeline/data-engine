@@ -61,6 +61,22 @@ def health():
     return {"ok": True}
 
 
+@app.get("/history")
+def history(limit: int = 200):
+    rows = []
+    for r in cache.history(limit):
+        rows.append({
+            "url": r.get("url"),
+            "domain": r.get("domain"),
+            "entity_name": r.get("entity_name"),
+            "jurisdiction": r.get("jurisdiction"),
+            "confidence": r.get("confidence"),
+            "cost_usd": float(r["cost_usd"]) if r.get("cost_usd") is not None else None,
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+        })
+    return {"lookups": rows}
+
+
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
@@ -184,6 +200,7 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8">
     <div class="progress-log-header">Progress Log</div>
     <div class="progress-log-body" id="log"></div>
   </div>
+  <div id="history" style="margin-top:26px"></div>
 </div>
 <script>
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -248,11 +265,36 @@ function go(e){
   var es=new EventSource('lookup/stream?url='+encodeURIComponent(u)+rf);
   es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('log'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
   es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, u);
-    var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); });
+    var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); });
   es.addEventListener('error', function(ev){ try{ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Error: '+esc(JSON.parse(ev.data))+'</span>'; }catch(_){ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Stream error</span>'; } es.close(); });
   es.addEventListener('done', function(){ es.close(); });
   return false;
 }
+var CONF2={high:['#d4edda','#155724'],medium:['#fff3cd','#856404'],low:['#ffeeba','#856404'],insufficient:['#f8d7da','#721c24']};
+function fmtWhen(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+function openLookup(url){ document.getElementById('url').value=url; var rf=document.getElementById('refresh'); if(rf) rf.checked=false; window.scrollTo(0,0); go(null); }
+function loadHistory(){
+  fetch('history').then(function(r){return r.json();}).then(function(d){
+    var rows=(d&&d.lookups)||[]; var h=document.getElementById('history');
+    if(!rows.length){ h.innerHTML=''; return; }
+    var out='<div style="font-size:13px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent lookups ('+rows.length+')</div>';
+    out+='<div style="border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;background:#fff;max-width:960px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f8f8fc;color:#888;text-align:left"><th style="padding:8px 14px;font-weight:600">Website</th><th style="padding:8px 14px;font-weight:600">Entity</th><th style="padding:8px 14px;font-weight:600">Conf</th><th style="padding:8px 14px;font-weight:600;text-align:right">Cost</th><th style="padding:8px 14px;font-weight:600;white-space:nowrap">When</th></tr></thead><tbody>';
+    rows.forEach(function(x){
+      var cb=CONF2[x.confidence]||CONF2.insufficient;
+      var badge=x.confidence?'<span style="display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:'+cb[0]+';color:'+cb[1]+'">'+esc(x.confidence)+'</span>':'';
+      var arg=JSON.stringify(x.url).replace(/"/g,'&quot;');
+      out+='<tr style="border-top:1px solid #f0f0f0;cursor:pointer" onmouseover="this.style.background=\'#f6f9ff\'" onmouseout="this.style.background=\'\'" onclick="openLookup('+arg+')">'
+        +'<td style="padding:8px 14px;color:#4a90d9">'+esc(x.domain||x.url)+'</td>'
+        +'<td style="padding:8px 14px">'+esc(x.entity_name||'—')+(x.jurisdiction?' <span style="color:#aaa">· '+esc(x.jurisdiction)+'</span>':'')+'</td>'
+        +'<td style="padding:8px 14px">'+badge+'</td>'
+        +'<td style="padding:8px 14px;text-align:right;color:#888">'+(x.cost_usd!=null?'$'+x.cost_usd:'')+'</td>'
+        +'<td style="padding:8px 14px;color:#888;white-space:nowrap">'+esc(fmtWhen(x.created_at))+'</td></tr>';
+    });
+    out+='</tbody></table></div>';
+    h.innerHTML=out;
+  }).catch(function(){});
+}
+loadHistory();
 (function(){ var p=new URLSearchParams(location.search); var u=p.get('url'); if(u){ document.getElementById('url').value=u; go(null); } })();
 </script></body></html>"""
 
