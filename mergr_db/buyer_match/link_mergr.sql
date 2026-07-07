@@ -62,19 +62,17 @@ SELECT cm.buyer_id, 'company', NULL, cm.company_id,
        NULL, NULL,
        (SELECT count(*) FROM transaction_parties tp
           WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id AND tp.role='acquirer'),
-       -- Largest by USD (millions): Mergr's USD-normalized raw->>'value' ("Value$2,500"), else
-       -- a USD-currency deal_value. NULL (no price shown) when neither exists — never a
-       -- misleading original-currency figure. Ranked + shown in USD.
-       (SELECT CASE WHEN x.usd >= 1000 THEN '$' || round(x.usd/1000, 1) || 'B'
-                    WHEN x.usd >= 1    THEN '$' || round(x.usd, 0) || 'M'
-                    ELSE '$' || round(x.usd*1000, 0) || 'K' END
-          FROM (SELECT COALESCE(
-                         replace(substring(t.raw->>'value' from '\$([0-9,]+)'), ',', '')::numeric,
-                         CASE WHEN t.deal_value_currency='USD' THEN t.deal_value END) AS usd
+       -- Largest acquisition, USD-normalized via fx_rates — same mechanism as the Mergr company
+       -- page (deal_value * usd_per_unit). Ranks correctly across currencies and shows USD,
+       -- e.g. PTSG's £14M -> $18M. deal_value is in millions.
+       (SELECT CASE WHEN u.usd >= 1000 THEN '$' || round(u.usd/1000, 1) || 'B'
+                    WHEN u.usd >= 1    THEN '$' || round(u.usd, 0) || 'M'
+                    ELSE '$' || round(u.usd*1000, 0) || 'K' END
+          FROM (SELECT t.deal_value * fx.usd_per_unit AS usd
                 FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+                     JOIN fx_rates fx ON fx.currency = t.deal_value_currency
                 WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id
-                  AND tp.role='acquirer') x
-          WHERE x.usd IS NOT NULL
-          ORDER BY x.usd DESC LIMIT 1),
+                  AND tp.role='acquirer' AND t.deal_value > 0 AND fx.usd_per_unit IS NOT NULL) u
+          ORDER BY u.usd DESC LIMIT 1),
        cm.mb
 FROM comp_m cm;
