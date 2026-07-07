@@ -13,8 +13,11 @@ import psycopg2
 import psycopg2.extras
 
 EMBED_MODEL = "text-embedding-3-small"
+# no_of_employees falls back to the enriched LinkedIn cache when the buyer has none of its own
+# (buyer_match.effective_employees). Transparent to callers — the column is still no_of_employees.
 BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
-              "website, tags, email_count, linkedin_count, no_of_employees")
+              "website, tags, email_count, linkedin_count, "
+              "buyer_match.effective_employees(b.id, b.no_of_employees) AS no_of_employees")
 
 
 def _openai_key():

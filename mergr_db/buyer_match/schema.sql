@@ -79,6 +79,31 @@ CREATE TABLE IF NOT EXISTS buyer_match.doc_cache (
     hits              int DEFAULT 0
 );
 
+-- LinkedIn enrichment side-table (populated by buyer_enrich.py). Kept DELIBERATELY SEPARATE
+-- from buyer_match.buyers: sync re-pulls buyers from read-only prod, so anything written onto
+-- buyers would be lost — this table (keyed by buyer_id) is never touched by sync, so the
+-- enriched data persists. The Buyer Match queries fall back to it via effective_employees().
+CREATE TABLE IF NOT EXISTS buyer_match.buyer_linkedin (
+    buyer_id     bigint PRIMARY KEY,
+    query        text,
+    linkedin_url text,
+    employees    int,
+    name         text,
+    website      text,
+    address      text,
+    status       text,                      -- ok | no_data | no_linkedin | no_input | error
+    checked_at   timestamptz DEFAULT now()
+);
+
+-- Effective employee count for a buyer: its own value if present, else the cached LinkedIn
+-- count. Source always wins (a real synced count beats the fallback). One function, used by
+-- every buyer query, so the fallback is transparent to callers and the UI.
+CREATE OR REPLACE FUNCTION buyer_match.effective_employees(p_buyer_id bigint, p_src int)
+RETURNS int LANGUAGE sql STABLE AS $$
+    SELECT COALESCE(p_src,
+        (SELECT employees FROM buyer_match.buyer_linkedin WHERE buyer_id = p_buyer_id));
+$$;
+
 -- Sync bookkeeping (single row).
 CREATE TABLE IF NOT EXISTS buyer_match.sync_state (
     id                     int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
