@@ -8,6 +8,7 @@ openpyxl), gpt-4o-mini summarise, and assemble the `full_text` that gets embedde
 Reads mandate metadata from buyer_match.mandates (the synced replica). Document files come
 from `docs_base` — local disk (dev) or an SFTP-mirrored path (prod, Phase 5).
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -122,6 +123,10 @@ def build_mandate_text(m):
     return "\n".join(parts)
 
 
+def _doc_hash(path):
+    return hashlib.sha256((GPT_MODEL + "\n" + (path or "")).encode("utf-8")).hexdigest()
+
+
 def load_mandate(conn, identifier, docs_base=None):
     """Fetch a mandate (by code, else numeric id) and run the doc pipeline. Mirrors the tool."""
     docs_base = docs_base or os.environ.get("BM_DOCS_BASE", DOCS_BASE_DEFAULT)
@@ -143,7 +148,20 @@ def load_mandate(conn, identifier, docs_base=None):
     doc_summaries, ptok, ctok = [], 0, 0
     for doc in _as_list(m.get("documents")):
         title = doc.get("title", "Untitled")
-        full_path = os.path.join(docs_base, doc.get("document", ""))
+        doc_path = doc.get("document", "")
+        dh = _doc_hash(doc_path)
+        # cache hit -> reuse summary, skip fetch + gpt (the cost)
+        with conn.cursor() as cur:
+            cur.execute("SELECT summary FROM buyer_match.doc_cache WHERE doc_hash=%s", (dh,))
+            crow = cur.fetchone()
+        if crow:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE buyer_match.doc_cache SET hits=hits+1 WHERE doc_hash=%s", (dh,))
+            conn.commit()
+            doc_summaries.append({"title": title, "summary": crow[0], "cached": True})
+            continue
+
+        full_path = os.path.join(docs_base, doc_path)
         if not os.path.exists(full_path):
             doc_summaries.append({"title": title, "summary": "(File not found)"})
             continue
@@ -154,8 +172,16 @@ def load_mandate(conn, identifier, docs_base=None):
             summary, usage = _summarise_excel(full_path)
         else:
             summary, usage = f"(Unsupported file type: {os.path.splitext(full_path)[1]})", {}
-        ptok += usage.get("prompt_tokens", 0)
-        ctok += usage.get("completion_tokens", 0)
+        pt, ct = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+        ptok += pt
+        ctok += ct
+        if not summary.startswith("("):                 # cache only real summaries, not errors
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO buyer_match.doc_cache "
+                            "(doc_hash, doc_path, title, summary, prompt_tokens, completion_tokens) "
+                            "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (doc_hash) DO NOTHING",
+                            (dh, doc_path, title, summary, pt, ct))
+            conn.commit()
         doc_summaries.append({"title": title, "summary": summary})
 
     return {

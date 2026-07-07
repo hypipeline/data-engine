@@ -5,6 +5,7 @@ Buyer Match — read/query service (Data Engine). Pure Postgres/pgvector; exact 
 Query embedding via OpenAI (text-embedding-3-small); ranking via `1 - (embedding <=> q)`,
 identical math to the tool's `matrix @ q / (norms·|q|)`.
 """
+import hashlib
 import os
 
 import httpx
@@ -54,22 +55,48 @@ def _vec(emb) -> str:
     return "[" + ",".join(repr(float(x)) for x in emb) + "]"
 
 
+def _query_hash(text: str) -> str:
+    return hashlib.sha256((EMBED_MODEL + "\n" + (text or "").strip()).encode("utf-8")).hexdigest()
+
+
 def search(conn, query_text: str, top_n: int = 500):
-    """Embed the query, return top-N buyers by exact cosine similarity."""
-    qv, usage = embed(query_text)
-    lit = _vec(qv)
+    """Top-N buyers by exact cosine. Reuses a cached query embedding when the same
+    search text was embedded before (skips the OpenAI call)."""
+    h = _query_hash(query_text)
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM buyer_match.query_cache WHERE query_hash=%s", (h,))
+        cached = cur.fetchone() is not None
+
+    usage = {}
+    if cached:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE buyer_match.query_cache SET hits=hits+1, last_used_at=now() "
+                        "WHERE query_hash=%s", (h,))
+        conn.commit()
+    else:
+        qv, usage = embed(query_text)                       # the only external cost
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO buyer_match.query_cache (query_hash, query_text, model, embedding) "
+                        "VALUES (%s,%s,%s,%s::vector) ON CONFLICT (query_hash) DO NOTHING",
+                        (h, (query_text or "")[:4000], EMBED_MODEL, _vec(qv)))
+        conn.commit()
+
+    # rank straight off the stored vector (subquery — no round-tripping the embedding)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            f"""SELECT {BUYER_COLS}, 1 - (embedding <=> %s::vector) AS score
-                FROM buyer_match.buyers
-                WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> %s::vector
+            f"""SELECT {BUYER_COLS}, 1 - (b.embedding <=> q.e) AS score
+                FROM buyer_match.buyers b,
+                     (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
+                WHERE b.embedding IS NOT NULL
+                ORDER BY b.embedding <=> q.e
                 LIMIT %s""",
-            (lit, lit, top_n),
+            (h, top_n),
         )
         rows = [dict(r) for r in cur.fetchall()]
     for r in rows:
         r["score"] = float(r["score"])
+    usage = dict(usage or {})
+    usage["cached"] = cached
     return rows, usage
 
 

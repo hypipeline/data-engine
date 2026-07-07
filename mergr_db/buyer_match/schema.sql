@@ -53,6 +53,32 @@ CREATE TABLE IF NOT EXISTS buyer_match.keywords (
     embedded_at  timestamptz
 );
 
+-- Query-embedding cache: skip the OpenAI embed for a repeated search text.
+-- Embeddings are deterministic per (model, text), so entries never expire.
+CREATE TABLE IF NOT EXISTS buyer_match.query_cache (
+    query_hash   text PRIMARY KEY,       -- sha256(model + '\n' + trim(text))
+    query_text   text,
+    model        text,
+    embedding    vector(1536),
+    hits         int DEFAULT 0,
+    created_at   timestamptz DEFAULT now(),
+    last_used_at timestamptz DEFAULT now()
+);
+
+-- Document-summary cache: skip the gpt-4o-mini summarise for a document we've seen.
+-- Keyed on a hash of the (model + storage path); upload paths are immutable, so a hit
+-- means the same file. Cached docs cost $0 on re-load of the same mandate.
+CREATE TABLE IF NOT EXISTS buyer_match.doc_cache (
+    doc_hash          text PRIMARY KEY,   -- sha256(model + '\n' + document path)
+    doc_path          text,
+    title             text,
+    summary           text,
+    prompt_tokens     int DEFAULT 0,
+    completion_tokens int DEFAULT 0,
+    created_at        timestamptz DEFAULT now(),
+    hits              int DEFAULT 0
+);
+
 -- Sync bookkeeping (single row).
 CREATE TABLE IF NOT EXISTS buyer_match.sync_state (
     id                     int PRIMARY KEY DEFAULT 1 CHECK (id = 1),

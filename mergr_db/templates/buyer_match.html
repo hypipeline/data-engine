@@ -52,8 +52,7 @@
   .tag-label { font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint); font-weight:700; }
   .buyer-tag { display:inline-block; background:var(--bg-3); color:var(--muted); padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--border); font-weight:500; }
   .ftext.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .more-toggle { font-size:11px; color:var(--link); cursor:pointer; display:inline-block; margin-top:1px; }
-  .more-toggle:hover { text-decoration:underline; }
+  .ftext.expandable { cursor:pointer; }
   .kw-more { display:inline-block; background:var(--bg-3); color:var(--muted); padding:2px 9px; border-radius:20px; font-size:11px; border:1px solid var(--border); cursor:pointer; }
   .kw-more:hover { color:var(--text); border-color:var(--border-2); }
   /* description + investment thesis span the FULL table width (2 cols) below the buyer row */
@@ -61,8 +60,8 @@
   tr.buyer-main.bordered > td { border-bottom:1px solid var(--border); }
   tr.fields-row > td { padding-top:0; padding-bottom:14px; }
   .buyer-fields { display:grid; grid-template-columns:1fr 1fr; gap:4px 34px; }
-  .buyer-fields .flabel { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin-bottom:2px; }
   .buyer-fields .ftext { font-size:12.5px; color:var(--text); line-height:1.5; }
+  .flabel-inline { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; }
   @media (max-width:820px){ .buyer-fields { grid-template-columns:1fr; } }
 
   .score-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
@@ -160,7 +159,7 @@
 </div>
 
 <script>
-var PAGE_SIZE = 50;
+var PAGE_SIZE = 100;
 var allResults = [];      // full ranked list from /buyer-match/search
 var displayed = 0;
 var queryWords = [];      // for highlighting
@@ -261,13 +260,9 @@ function scoreCell(r){
 function fieldHtml(label, text){
   if(!text) return '';
   var long = String(text).length > 150;
-  return '<div><div class="flabel">'+label+'</div>'
-    + '<div class="ftext'+(long?' clamp':'')+'">'+highlight(esc(text),queryWords)+'</div>'
-    + (long ? '<span class="more-toggle" onclick="moreTog(this)">more</span>' : '') + '</div>';
-}
-function moreTog(el){
-  var ft = el.previousElementSibling;
-  el.textContent = ft.classList.toggle('clamp') ? 'more' : 'less';
+  var cls = 'ftext' + (long ? ' clamp expandable' : '');
+  var oc = long ? ' onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse"' : '';
+  return '<div><div class="'+cls+'"'+oc+'><span class="flabel-inline">'+label+':</span> '+highlight(esc(text),queryWords)+'</div></div>';
 }
 function rowHtml(r, rank, idPrefix, showScore){
   r = r||{};
@@ -357,7 +352,8 @@ async function doSearch(){
       document.getElementById('results').innerHTML='<div class="empty-box">No buyers matched.</div>';
       return;
     }
-    document.getElementById('search-meta').innerHTML = '<b>'+count+'</b> ranked buyer'+(count===1?'':'s');
+    var cachedTag = (data.usage && data.usage.cached) ? ' <span style="color:var(--muted)">· cached (no embed cost)</span>' : '';
+    document.getElementById('search-meta').innerHTML = '<b>'+count+'</b> ranked buyer'+(count===1?'':'s')+cachedTag;
     document.getElementById('results').innerHTML =
       tableHead(true)+'</tbody></table></div>'
       + '<div id="load-more" style="text-align:center; padding:16px; display:none">'
@@ -416,7 +412,9 @@ async function doLoadMandate(){
       if(data.gpt_cost && data.gpt_cost.total_tokens>0){
         costStr = ' | GPT cost: $'+Number(data.gpt_cost.cost_usd||0).toFixed(6)+' ('+Number(data.gpt_cost.total_tokens).toLocaleString()+' tokens)';
       }
-      docsHtml = data.doc_summaries.length+' document(s) summarised and included in search text'+costStr;
+      var nCached = data.doc_summaries.filter(function(d){ return d.cached; }).length;
+      var cacheNote = nCached ? ' ('+nCached+' from cache)' : '';
+      docsHtml = data.doc_summaries.length+' document(s)'+cacheNote+' included in search text'+costStr;
     } else {
       docsHtml = 'No documents. Mandate text loaded into the search box — hit Search Buyers.';
     }
