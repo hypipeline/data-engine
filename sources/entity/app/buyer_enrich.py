@@ -3,9 +3,9 @@ Buyer LinkedIn enrichment — one-off / cron-able background pass over Buyer Mat
 
 For each buyer that has no employee count, resolve its website to a LinkedIn company page
 (Google via Bright Data Web Unlocker) and pull the LinkedIn Organization data — headline being
-the employee count. Results are written to buyer_match.buyer_linkedin, the shared
-linkedin.companies cache is populated, and buyer_match.buyers.no_of_employees is gap-filled
-(only where NULL — never clobbers a value already there).
+the employee count. Results are written to buyer_match.buyer_linkedin ONLY, and the shared
+linkedin.companies cache is populated. The buyer records (buyer_match.buyers) are deliberately
+left untouched — the enriched data stays isolated for review and can be merged in later.
 
 Idempotent + resumable: a buyer already in buyer_match.buyer_linkedin is skipped, so the job
 can be stopped and restarted freely. Slow/gentle by design (small worker pool, no hammering).
@@ -146,6 +146,9 @@ def process(row):
 
 
 def _write(bid, query, url, emp, li_name, li_site, status, address=None):
+    # Side-table only: results live in buyer_match.buyer_linkedin. We deliberately do NOT
+    # touch buyer_match.buyers — the enriched employee counts stay isolated for review, and
+    # can be merged into the buyer records later as a separate, explicit step.
     with closing(_conn()) as c, c.cursor() as cur:
         cur.execute(
             "INSERT INTO buyer_match.buyer_linkedin "
@@ -156,9 +159,6 @@ def _write(bid, query, url, emp, li_name, li_site, status, address=None):
             "  name=EXCLUDED.name, website=EXCLUDED.website, address=EXCLUDED.address, "
             "  status=EXCLUDED.status, checked_at=now()",
             (bid, query, url, emp, li_name, li_site, address, status))
-        if emp is not None:                                # gap-fill only; never overwrite
-            cur.execute("UPDATE buyer_match.buyers SET no_of_employees=%s "
-                        "WHERE id=%s AND no_of_employees IS NULL", (emp, bid))
         c.commit()
 
 

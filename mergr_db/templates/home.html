@@ -58,8 +58,8 @@
     <p class="tool-card-desc">Resolve a company domain or name to its LinkedIn page and pull back
        its data — headline being the current employee count — via Google + LinkedIn, cached.</p>
     <div class="tool-card-stats">
+      {% if counts.linkedin is not none %}<span><b>{{ "{:,}".format(counts.linkedin) }}</b> cached lookups</span>{% endif %}
       <span>domain / name&nbsp;→&nbsp;<b>employees</b></span>
-      <span>+ website, address, profile</span>
     </div>
     <span class="tool-card-cta">Open LinkedIn Finder →</span>
   </a>

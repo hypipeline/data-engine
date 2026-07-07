@@ -167,6 +167,11 @@ def home(request: Request):
         counts["buyers"] = b["n"] if b else 0
     except Exception:
         counts["buyers"] = None
+    try:                                              # linkedin cache may not exist yet
+        li = query("SELECT count(*) n FROM linkedin.companies", one=True)
+        counts["linkedin"] = li["n"] if li else 0
+    except Exception:
+        counts["linkedin"] = None
     return render(request, "home.html", "home",
                   counts=counts, entity_up=entity_client.health())
 
