@@ -34,5 +34,19 @@
     </div>
     <span class="tool-card-cta">Open Entity Lookup →</span>
   </a>
+
+  <a class="tool-card" href="/buyer-match">
+    <div class="tool-card-h">
+      <span class="tool-card-title">Buyer Match</span>
+      <span class="tool-card-tag">M&amp;A matchmaking</span>
+    </div>
+    <p class="tool-card-desc">Semantically match a sell-side mandate (or free text) to the most
+       relevant buyers using OpenAI embeddings over buyer theses and mandate documents.</p>
+    <div class="tool-card-stats">
+      {% if counts.buyers is not none %}<span><b>{{ "{:,}".format(counts.buyers) }}</b> buyers</span>{% endif %}
+      <span>mandate&nbsp;→&nbsp;<b>ranked buyers</b></span>
+    </div>
+    <span class="tool-card-cta">Open Buyer Match →</span>
+  </a>
 </div>
 {% endblock %}

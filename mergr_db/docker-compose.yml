@@ -65,12 +65,13 @@ services:
     build: .
     command: ["uvicorn", "webui:app", "--host", "0.0.0.0", "--port", "8501"]
     restart: unless-stopped
+    env_file:
+      - entity.secrets.env   # OPENAI_API_KEY (gitignored; used by vector search + buyer match)
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://mergr:mergr@db:5432/mergr
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ENTITY_BASE_URL: http://entity:8000
       ENTITY_PUBLIC_BASE: ${ENTITY_PUBLIC_BASE:-/entity-app}   # same-origin path via Caddy
 

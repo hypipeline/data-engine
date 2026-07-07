@@ -125,6 +125,8 @@ def _tool_for(active):
         return "mergr"
     if active in {"lookup", "entity"}:
         return "entity"
+    if active == "buyer-match":
+        return "buyer-match"
     return None            # hub / home — no tool chrome
 
 
@@ -152,10 +154,15 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    """Data Engine hub — presents the tools (Mergr, Entity Lookup) as peers."""
+    """Data Engine hub — presents the tools (Mergr, Entity Lookup, Buyer Match) as peers."""
     counts = query("SELECT (SELECT count(*) FROM firms) firms, "
                    "(SELECT count(*) FROM companies) companies, "
                    "(SELECT count(*) FROM transactions) transactions", one=True)
+    try:                                              # buyer_match schema may not exist yet
+        b = query("SELECT count(*) n FROM buyer_match.buyers WHERE embedding IS NOT NULL", one=True)
+        counts["buyers"] = b["n"] if b else 0
+    except Exception:
+        counts["buyers"] = None
     return render(request, "home.html", "home",
                   counts=counts, entity_up=entity_client.health())
 
@@ -492,3 +499,79 @@ def entity_lookup(request: Request, domain: str):
         except Exception:
             pass                                      # cache table absent -> fall back
     return render(request, "entity.html", "entity", initial_url=initial)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Buyer Match — semantic buyer↔mandate matching (pgvector). UI at /buyer-match;
+# JSON endpoints under /buyer-match/*. See buyer_match/ + BUYER_MATCH_SPEC.md.
+# ─────────────────────────────────────────────────────────────────────────────
+from fastapi.responses import JSONResponse            # noqa: E402
+from pydantic import BaseModel                          # noqa: E402
+from buyer_match import service as bm_svc, mandate as bm_mand  # noqa: E402
+
+
+def _bm(fn, *args):
+    """Run a read-only Buyer Match query on a pooled connection."""
+    conn = POOL.getconn()
+    try:
+        return fn(conn, *args)
+    finally:
+        conn.rollback()          # read-only; reset the transaction
+        POOL.putconn(conn)
+
+
+class _SearchReq(BaseModel):
+    query: str = ""
+
+class _MandateReq(BaseModel):
+    identifier: str = ""
+
+class _KeywordsReq(BaseModel):
+    keywords: list[str] = []
+
+class _KeywordReq(BaseModel):
+    keyword: str = ""
+
+
+@app.get("/buyer-match", response_class=HTMLResponse)
+def buyer_match_page(request: Request):
+    return render(request, "buyer_match.html", "buyer-match")
+
+
+@app.get("/buyer-match/mandates")
+def bm_mandates():
+    return JSONResponse(_bm(bm_svc.list_mandates))
+
+
+@app.post("/buyer-match/search")
+def bm_search(req: _SearchReq):
+    q = (req.query or "").strip()
+    if not q:
+        return JSONResponse({"results": [], "count": 0})
+    rows, usage = _bm(bm_svc.search, q, 500)
+    return JSONResponse({"results": rows, "count": len(rows), "usage": usage})
+
+
+@app.post("/buyer-match/load-mandate")
+def bm_load_mandate(req: _MandateReq):
+    ident = (req.identifier or "").strip()
+    if not ident:
+        return JSONResponse({"error": "empty identifier"}, status_code=400)
+    return JSONResponse(_bm(bm_mand.load_mandate, ident))
+
+
+@app.get("/buyer-match/keyword-counts")
+def bm_keyword_counts():
+    return JSONResponse(_bm(bm_svc.keyword_counts))
+
+
+@app.post("/buyer-match/keyword-buyers")
+def bm_keyword_buyers(req: _KeywordsReq):
+    buyers = _bm(bm_svc.keyword_buyers, req.keywords)
+    return JSONResponse({"keywords": req.keywords, "count": len(buyers), "buyers": buyers})
+
+
+@app.post("/buyer-match/similar-keywords")
+def bm_similar_keywords(req: _KeywordReq):
+    kw = (req.keyword or "").strip()
+    return JSONResponse({"keyword": kw, "similar": _bm(bm_svc.similar_keywords, kw)})

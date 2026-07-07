@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block title %}Buyer Match — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* Buyer Match — page-scoped, light theme; ported from the standalone match_server.py tool.
+     Simplifications vs the standalone tool (noted per brief):
+       - No SPA history / URL routing (/keywords/...) — keyword browsing is an inline panel, not a
+         pushState view swap. Back/forward and deep-links are dropped.
+       - Search results and keyword-browser results live in two separate panels instead of one
+         swapped view, so there is no "Back to search results" round-trip.
+       - Stats row (tokens/cost/median score) from the old /search response is dropped: the new
+         /buyer-match/search endpoint returns only {results, count}. We show the result count and
+         per-row scores. Score-bar scaling uses the max score in the returned set.
+       - "Load next 50" paging kept (client-side slice of the returned results). */
+
+  .bm-panel { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:18px; box-shadow:var(--shadow); }
+  .bm-h { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; margin:0 0 12px; }
+
+  .bm-textarea { width:100%; min-height:120px; border:1px solid var(--border-2); border-radius:var(--radius-sm); padding:12px; font-size:14px; font-family:inherit; color:var(--text); background:var(--panel); resize:vertical; box-sizing:border-box; }
+  .bm-textarea:focus { outline:none; border-color:var(--accent); }
+  .bm-input, .bm-select { padding:10px 12px; font-size:14px; border:1px solid var(--border-2); border-radius:var(--radius-sm); outline:none; background:var(--panel); color:var(--text); font-family:inherit; }
+  .bm-input:focus, .bm-select:focus { border-color:var(--accent); }
+  .bm-select { max-width:100%; }
+
+  .search-btn { padding:10px 24px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer; }
+  .search-btn:hover { background:var(--accent-2); }
+  .search-btn:disabled { background:var(--border-2); color:var(--muted); cursor:not-allowed; }
+
+  .bm-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .bm-row .grow { flex:1; min-width:200px; }
+
+  .mandate-info { margin:6px 0 0; padding:12px 14px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; }
+  .mandate-info .mh { font-weight:600; color:var(--text); margin-bottom:6px; }
+  .mandate-info .md { font-size:12px; color:var(--muted); }
+
+  .meta-line { font-size:13px; color:var(--muted); margin:2px 0 12px; min-height:18px; }
+  .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:12px 14px; color:#991b1b; margin:8px 0 14px; }
+  .empty-box { color:var(--muted); font-size:14px; padding:12px 0; }
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border-2); border-top-color:var(--accent); border-radius:50%; animation:sp .7s linear infinite; vertical-align:middle; margin-right:6px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+
+  .buyer-name { font-weight:600; color:var(--text); }
+  .buyer-name a { color:var(--link); }
+  .buyer-sub { font-size:11.5px; color:var(--muted); margin-top:3px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .contact-pill { display:inline-flex; align-items:center; gap:4px; background:var(--bg-3); color:var(--accent-2); padding:1px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+
+  .score-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .score-val { font-weight:700; }
+  .score-bar { width:70px; height:5px; background:var(--bg-3); border-radius:3px; overflow:hidden; margin-top:4px; }
+  .score-bar-fill { height:100%; border-radius:3px; background:var(--accent); }
+
+  .kw-wrap { display:flex; flex-wrap:wrap; gap:5px; }
+  .kw { display:inline-block; background:var(--bg-3); color:var(--text); padding:2px 9px; border-radius:20px; font-size:11px; border:1px solid var(--border); }
+  .kw.clickable { cursor:pointer; }
+  .kw.clickable:hover { background:color-mix(in srgb, var(--accent) 20%, transparent); border-color:var(--accent); }
+  .kw.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .kw .rm { margin-left:5px; cursor:pointer; font-weight:700; opacity:.7; }
+  .kw .rm:hover { opacity:1; }
+
+  .row-toggle { cursor:pointer; color:var(--link); font-size:11.5px; user-select:none; white-space:nowrap; }
+  .row-toggle:hover { text-decoration:underline; }
+  .detail-row > td { background:var(--bg-2); padding:4px 12px 14px; }
+  .detail-grid dt { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:2px; }
+  .detail-grid dd { margin:0 0 10px; color:var(--text); line-height:1.55; font-size:13px; }
+  mark { background:#fff3b0; color:var(--text); padding:0 1px; border-radius:2px; }
+
+  .kw-list { max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; background:var(--bg-2); }
+  .bm-details summary { cursor:pointer; font-weight:700; font-size:13px; color:var(--text); }
+</style>
+{% endblock %}
+{% block body %}
+<h1 class="page">Buyer Match</h1>
+<p class="sub">Semantic buyer&#8596;mandate matching via embeddings. Load a live mandate (or paste a target profile), then rank all buyers by cosine similarity of their OpenAI embeddings. Browse and pivot on sector keywords.</p>
+
+<!-- Load from mandate -->
+<div class="bm-panel">
+  <div class="bm-h">Load from mandate</div>
+  <div class="bm-row">
+    <select class="bm-select grow" id="mandate-select">
+      <option value="">Loading mandates…</option>
+    </select>
+    <input class="bm-input" id="mandate-code" type="text" placeholder="…or type a code / id" autocomplete="off" style="width:200px">
+    <button class="search-btn" id="load-mandate-btn" onclick="doLoadMandate()">Load Mandate</button>
+  </div>
+  <div class="mandate-info" id="mandate-info" style="display:none">
+    <div class="mh" id="mandate-header"></div>
+    <div class="md" id="mandate-docs"></div>
+  </div>
+</div>
+
+<!-- Search -->
+<div class="bm-panel">
+  <div class="bm-h">Search text</div>
+  <textarea class="bm-textarea" id="query" placeholder="e.g. UK-based lightning protection systems business. Revenue £3-5m, strong recurring maintenance contracts, serving construction and infrastructure sectors…"></textarea>
+  <div style="margin-top:12px"><button class="search-btn" id="search-btn" onclick="doSearch()">Search Buyers</button></div>
+</div>
+
+<div class="meta-line" id="search-meta"></div>
+
+<!-- Top keywords across the current result set -->
+<div class="bm-panel" id="cluster-panel" style="display:none">
+  <div class="bm-h">Top keywords in results — click to browse buyers by keyword</div>
+  <div class="kw-wrap" id="cluster-pills"></div>
+</div>
+
+<div id="results"></div>
+
+<!-- Keyword browser -->
+<div class="bm-panel">
+  <details class="bm-details" id="kb-details">
+    <summary>Keyword browser</summary>
+    <div style="margin-top:14px">
+      <div class="bm-h">Similar keywords lookup</div>
+      <div class="bm-row">
+        <input class="bm-input grow" id="sim-input" type="text" placeholder="Type a keyword to find similar ones…" autocomplete="off">
+        <button class="search-btn" id="sim-btn" onclick="doSimilar()">Find similar</button>
+      </div>
+      <div class="kw-wrap" id="sim-pills" style="margin-bottom:14px"></div>
+
+      <div class="bm-h">Browse keywords (click to select; buyers matching ANY selected keyword are listed)</div>
+      <input class="bm-input" id="kw-filter" type="text" placeholder="Filter keywords…" autocomplete="off" style="width:100%; margin-bottom:8px; box-sizing:border-box">
+      <div class="kw-list" id="kw-list"><span class="empty-box">Loading keywords…</span></div>
+
+      <div id="active-wrap" style="display:none; margin-top:14px">
+        <div class="bm-h" style="margin-bottom:8px">Selected keywords</div>
+        <div class="kw-wrap" id="active-pills" style="margin-bottom:10px"></div>
+        <div class="meta-line" id="kb-meta"></div>
+        <div id="kb-results"></div>
+      </div>
+    </div>
+  </details>
+</div>
+
+<script>
+var PAGE_SIZE = 50;
+var allResults = [];      // full ranked list from /buyer-match/search
+var displayed = 0;
+var queryWords = [];      // for highlighting
+var maxScore = 0;
+var keywordCounts = {};   // keyword -> count (from /buyer-match/keyword-counts)
+var activeKeywords = [];  // selected keywords in the browser
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function tog(id){ var el=document.getElementById(id); if(el) el.style.display=(el.style.display==='none'?'':'none'); }
+function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+
+// --- highlighting (optional feature from the tool) -----------------------
+var STOP_WORDS = new Set(['a','an','the','and','or','but','in','on','at','to','for','of','with','by','from','is','are','was','were','be','been','being','has','have','had','do','does','did','will','would','could','should','may','might','shall','can','it','its','this','that','these','those','there','their','they','them','we','our','us','who','which','what','where','when','how','not','no','nor','so','if','then','than','too','very','just','also','as','about','up','out','into','over','after','before','between','through','during','above','below','all','each','every','both','few','more','most','other','some','such','any','own','same','only','well','still','even','here','why','again','based','looking','seeking','including','approximately','strong','good']);
+function getQueryWords(q){
+  var m = (q||'').toLowerCase().match(/[a-z0-9]+/g) || [];
+  return [...new Set(m.filter(function(w){ return w.length>=3 && !STOP_WORDS.has(w); }))];
+}
+function highlight(escaped, words){
+  if(!words.length) return escaped;
+  words.forEach(function(w){
+    var pat = new RegExp('\\b('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')\\b','gi');
+    escaped = escaped.replace(pat, '<mark>$1</mark>');
+  });
+  return escaped;
+}
+
+function contactPills(r){
+  var h='';
+  if(r.email_count>0) h+='<span class="contact-pill" title="Contacts with email">&#9993; '+r.email_count+'</span>';
+  if(r.linkedin_count>0) h+='<span class="contact-pill" title="Contacts with LinkedIn">in '+r.linkedin_count+'</span>';
+  return h;
+}
+
+function keywordPillsHtml(r){
+  if(!r.sector_keywords) return '';
+  var ks = r.sector_keywords.split(',').map(function(k){ return k.trim(); }).filter(Boolean);
+  if(!ks.length) return '';
+  return '<div class="kw-wrap">'+ks.map(function(k){
+    var c = keywordCounts[k]||0;
+    var cs = c>1 ? ' ('+c+')' : '';
+    return '<span class="kw clickable" data-keyword="'+esc(k)+'">'+highlight(esc(k),queryWords)+cs+'</span>';
+  }).join('')+'</div>';
+}
+
+function detailGrid(r){
+  var g='';
+  if(r.description) g+='<div><dt>Description</dt><dd>'+highlight(esc(r.description),queryWords)+'</dd></div>';
+  if(r.investment_thesis) g+='<div><dt>Investment thesis</dt><dd>'+highlight(esc(r.investment_thesis),queryWords)+'</dd></div>';
+  if(r.tags) g+='<div><dt>Tags</dt><dd>'+esc(r.tags)+'</dd></div>';
+  var contacts=[];
+  if(r.email_count>0) contacts.push(r.email_count+' with email');
+  if(r.linkedin_count>0) contacts.push(r.linkedin_count+' with LinkedIn');
+  if(contacts.length) g+='<div><dt>Contacts</dt><dd>'+esc(contacts.join(' · '))+'</dd></div>';
+  return g ? '<dl class="detail-grid">'+g+'</dl>' : '<span class="empty-box">No further details.</span>';
+}
+
+// name links to website if present, else plain text
+function nameCell(r){
+  var nm = esc(r.name||'(unnamed)');
+  var head = r.website ? '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+nm+'</a>' : nm;
+  var sub = '<span>ID '+esc(r.id)+'</span>';
+  if(r.website) sub += '<span>· '+esc(shortUrl(r.website))+'</span>';
+  sub += contactPills(r);
+  return '<span class="buyer-name">'+head+'</span><div class="buyer-sub">'+sub+'</div>';
+}
+
+function scoreCell(r){
+  if(r.score==null) return '';
+  var pct = maxScore>0 ? Math.max(0, Math.min(100, r.score/maxScore*100)) : 0;
+  return '<div class="score-cell"><span class="score-val">'+r.score.toFixed(3)+'</span>'
+       + '<div class="score-bar"><div class="score-bar-fill" style="width:'+pct.toFixed(0)+'%"></div></div></div>';
+}
+
+function rowHtml(r, rank, idPrefix, showScore){
+  r = r||{};
+  var toggleId = idPrefix+rank;
+  var main = '<tr>'
+    + '<td class="num">'+rank+'</td>'
+    + '<td>'+nameCell(r)+'<div style="margin-top:4px"><span class="row-toggle" onclick="tog(\''+toggleId+'\')">details &#9662;</span></div></td>'
+    + (showScore ? '<td>'+scoreCell(r)+'</td>' : '')
+    + '<td>'+keywordPillsHtml(r)+'</td>'
+    + '</tr>';
+  var cols = showScore ? 4 : 3;
+  var detail = '<tr class="detail-row" id="'+toggleId+'" style="display:none"><td colspan="'+cols+'">'+detailGrid(r)+'</td></tr>';
+  return main + detail;
+}
+
+function tableHead(showScore){
+  return '<div class="tbl-wrap"><table class="tbl"><thead><tr>'
+    + '<th class="num">Rank</th><th>Buyer</th>'
+    + (showScore ? '<th>Score</th>' : '')
+    + '<th>Sector keywords</th></tr></thead><tbody>';
+}
+
+// --- search ---------------------------------------------------------------
+function renderMore(){
+  var tbody = document.getElementById('results-tbody');
+  if(!tbody) return;
+  var batch = allResults.slice(displayed, displayed+PAGE_SIZE);
+  var html='';
+  batch.forEach(function(r,i){ html += rowHtml(r, displayed+i+1, 'sr', true); });
+  tbody.insertAdjacentHTML('beforeend', html);
+  displayed += batch.length;
+  var lm = document.getElementById('load-more');
+  if(displayed < allResults.length){
+    lm.style.display='block';
+    document.getElementById('load-more-btn').textContent = 'Load next '+Math.min(PAGE_SIZE, allResults.length-displayed);
+    document.getElementById('showing-count').textContent = 'Showing '+displayed+' of '+allResults.length+' results';
+  } else {
+    lm.style.display='block';
+    document.getElementById('load-more-btn').style.display='none';
+    document.getElementById('showing-count').textContent = 'Showing all '+allResults.length+' results';
+  }
+}
+
+function buildCluster(){
+  var counts={};
+  allResults.forEach(function(r){
+    if(!r.sector_keywords) return;
+    r.sector_keywords.split(',').map(function(k){ return k.trim(); }).filter(Boolean).forEach(function(k){ counts[k]=(counts[k]||0)+1; });
+  });
+  var sorted = Object.entries(counts).sort(function(a,b){ return b[1]-a[1]; }).filter(function(x){ return x[1]>1; }).slice(0,40);
+  var panel=document.getElementById('cluster-panel');
+  if(!sorted.length){ panel.style.display='none'; return; }
+  document.getElementById('cluster-pills').innerHTML = sorted.map(function(x){
+    return '<span class="kw clickable" data-keyword="'+esc(x[0])+'">'+esc(x[0])+' ('+x[1]+')</span>';
+  }).join('');
+  panel.style.display='block';
+}
+
+async function doSearch(){
+  var q = document.getElementById('query').value.trim();
+  if(!q) return;
+  var btn = document.getElementById('search-btn');
+  btn.disabled=true; btn.textContent='Searching…';
+  document.getElementById('search-meta').innerHTML='<span class="spin"></span> searching all buyers…';
+  document.getElementById('results').innerHTML='';
+  document.getElementById('cluster-panel').style.display='none';
+  try{
+    var resp = await fetch('/buyer-match/search', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q})
+    });
+    var data = await resp.json();
+    if(data.error){ document.getElementById('search-meta').textContent=''; document.getElementById('results').innerHTML='<div class="error-box">'+esc(data.error)+'</div>'; return; }
+    allResults = data.results || [];
+    queryWords = getQueryWords(q);
+    maxScore = allResults.length ? Math.max.apply(null, allResults.map(function(r){ return r.score||0; })) : 0;
+    var count = (data.count!=null) ? data.count : allResults.length;
+    if(!allResults.length){
+      document.getElementById('search-meta').textContent='';
+      document.getElementById('results').innerHTML='<div class="empty-box">No buyers matched.</div>';
+      return;
+    }
+    document.getElementById('search-meta').innerHTML = '<b>'+count+'</b> ranked buyer'+(count===1?'':'s');
+    document.getElementById('results').innerHTML =
+      tableHead(true)+'</tbody></table></div>'
+      + '<div id="load-more" style="text-align:center; padding:16px; display:none">'
+      + '<button class="search-btn" id="load-more-btn" onclick="renderMore()">Load next 50</button>'
+      + '<div style="margin-top:8px; font-size:13px; color:var(--muted)" id="showing-count"></div></div>';
+    // give tbody an id for incremental append
+    document.querySelector('#results table.tbl tbody').id='results-tbody';
+    displayed=0;
+    renderMore();
+    buildCluster();
+  }catch(e){
+    document.getElementById('search-meta').textContent='';
+    document.getElementById('results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
+  }finally{
+    btn.disabled=false; btn.textContent='Search Buyers';
+  }
+}
+
+// --- load mandate ---------------------------------------------------------
+async function doLoadMandate(){
+  var id = document.getElementById('mandate-code').value.trim() || document.getElementById('mandate-select').value.trim();
+  if(!id){ return; }
+  var btn = document.getElementById('load-mandate-btn');
+  btn.disabled=true; btn.textContent='Loading…';
+  var info = document.getElementById('mandate-info');
+  info.style.display='block';
+  document.getElementById('mandate-header').innerHTML='<span class="spin"></span> loading mandate (may take 30–60s if it has documents)…';
+  document.getElementById('mandate-docs').textContent='';
+  try{
+    var resp = await fetch('/buyer-match/load-mandate', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({identifier:id})
+    });
+    var data = await resp.json();
+    if(data.error){
+      document.getElementById('mandate-header').innerHTML='<span style="color:#991b1b">'+esc(data.error)+'</span>';
+      document.getElementById('mandate-docs').textContent='';
+      return;
+    }
+    // Build fullText EXACTLY as the standalone tool does
+    var fullText = data.mandate_text || '';
+    if(data.doc_summaries && data.doc_summaries.length){
+      fullText += '\n\nDocument summaries:\n';
+      data.doc_summaries.forEach(function(d){
+        fullText += '\n'+ (d.title||'') +':\n'+ (d.summary||'') +'\n';
+      });
+    }
+    document.getElementById('query').value = fullText;
+
+    document.getElementById('mandate-header').textContent =
+      (data.project_name||'') + ' (' + (data.code||'') + ') — ' + (data.summary||'');
+
+    var docsHtml='';
+    if(data.doc_summaries && data.doc_summaries.length){
+      var costStr='';
+      if(data.gpt_cost && data.gpt_cost.total_tokens>0){
+        costStr = ' | GPT cost: $'+Number(data.gpt_cost.cost_usd||0).toFixed(6)+' ('+Number(data.gpt_cost.total_tokens).toLocaleString()+' tokens)';
+      }
+      docsHtml = data.doc_summaries.length+' document(s) summarised and included in search text'+costStr;
+    } else {
+      docsHtml = 'No documents. Mandate text loaded into the search box — hit Search Buyers.';
+    }
+    document.getElementById('mandate-docs').textContent = docsHtml;
+  }catch(e){
+    document.getElementById('mandate-header').innerHTML='<span style="color:#991b1b">Error: '+esc(e && e.message ? e.message : e)+'</span>';
+  }finally{
+    btn.disabled=false; btn.textContent='Load Mandate';
+  }
+}
+
+// --- keyword browser ------------------------------------------------------
+function renderKwList(filter){
+  var el = document.getElementById('kw-list');
+  var entries = Object.entries(keywordCounts);
+  if(!entries.length){ el.innerHTML='<span class="empty-box">No keywords available.</span>'; return; }
+  var f = (filter||'').toLowerCase();
+  var filtered = f ? entries.filter(function(x){ return x[0].toLowerCase().indexOf(f)!==-1; }) : entries;
+  filtered.sort(function(a,b){ return b[1]-a[1]; });
+  filtered = filtered.slice(0, 300);
+  if(!filtered.length){ el.innerHTML='<span class="empty-box">No matching keywords.</span>'; return; }
+  el.innerHTML = '<div class="kw-wrap">'+filtered.map(function(x){
+    var on = activeKeywords.indexOf(x[0])!==-1 ? ' active' : '';
+    return '<span class="kw clickable'+on+'" data-keyword="'+esc(x[0])+'">'+esc(x[0])+' ('+x[1]+')</span>';
+  }).join('')+'</div>';
+}
+
+function renderActivePills(){
+  var wrap=document.getElementById('active-wrap');
+  if(!activeKeywords.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  document.getElementById('active-pills').innerHTML = activeKeywords.map(function(k){
+    return '<span class="kw active">'+esc(k)+' <span class="rm" data-remove="'+esc(k)+'">&times;</span></span>';
+  }).join('');
+}
+
+function toggleKeyword(k){
+  var i = activeKeywords.indexOf(k);
+  if(i===-1) activeKeywords.push(k); else activeKeywords.splice(i,1);
+  document.getElementById('kb-details').open = true;
+  renderKwList(document.getElementById('kw-filter').value);
+  renderActivePills();
+  loadKeywordBuyers();
+}
+
+async function loadKeywordBuyers(){
+  if(!activeKeywords.length){
+    document.getElementById('kb-meta').textContent='';
+    document.getElementById('kb-results').innerHTML='';
+    return;
+  }
+  document.getElementById('kb-meta').innerHTML='<span class="spin"></span> loading buyers…';
+  document.getElementById('kb-results').innerHTML='';
+  try{
+    var resp = await fetch('/buyer-match/keyword-buyers', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keywords:activeKeywords})
+    });
+    var data = await resp.json();
+    var buyers = data.buyers || [];
+    var kws = (data.keywords||activeKeywords).map(function(k){ return '"'+k+'"'; }).join(', ');
+    document.getElementById('kb-meta').innerHTML = '<b>'+(data.count!=null?data.count:buyers.length)+'</b> buyer'
+      + ((data.count===1)?'':'s') + ' matching ' + (activeKeywords.length>1?'any of ':'') + esc(kws);
+    if(!buyers.length){ document.getElementById('kb-results').innerHTML='<div class="empty-box">No buyers for these keywords.</div>'; return; }
+    var savedQW = queryWords; queryWords=[];   // no query-term highlighting in keyword view
+    var rows=''; buyers.forEach(function(r,i){ rows += rowHtml(r, i+1, 'kb', false); });
+    queryWords = savedQW;
+    document.getElementById('kb-results').innerHTML = tableHead(false)+rows+'</tbody></table></div>';
+  }catch(e){
+    document.getElementById('kb-meta').textContent='';
+    document.getElementById('kb-results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
+  }
+}
+
+async function doSimilar(){
+  var kw = document.getElementById('sim-input').value.trim();
+  if(!kw) return;
+  var btn=document.getElementById('sim-btn'); btn.disabled=true; btn.textContent='…';
+  var pills=document.getElementById('sim-pills');
+  pills.innerHTML='<span class="empty-box"><span class="spin"></span> finding similar keywords…</span>';
+  try{
+    var resp = await fetch('/buyer-match/similar-keywords', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:kw})
+    });
+    var data = await resp.json();
+    var sim = data.similar || [];
+    if(!sim.length){ pills.innerHTML='<span class="empty-box">No similar keywords found for "'+esc(kw)+'".</span>'; return; }
+    pills.innerHTML = sim.map(function(s){
+      return '<span class="kw clickable" data-keyword="'+esc(s.keyword)+'" title="Similarity: '+Number(s.score||0).toFixed(3)+'">'
+        + esc(s.keyword) + ' ('+(s.count!=null?s.count:0)+')</span>';
+    }).join('');
+  }catch(e){
+    pills.innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
+  }finally{
+    btn.disabled=false; btn.textContent='Find similar';
+  }
+}
+
+// --- delegated keyword clicks (results, cluster, browser list, similar) ----
+document.addEventListener('click', function(e){
+  var rm = e.target.closest('.rm');
+  if(rm && rm.dataset.remove){ toggleKeyword(rm.dataset.remove); return; }
+  var kwEl = e.target.closest('.kw.clickable');
+  if(kwEl && kwEl.dataset.keyword){ toggleKeyword(kwEl.dataset.keyword); }
+});
+
+// --- init -----------------------------------------------------------------
+document.getElementById('query').addEventListener('keydown', function(e){
+  if((e.metaKey||e.ctrlKey) && e.key==='Enter') doSearch();
+});
+document.getElementById('mandate-code').addEventListener('keydown', function(e){ if(e.key==='Enter') doLoadMandate(); });
+document.getElementById('sim-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doSimilar(); });
+document.getElementById('kw-filter').addEventListener('input', function(e){ renderKwList(e.target.value); });
+
+// mandates dropdown
+fetch('/buyer-match/mandates').then(function(r){ return r.json(); }).then(function(data){
+  var sel = document.getElementById('mandate-select');
+  var list = Array.isArray(data) ? data : [];
+  if(!list.length){ sel.innerHTML='<option value="">(no mandates)</option>'; return; }
+  sel.innerHTML = '<option value="">— select a mandate —</option>' + list.map(function(m){
+    return '<option value="'+esc(m.code||m.id)+'">'+esc(m.label||m.code||m.id)+'</option>';
+  }).join('');
+}).catch(function(){ document.getElementById('mandate-select').innerHTML='<option value="">(failed to load mandates)</option>'; });
+
+// keyword counts
+fetch('/buyer-match/keyword-counts').then(function(r){ return r.json(); }).then(function(data){
+  keywordCounts = data || {};
+  renderKwList('');
+}).catch(function(){ document.getElementById('kw-list').innerHTML='<span class="empty-box">Failed to load keywords.</span>'; });
+</script>
+{% endblock %}
