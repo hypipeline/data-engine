@@ -13,7 +13,7 @@
     <a class="brand" href="/"><span class="dot"></span> Data Engine</a>
     {% if tool %}
       <span class="topsep">/</span>
-      <span class="toolname">{{ {'mergr':'Mergr','entity':'Entity Lookup','buyer-match':'Buyer Match'}[tool] }}</span>
+      <span class="toolname">{{ {'mergr':'Mergr','entity':'Entity Lookup','buyer-match':'Buyer Match','linkedin':'LinkedIn Finder'}[tool] }}</span>
     {% endif %}
     <nav class="nav">
       {% if tool == 'mergr' %}
@@ -30,6 +30,7 @@
       <a href="/mergr"       class="tool {{ 'on' if tool=='mergr' }}">Mergr</a>
       <a href="/entity"      class="tool {{ 'on' if tool=='entity' }}">Entity Lookup</a>
       <a href="/buyer-match" class="tool {{ 'on' if tool=='buyer-match' }}">Buyer Match</a>
+      <a href="/linkedin"    class="tool {{ 'on' if tool=='linkedin' }}">LinkedIn Finder</a>
     </nav>
   </header>
   <main class="wrap">

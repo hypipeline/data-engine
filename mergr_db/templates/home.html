@@ -48,5 +48,20 @@
     </div>
     <span class="tool-card-cta">Open Buyer Match →</span>
   </a>
+
+  <a class="tool-card" href="/linkedin">
+    <div class="tool-card-h">
+      <span class="tool-card-title">LinkedIn Finder</span>
+      <span class="tool-card-tag">Company enrichment</span>
+      {% if not entity_up %}<span class="tool-card-tag down">offline</span>{% endif %}
+    </div>
+    <p class="tool-card-desc">Resolve a company domain or name to its LinkedIn page and pull back
+       its data — headline being the current employee count — via Google + LinkedIn, cached.</p>
+    <div class="tool-card-stats">
+      <span>domain / name&nbsp;→&nbsp;<b>employees</b></span>
+      <span>+ website, address, profile</span>
+    </div>
+    <span class="tool-card-cta">Open LinkedIn Finder →</span>
+  </a>
 </div>
 {% endblock %}

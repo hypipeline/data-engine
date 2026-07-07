@@ -22,6 +22,7 @@ from config import load_config
 from agent import EntityLookup
 from tools import LookupTools
 import cache
+import linkedin_cache
 
 # Countries validated via NorthData (faithful to validate.php).
 NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
@@ -37,6 +38,10 @@ def _startup():
         cache.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[cache] schema init skipped: {e}")
+    try:
+        linkedin_cache.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[linkedin_cache] schema init skipped: {e}")
 
 
 def _domain(url: str) -> str:
@@ -318,6 +323,79 @@ def api_validate(entity_name: str = "", registry_id: str = "", country: str = ""
     return JSONResponse({**base, "result": True, "status": "verified",
                          "message": f'Verified: "{registry_name}" is {registry_status} in {source}'
                                     + (" (registry ID confirmed on page)" if source == 'NorthData' else "")})
+
+
+# ── LinkedIn Finder ───────────────────────────────────────────────────────────
+# Google (Bright Data SERP) → linkedin.com/company URL → LinkedIn Organization data
+# (employees the headline field). Same flow the entity pipeline uses; results cached in
+# Postgres so repeat lookups don't re-hit Bright Data (which costs per call).
+def _norm_query(q: str) -> str:
+    """Normalize the user input: a URL collapses to its bare domain; a name is trimmed/lowered."""
+    q = (q or "").strip()
+    if not q:
+        return ""
+    if "://" in q or q.lower().startswith("www."):
+        host = urlparse(q if "://" in q else "http://" + q).hostname or q
+        return re.sub(r'^www\.', '', host).lower()
+    if "." in q and " " not in q:                 # looks like a bare domain
+        return re.sub(r'^www\.', '', q).lower()
+    return q.lower()
+
+
+@app.get("/api/linkedin")
+def api_linkedin(q: str = "", refresh: str = ""):
+    """Find a company's LinkedIn page + employee count from a domain or name."""
+    query = _norm_query(q)
+    if not query:
+        return JSONResponse({"error": "Enter a company domain or name."})
+
+    if not refresh:
+        cached = linkedin_cache.get_latest(query)
+        if cached:
+            return JSONResponse(cached)
+
+    t = _tools()
+    try:
+        linkedin_url = t.find_linkedin_url(query)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"query": query, "error": f"Google search failed: {e}"})
+
+    result = {
+        "query": query,
+        "linkedin_url": linkedin_url,
+        "name": None, "employees": None, "website": None, "address": None,
+        "description": None, "slogan": None, "org": None,
+        "from_cache": False,
+    }
+
+    if linkedin_url:
+        try:
+            data = t.linkedin_company_data(linkedin_url)
+        except Exception as e:  # noqa: BLE001
+            data = None
+            result["linkedin_error"] = str(e)
+        if data:
+            for k in ("name", "employees", "website", "address", "address_locality",
+                      "address_country", "description", "slogan", "org"):
+                result[k] = data.get(k)
+
+    if not result["linkedin_url"]:
+        result["error"] = "No LinkedIn company page found for this company."
+    elif result["employees"] is None and result["name"] is None:
+        result["error"] = "Found the LinkedIn page but couldn't read its company data."
+
+    # Only cache genuine successes — a failed/empty lookup should retry next time, not stick.
+    if not result.get("error"):
+        try:
+            linkedin_cache.save(query, result)
+        except Exception as e:  # noqa: BLE001
+            print(f"[linkedin_cache] save failed: {e}")
+    return JSONResponse(result)
+
+
+@app.get("/api/linkedin/history")
+def api_linkedin_history(limit: int = 100):
+    return JSONResponse({"history": linkedin_cache.history(limit)})
 
 
 PAGE = r"""<!doctype html><html><head><meta charset="utf-8">

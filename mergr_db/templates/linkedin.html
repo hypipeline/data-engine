@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}LinkedIn Finder — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* LinkedIn Finder — page-scoped. Domain/name -> LinkedIn page + employee count. */
+  .back-link { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .back-link:hover { color:var(--text); }
+  .search-form { display:flex; gap:12px; max-width:760px; margin:6px 0 6px; flex-wrap:wrap; align-items:center; }
+  .search-input { flex:1; min-width:280px; padding:11px 14px; font-size:15px; border:1px solid var(--border-2); border-radius:var(--radius-sm); outline:none; background:var(--panel); color:var(--text); }
+  .search-input:focus { border-color:var(--accent); }
+  .search-btn { padding:11px 26px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; cursor:pointer; }
+  .search-btn:hover { background:var(--accent-2); }
+  .search-btn:disabled { opacity:.55; cursor:default; }
+  .refresh-lbl { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:5px; cursor:pointer; user-select:none; }
+  .meta-line { font-size:13px; color:var(--muted); margin:8px 0 14px; min-height:18px; }
+  .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:8px 0 18px; max-width:760px; }
+  .empty-box { color:var(--muted); font-size:14px; padding:14px 0; }
+
+  /* result card */
+  .li-card { max-width:760px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); padding:18px 20px; margin:6px 0 22px; }
+  .li-head { display:flex; align-items:flex-start; gap:16px; }
+  .li-emp { flex:0 0 auto; text-align:center; background:#eef4ff; border:1px solid #d6e4ff; border-radius:10px; padding:12px 18px; min-width:120px; }
+  .li-emp .n { font-size:30px; font-weight:800; line-height:1.05; color:#0a3d91; }
+  .li-emp .l { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#4a6aa5; margin-top:3px; }
+  .li-emp.unknown .n { font-size:20px; color:var(--muted); }
+  .li-main { flex:1; min-width:0; }
+  .li-name { font-size:19px; font-weight:700; color:var(--text); }
+  .li-slogan { font-size:13px; color:var(--muted); margin-top:2px; font-style:italic; }
+  .li-links { display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:10px; font-size:13px; }
+  .li-links a { color:var(--accent-2); font-weight:600; word-break:break-all; }
+  .li-links a:hover { text-decoration:underline; }
+  .li-ci { display:inline-flex; align-items:center; gap:5px; }
+  .li-ci svg { width:15px; height:15px; flex:0 0 auto; }
+  .ci-li { color:#0a66c2; }
+  .li-addr { font-size:13px; color:var(--text); margin-top:8px; }
+  .li-addr .muted { color:var(--muted); }
+  .li-desc { font-size:13px; color:var(--text); line-height:1.55; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); white-space:pre-wrap; }
+  .li-cached { display:inline-block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#166534; background:#dcfce7; border-radius:4px; padding:2px 8px; margin-left:8px; vertical-align:middle; }
+
+  /* history */
+  .hist-h { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 8px; }
+  .hist-tbl { width:100%; max-width:760px; border-collapse:collapse; font-size:13px; }
+  .hist-tbl th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; padding:6px 10px; border-bottom:1px solid var(--border-2); }
+  .hist-tbl td { padding:7px 10px; border-bottom:1px solid var(--border); }
+  .hist-tbl tr { cursor:pointer; }
+  .hist-tbl tbody tr:hover { background:var(--bg-2); }
+  .hist-tbl .emp { font-weight:700; color:#0a3d91; text-align:right; white-space:nowrap; }
+  .hist-tbl .nm { font-weight:600; color:var(--text); }
+  .hist-tbl .q { color:var(--muted); }
+</style>
+{% endblock %}
+{% block body %}
+<a class="back-link" href="/">← Back to Data Engine</a>
+<h1 class="page">LinkedIn Finder</h1>
+<p class="sub">Enter a company domain (e.g. <code>stripe.com</code>) or name — resolves its LinkedIn
+   company page and pulls back the data, headline being the current employee count. Results are
+   cached, so a repeat lookup is instant and free.</p>
+
+<form class="search-form" onsubmit="return go(event)">
+  <input class="search-input" id="q" type="text" placeholder="Company domain or name…" autocomplete="off">
+  <button class="search-btn" id="btn" type="submit">Find</button>
+  <label class="refresh-lbl" title="Ignore the cache and re-fetch from Google + LinkedIn">
+    <input type="checkbox" id="refresh"> refresh
+  </label>
+</form>
+
+<div class="meta-line" id="meta"></div>
+<div id="result"></div>
+
+<div id="hist-wrap" style="display:none">
+  <div class="hist-h">Recent lookups</div>
+  <table class="hist-tbl"><thead>
+    <tr><th>Company</th><th>Query</th><th style="text-align:right">Employees</th></tr>
+  </thead><tbody id="hist"></tbody></table>
+</div>
+
+<script>
+var EBASE = '/entity-app';
+
+var ICO_LI = '<svg class="ci-li" viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z"/></svg>';
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function nfmt(n){ return (n==null || n==='') ? '' : Number(n).toLocaleString(); }
+
+function renderResult(d){
+  var out = document.getElementById('result');
+  var meta = document.getElementById('meta');
+  d = d || {};
+  if(d.error && !d.linkedin_url){
+    meta.textContent = '';
+    out.innerHTML = '<div class="error-box">'+esc(d.error)+'</div>';
+    return;
+  }
+  var emp = d.employees;
+  var empBox = (emp==null)
+    ? '<div class="li-emp unknown"><div class="n">—</div><div class="l">employees</div></div>'
+    : '<div class="li-emp"><div class="n">'+nfmt(emp)+'</div><div class="l">employees</div></div>';
+
+  var links = [];
+  if(d.linkedin_url) links.push('<a class="li-ci" href="'+esc(d.linkedin_url)+'" target="_blank" rel="noopener">'+ICO_LI+'LinkedIn</a>');
+  if(d.website){ var w=esc(d.website); links.push('<a href="'+w+'" target="_blank" rel="noopener">'+w.replace(/^https?:\/\//,'')+'</a>'); }
+
+  var cached = d.from_cache ? '<span class="li-cached">cached</span>' : '';
+  var main = '<div class="li-main">'
+    + '<div class="li-name">'+esc(d.name || d.query || 'Company')+cached+'</div>'
+    + (d.slogan ? '<div class="li-slogan">'+esc(d.slogan)+'</div>' : '')
+    + (links.length ? '<div class="li-links">'+links.join('')+'</div>' : '')
+    + (d.address ? '<div class="li-addr">'+esc(d.address)+'</div>' : '')
+    + '</div>';
+
+  var desc = d.description ? '<div class="li-desc">'+esc(d.description)+'</div>' : '';
+  var note = (d.error && d.linkedin_url) ? '<div class="li-addr muted">'+esc(d.error)+'</div>' : '';
+  out.innerHTML = '<div class="li-card"><div class="li-head">'+empBox+main+'</div>'+note+desc+'</div>';
+  meta.textContent = '';
+}
+
+function loadHistory(){
+  fetch(EBASE + '/api/linkedin/history?limit=25')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var rows = (d && d.history) || [];
+      if(!rows.length){ return; }
+      document.getElementById('hist-wrap').style.display = '';
+      document.getElementById('hist').innerHTML = rows.map(function(r){
+        return '<tr onclick="runSearch(\''+esc(String(r.query).replace(/\\/g,"\\\\").replace(/'/g,"\\'"))+'\', false, false)">'
+          + '<td class="nm">'+esc(r.name || '—')+'</td>'
+          + '<td class="q">'+esc(r.query)+'</td>'
+          + '<td class="emp">'+(r.employees==null?'—':nfmt(r.employees))+'</td>'
+          + '</tr>';
+      }).join('');
+    })
+    .catch(function(){});
+}
+
+function runSearch(q, refresh, push){
+  q = (q||'').trim();
+  if(!q){ return; }
+  document.getElementById('q').value = q;
+  var btn = document.getElementById('btn');
+  var params = new URLSearchParams(); params.set('q', q);
+  if(refresh) params.set('refresh', '1');
+  if(push){ history.replaceState(null, '', '?q=' + encodeURIComponent(q)); }
+  document.getElementById('meta').innerHTML = 'Searching Google + LinkedIn…';
+  document.getElementById('result').innerHTML = '';
+  btn.disabled = true;
+  fetch(EBASE + '/api/linkedin?' + params.toString())
+    .then(function(r){ return r.json(); })
+    .then(function(d){ renderResult(d); loadHistory(); })
+    .catch(function(err){
+      document.getElementById('meta').textContent = '';
+      document.getElementById('result').innerHTML = '<div class="error-box">Request failed: '+esc(err && err.message ? err.message : err)+'</div>';
+    })
+    .finally(function(){ btn.disabled = false; });
+}
+function go(e){
+  if(e) e.preventDefault();
+  runSearch(document.getElementById('q').value, document.getElementById('refresh').checked, true);
+  return false;
+}
+
+(function(){
+  var sp = new URLSearchParams(location.search);
+  var q = sp.get('q') || '';
+  document.getElementById('q').value = q;
+  loadHistory();
+  if(q) runSearch(q, false, false); else document.getElementById('q').focus();
+})();
+</script>
+{% endblock %}

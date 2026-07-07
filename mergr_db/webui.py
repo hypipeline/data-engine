@@ -127,6 +127,8 @@ def _tool_for(active):
         return "entity"
     if active == "buyer-match":
         return "buyer-match"
+    if active == "linkedin":
+        return "linkedin"
     return None            # hub / home — no tool chrome
 
 
@@ -538,6 +540,13 @@ class _KeywordReq(BaseModel):
 @app.get("/buyer-match", response_class=HTMLResponse)
 def buyer_match_page(request: Request):
     return render(request, "buyer_match.html", "buyer-match")
+
+
+@app.get("/linkedin", response_class=HTMLResponse)
+def linkedin_page(request: Request):
+    """LinkedIn Finder — company domain/name → LinkedIn page + employee count.
+    Backend lives in the entity app (Bright Data); page calls /entity-app/api/linkedin."""
+    return render(request, "linkedin.html", "linkedin")
 
 
 @app.get("/buyer-match/mandates")

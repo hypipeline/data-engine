@@ -32,6 +32,22 @@ def _php_number_format(number, decimals: int = 0) -> str:
     return f"{rounded:,.{decimals}f}"
 
 
+def _extract_ld_org(html: str):
+    """First LD+JSON Organization object in the page (handles bare + @graph)."""
+    for json_str in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
+        try:
+            data = json.loads(json_str)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(data, dict) and data.get('@type') == 'Organization':
+            return data
+        if isinstance(data, dict) and '@graph' in data:
+            for item in data['@graph']:
+                if isinstance(item, dict) and item.get('@type') == 'Organization':
+                    return item
+    return None
+
+
 class GoogleMixin:
     # ── Google Intelligence (Bright Data SERP batch) ──────────────────────────
     def google_intelligence(self, domain: str) -> dict:
@@ -236,6 +252,106 @@ class GoogleMixin:
         self._progress('linkedin', f"LinkedIn: got {result.count(chr(10))} lines for {org.get('name') or 'unknown'}")
         self.log.append({'tool': 'linkedin', 'input': linkedin_url, 'output': result[:300]})
         return result
+
+    # ── Find a company's LinkedIn URL via Google (Web Unlocker) ────────────────
+    def find_linkedin_url(self, query: str):
+        """Google '<query> linkedin company' through the Bright Data Web Unlocker and return
+        the first linkedin.com/company/<slug> URL (or None). Self-contained + synchronous —
+        avoids the SERP dataset API, which is now async (202 + snapshot polling)."""
+        from urllib.parse import quote_plus
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key:
+            return None
+        self._progress('google', f"Google: searching LinkedIn for {query}...")
+        self.api_calls['brightdata'] += 1
+        search_url = ('https://www.google.com/search?q='
+                      + quote_plus(f"{query} linkedin company") + '&num=20')
+        payload = {
+            'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
+            'url': search_url,
+            'format': 'raw',
+        }
+        try:
+            r = requests.post(
+                'https://api.brightdata.com/request',
+                headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                data=json.dumps(payload), timeout=60, allow_redirects=False,
+            )
+            html = r.text if r.status_code == 200 else None
+        except requests.RequestException:
+            html = None
+        if not html:
+            self._progress('google', "Google: search failed")
+            return None
+        m = re.search(r'linkedin\.com/company/[A-Za-z0-9_\-\.%]+', html, re.I)
+        if not m:
+            self._progress('google', "Google: no LinkedIn company link found")
+            return None
+        # strip any trailing junk, normalise to a clean https URL
+        slug = m.group(0)
+        url = 'https://www.' + slug.rstrip('.')
+        self._progress('google', f"Found LinkedIn: {url}")
+        return url
+
+    # ── LinkedIn company page (structured) ────────────────────────────────────
+    def linkedin_company_data(self, url: str):
+        """Fetch a LinkedIn company page (Bright Data Web Unlocker) and return the parsed
+        Organization as a structured dict (or None). `employees` = LD+JSON
+        numberOfEmployees.value — the headline figure the LinkedIn Finder tool is after."""
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key:
+            return None
+        self._progress('linkedin', f"Fetching LinkedIn: {url}...")
+        self.api_calls['brightdata'] += 1
+        payload = {
+            'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
+            'url': url,
+            'format': 'raw',
+        }
+        try:
+            r = requests.post(
+                'https://api.brightdata.com/request',
+                headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                data=json.dumps(payload), timeout=60, allow_redirects=False,
+            )
+            html = r.text if r.status_code == 200 else None
+        except requests.RequestException:
+            html = None
+        if not html:
+            self._progress('linkedin', "LinkedIn: fetch failed")
+            return None
+
+        org = _extract_ld_org(html)
+        if not org:
+            self._progress('linkedin', "LinkedIn: no Organization data found")
+            return None
+
+        emp = org.get('numberOfEmployees')
+        employees = emp.get('value') if isinstance(emp, dict) else emp
+        try:
+            employees = int(employees) if employees not in (None, '') else None
+        except (ValueError, TypeError):
+            employees = None
+
+        addr = org.get('address') if isinstance(org.get('address'), dict) else {}
+        address = ', '.join([p for p in [
+            addr.get('streetAddress'), addr.get('addressLocality'),
+            addr.get('postalCode'), addr.get('addressCountry'),
+        ] if p])
+
+        self._progress('linkedin', f"LinkedIn: {org.get('name') or 'unknown'} — {employees} employees")
+        return {
+            'linkedin_url': url,
+            'name': org.get('name'),
+            'employees': employees,
+            'website': org.get('sameAs'),
+            'slogan': org.get('slogan'),
+            'description': org.get('description'),
+            'address': address or None,
+            'address_locality': addr.get('addressLocality'),
+            'address_country': addr.get('addressCountry'),
+            'org': org,
+        }
 
     # ── Yahoo Finance ─────────────────────────────────────────────────────────
     def yahoo_finance_data(self, ticker: str) -> str:
