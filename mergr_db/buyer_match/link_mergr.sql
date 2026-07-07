@@ -51,22 +51,30 @@ comp_m AS (
 )
 INSERT INTO buyer_match.buyer_mergr
     (buyer_id, kind, firm_id, company_id, size_category, aum, acquisitions, largest, matched_by)
+-- `largest` = price paid only (no target entity). Firms: extract the $amount from the
+-- precomputed largest_buy text. Companies: format the deal_value of the biggest acquirer deal.
 SELECT buyer_id, 'firm', firm_id, NULL,
-       size_category, pe_assets, total_buys, largest_buy, mb
+       size_category, pe_assets, total_buys,
+       substring(largest_buy from '\$[0-9][0-9.,]*[BMK]?'), mb
 FROM firm_m
 UNION ALL
 SELECT cm.buyer_id, 'company', NULL, cm.company_id,
        NULL, NULL,
        (SELECT count(*) FROM transaction_parties tp
           WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id AND tp.role='acquirer'),
-       (SELECT t.target_name ||
-               CASE WHEN t.deal_value IS NOT NULL THEN ' ' ||
-                    CASE WHEN t.deal_value >= 1e9 THEN '$' || round(t.deal_value/1e9, 1) || 'B'
-                         WHEN t.deal_value >= 1e6 THEN '$' || round(t.deal_value/1e6, 0) || 'M'
-                         ELSE '$' || round(t.deal_value, 0) END
-                    ELSE '' END
-          FROM transaction_parties tp JOIN transactions t USING (transaction_id)
-          WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id AND tp.role='acquirer'
-          ORDER BY t.deal_value DESC NULLS LAST LIMIT 1),
+       -- Largest by USD (millions): Mergr's USD-normalized raw->>'value' ("Value$2,500"), else
+       -- a USD-currency deal_value. NULL (no price shown) when neither exists — never a
+       -- misleading original-currency figure. Ranked + shown in USD.
+       (SELECT CASE WHEN x.usd >= 1000 THEN '$' || round(x.usd/1000, 1) || 'B'
+                    WHEN x.usd >= 1    THEN '$' || round(x.usd, 0) || 'M'
+                    ELSE '$' || round(x.usd*1000, 0) || 'K' END
+          FROM (SELECT COALESCE(
+                         replace(substring(t.raw->>'value' from '\$([0-9,]+)'), ',', '')::numeric,
+                         CASE WHEN t.deal_value_currency='USD' THEN t.deal_value END) AS usd
+                FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+                WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id
+                  AND tp.role='acquirer') x
+          WHERE x.usd IS NOT NULL
+          ORDER BY x.usd DESC LIMIT 1),
        cm.mb
 FROM comp_m cm;
