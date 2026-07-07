@@ -18,6 +18,11 @@ EMBED_MODEL = "text-embedding-3-small"
 BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
               "website, tags, email_count, linkedin_count, "
               "buyer_match.effective_employees(b.id, b.no_of_employees) AS no_of_employees")
+# Mergr attributes from the precomputed buyer_mergr link (fast PK join). All NULL when the
+# buyer isn't in Mergr. Keys kept as firm_* for the UI even for company matches (kind tells them apart).
+FIRM_COLS = ("bm.kind AS mergr_kind, bm.firm_id AS firm_id, bm.company_id AS company_id, "
+             "bm.size_category AS firm_size, bm.aum AS firm_aum, "
+             "bm.acquisitions AS firm_acquisitions, bm.largest AS firm_largest")
 
 
 def _openai_key():
@@ -87,8 +92,9 @@ def search(conn, query_text: str, top_n: int = 500):
     # rank straight off the stored vector (subquery — no round-tripping the embedding)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            f"""SELECT {BUYER_COLS}, 1 - (b.embedding <=> q.e) AS score
-                FROM buyer_match.buyers b,
+            f"""SELECT {BUYER_COLS}, {FIRM_COLS}, 1 - (b.embedding <=> q.e) AS score
+                FROM buyer_match.buyers b
+                LEFT JOIN buyer_match.buyer_mergr bm ON bm.buyer_id = b.id,
                      (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
                 WHERE b.embedding IS NOT NULL
                 ORDER BY b.embedding <=> q.e
@@ -141,7 +147,8 @@ def keyword_buyers(conn, keywords):
         return []
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            f"""SELECT {BUYER_COLS} FROM buyer_match.buyers b
+            f"""SELECT {BUYER_COLS}, {FIRM_COLS} FROM buyer_match.buyers b
+                LEFT JOIN buyer_match.buyer_mergr bm ON bm.buyer_id = b.id
                 WHERE EXISTS (
                     SELECT 1 FROM unnest(string_to_array(b.sector_keywords, ',')) AS kw
                     WHERE btrim(kw) = ANY(%s))""",
