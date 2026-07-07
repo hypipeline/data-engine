@@ -131,8 +131,10 @@ def _tool_for(active):
 
 
 def render(request, name, active, **ctx):
+    # no-cache: pages carry inline JS, so a stale cached page hides UI changes
     return templates.TemplateResponse(
-        name, {"request": request, "active": active, "tool": _tool_for(active), **ctx})
+        name, {"request": request, "active": active, "tool": _tool_for(active), **ctx},
+        headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 def fmt_deal_rows(rows):

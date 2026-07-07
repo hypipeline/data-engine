@@ -13,7 +13,7 @@ import psycopg2.extras
 
 EMBED_MODEL = "text-embedding-3-small"
 BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
-              "website, tags, email_count, linkedin_count")
+              "website, tags, email_count, linkedin_count, no_of_employees")
 
 
 def _openai_key():
@@ -104,14 +104,18 @@ def keyword_counts(conn):
 
 
 def keyword_buyers(conn, keywords):
-    """Buyers whose sector_keywords contain ALL given keywords (mirrors the tool's AND semantics)."""
+    """Buyers whose sector_keywords contain ANY of the given keywords — UNION, exact
+    (comma-split) membership. Mirrors the tool's keyword_index (union, exact match)."""
     kws = [k.strip() for k in keywords if k and k.strip()]
     if not kws:
         return []
-    conds = " AND ".join(["sector_keywords ILIKE %s"] * len(kws))
-    params = [f"%{k}%" for k in kws]
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute(f"SELECT {BUYER_COLS} FROM buyer_match.buyers WHERE {conds}", params)
+        cur.execute(
+            f"""SELECT {BUYER_COLS} FROM buyer_match.buyers b
+                WHERE EXISTS (
+                    SELECT 1 FROM unnest(string_to_array(b.sector_keywords, ',')) AS kw
+                    WHERE btrim(kw) = ANY(%s))""",
+            (kws,))
         return [dict(r) for r in cur.fetchall()]
 
 

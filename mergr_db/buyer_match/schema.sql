@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS buyer_match.buyers (
     tags                 text,                     -- comma-joined tag names (display + keyword features)
     email_count          int  DEFAULT 0,
     linkedin_count       int  DEFAULT 0,
+    no_of_employees      int,
     embedding            vector(1536),
     embed_model          text,
     embed_version        int  DEFAULT 1,           -- bump to force controlled re-embed

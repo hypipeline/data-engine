@@ -3,11 +3,13 @@
 {% block head %}
 <style>
   /* Buyer Match — page-scoped, light theme; ported from the standalone match_server.py tool.
-     Simplifications vs the standalone tool (noted per brief):
-       - No SPA history / URL routing (/keywords/...) — keyword browsing is an inline panel, not a
-         pushState view swap. Back/forward and deep-links are dropped.
-       - Search results and keyword-browser results live in two separate panels instead of one
-         swapped view, so there is no "Back to search results" round-trip.
+     Keyword browsing faithfully reproduces the standalone tool's VIEW-SWAP behaviour:
+       - Clicking a sector keyword saves the current search results and swaps the main results
+         area for a dedicated keyword view (active-keyword pills + similar keywords + buyers
+         matching ANY active keyword — union). "Back to search results" restores the saved view.
+       - SPA history is preserved via pushState/popstate. This page is served at /buyer-match,
+         so the keyword view uses /buyer-match/keywords/<kw>/<kw2>... and /buyer-match is the
+         search view. Back/forward works; unexpected popstate paths are guarded.
        - Stats row (tokens/cost/median score) from the old /search response is dropped: the new
          /buyer-match/search endpoint returns only {results, count}. We show the result count and
          per-row scores. Score-bar scaling uses the max score in the returned set.
@@ -41,8 +43,27 @@
 
   .buyer-name { font-weight:600; color:var(--text); }
   .buyer-name a { color:var(--link); }
-  .buyer-sub { font-size:11.5px; color:var(--muted); margin-top:3px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-  .contact-pill { display:inline-flex; align-items:center; gap:4px; background:var(--bg-3); color:var(--accent-2); padding:1px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+  /* clean meta line: plain muted text with small inline icons, no boxes */
+  .buyer-sub { font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.7; }
+  .buyer-sub .ci { width:13px; height:13px; vertical-align:-2px; margin-right:1px; }
+  .ci-li { color:#0a66c2; }
+  /* tags on their own line — the only pills */
+  .buyer-tags-row { display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:5px; }
+  .tag-label { font-size:9.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint); font-weight:700; }
+  .buyer-tag { display:inline-block; background:var(--bg-3); color:var(--muted); padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--border); font-weight:500; }
+  .ftext.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .more-toggle { font-size:11px; color:var(--link); cursor:pointer; display:inline-block; margin-top:1px; }
+  .more-toggle:hover { text-decoration:underline; }
+  .kw-more { display:inline-block; background:var(--bg-3); color:var(--muted); padding:2px 9px; border-radius:20px; font-size:11px; border:1px solid var(--border); cursor:pointer; }
+  .kw-more:hover { color:var(--text); border-color:var(--border-2); }
+  /* description + investment thesis span the FULL table width (2 cols) below the buyer row */
+  tr.buyer-main > td { border-bottom:none; vertical-align:top; }
+  tr.buyer-main.bordered > td { border-bottom:1px solid var(--border); }
+  tr.fields-row > td { padding-top:0; padding-bottom:14px; }
+  .buyer-fields { display:grid; grid-template-columns:1fr 1fr; gap:4px 34px; }
+  .buyer-fields .flabel { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin-bottom:2px; }
+  .buyer-fields .ftext { font-size:12.5px; color:var(--text); line-height:1.5; }
+  @media (max-width:820px){ .buyer-fields { grid-template-columns:1fr; } }
 
   .score-cell { white-space:nowrap; font-variant-numeric:tabular-nums; }
   .score-val { font-weight:700; }
@@ -50,9 +71,9 @@
   .score-bar-fill { height:100%; border-radius:3px; background:var(--accent); }
 
   .kw-wrap { display:flex; flex-wrap:wrap; gap:5px; }
-  .kw { display:inline-block; background:var(--bg-3); color:var(--text); padding:2px 9px; border-radius:20px; font-size:11px; border:1px solid var(--border); }
-  .kw.clickable { cursor:pointer; }
-  .kw.clickable:hover { background:color-mix(in srgb, var(--accent) 20%, transparent); border-color:var(--accent); }
+  .kw { display:inline-block; background:var(--bg-2); color:var(--text); padding:2px 9px; border-radius:20px; font-size:11px; border:1px solid var(--border-2); }
+  .kw.clickable { cursor:pointer; color:color-mix(in srgb, var(--link) 72%, #000); font-weight:500; }
+  .kw.clickable:hover { background:color-mix(in srgb, var(--link) 16%, transparent); border-color:var(--link); }
   .kw.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .kw .rm { margin-left:5px; cursor:pointer; font-weight:700; opacity:.7; }
   .kw .rm:hover { opacity:1; }
@@ -112,30 +133,28 @@
   <div class="kw-wrap" id="cluster-pills"></div>
 </div>
 
+<!-- Keyword view — swaps IN over the search results when a keyword is clicked -->
+<div id="kw-view" style="display:none">
+  <div class="bm-panel">
+    <button class="btn" onclick="backToResults()" style="margin-bottom:14px">&larr; Back to search results</button>
+    <div class="bm-h">Active keywords — buyers below match ONE of these</div>
+    <div class="kw-wrap" id="kw-active-pills" style="margin-bottom:16px"></div>
+    <div class="bm-h">Similar keywords — click to add</div>
+    <div class="kw-wrap" id="kw-similar-pills"><span class="empty-box">…</span></div>
+  </div>
+  <div class="meta-line" id="kw-meta"></div>
+</div>
+
 <div id="results"></div>
 
-<!-- Keyword browser -->
+<!-- Browse all keywords (secondary; clicking a keyword opens the keyword view) -->
 <div class="bm-panel">
   <details class="bm-details" id="kb-details">
-    <summary>Keyword browser</summary>
+    <summary>Browse all keywords</summary>
     <div style="margin-top:14px">
-      <div class="bm-h">Similar keywords lookup</div>
-      <div class="bm-row">
-        <input class="bm-input grow" id="sim-input" type="text" placeholder="Type a keyword to find similar ones…" autocomplete="off">
-        <button class="search-btn" id="sim-btn" onclick="doSimilar()">Find similar</button>
-      </div>
-      <div class="kw-wrap" id="sim-pills" style="margin-bottom:14px"></div>
-
-      <div class="bm-h">Browse keywords (click to select; buyers matching ANY selected keyword are listed)</div>
+      <div class="bm-h">Click a keyword to view matching buyers</div>
       <input class="bm-input" id="kw-filter" type="text" placeholder="Filter keywords…" autocomplete="off" style="width:100%; margin-bottom:8px; box-sizing:border-box">
       <div class="kw-list" id="kw-list"><span class="empty-box">Loading keywords…</span></div>
-
-      <div id="active-wrap" style="display:none; margin-top:14px">
-        <div class="bm-h" style="margin-bottom:8px">Selected keywords</div>
-        <div class="kw-wrap" id="active-pills" style="margin-bottom:10px"></div>
-        <div class="meta-line" id="kb-meta"></div>
-        <div id="kb-results"></div>
-      </div>
     </div>
   </details>
 </div>
@@ -147,11 +166,18 @@ var displayed = 0;
 var queryWords = [];      // for highlighting
 var maxScore = 0;
 var keywordCounts = {};   // keyword -> count (from /buyer-match/keyword-counts)
-var activeKeywords = [];  // selected keywords in the browser
+var activeKeywords = [];  // selected keywords in the keyword view (AND semantics)
+var currentView = 'search';   // 'search' | 'keywords'
+var savedResultsHtml = '';    // search results table saved while in keyword view
+var savedMetaHtml = '';       // search meta-line saved while in keyword view
+var KW_BASE = '/buyer-match/keywords/';
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function tog(id){ var el=document.getElementById(id); if(el) el.style.display=(el.style.display==='none'?'':'none'); }
 function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+var ICO_PERSON = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z"/></svg>';
+var ICO_MAIL = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
+var ICO_LI = '<svg class="ci ci-li" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 118.3 6.5a1.78 1.78 0 01-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0013 14.19V19h-3v-9h2.9v1.3a3.11 3.11 0 012.7-1.4c1.55 0 3.36.86 3.36 3.66z"/></svg>';
 
 // --- highlighting (optional feature from the tool) -----------------------
 var STOP_WORDS = new Set(['a','an','the','and','or','but','in','on','at','to','for','of','with','by','from','is','are','was','were','be','been','being','has','have','had','do','does','did','will','would','could','should','may','might','shall','can','it','its','this','that','these','those','there','their','they','them','we','our','us','who','which','what','where','when','how','not','no','nor','so','if','then','than','too','very','just','also','as','about','up','out','into','over','after','before','between','through','during','above','below','all','each','every','both','few','more','most','other','some','such','any','own','same','only','well','still','even','here','why','again','based','looking','seeking','including','approximately','strong','good']);
@@ -168,29 +194,33 @@ function highlight(escaped, words){
   return escaped;
 }
 
-function contactPills(r){
-  var h='';
-  if(r.email_count>0) h+='<span class="contact-pill" title="Contacts with email">&#9993; '+r.email_count+'</span>';
-  if(r.linkedin_count>0) h+='<span class="contact-pill" title="Contacts with LinkedIn">in '+r.linkedin_count+'</span>';
-  return h;
+function pillHtml(k){
+  var c = keywordCounts[k]||0;
+  var cs = c>1 ? ' ('+c+')' : '';
+  return '<span class="kw clickable" data-keyword="'+esc(k)+'">'+highlight(esc(k),queryWords)+cs+'</span>';
 }
-
 function keywordPillsHtml(r){
   if(!r.sector_keywords) return '';
   var ks = r.sector_keywords.split(',').map(function(k){ return k.trim(); }).filter(Boolean);
   if(!ks.length) return '';
-  return '<div class="kw-wrap">'+ks.map(function(k){
-    var c = keywordCounts[k]||0;
-    var cs = c>1 ? ' ('+c+')' : '';
-    return '<span class="kw clickable" data-keyword="'+esc(k)+'">'+highlight(esc(k),queryWords)+cs+'</span>';
-  }).join('')+'</div>';
+  var N = 6;                                    // cap to ~one row; rest behind "+N more"
+  var html = ks.slice(0, N).map(pillHtml).join('');
+  if(ks.length > N){
+    html += '<span class="kw-rest" style="display:none">'+ks.slice(N).map(pillHtml).join('')+'</span>'
+          + '<span class="kw-more" onclick="kwMore(this)">+'+(ks.length-N)+' more</span>';
+  }
+  return '<div class="kw-wrap">'+html+'</div>';
+}
+function kwMore(el){
+  var rest = el.previousElementSibling;
+  if(rest && rest.classList.contains('kw-rest')) rest.style.display='contents';
+  el.style.display='none';
 }
 
 function detailGrid(r){
   var g='';
   if(r.description) g+='<div><dt>Description</dt><dd>'+highlight(esc(r.description),queryWords)+'</dd></div>';
   if(r.investment_thesis) g+='<div><dt>Investment thesis</dt><dd>'+highlight(esc(r.investment_thesis),queryWords)+'</dd></div>';
-  if(r.tags) g+='<div><dt>Tags</dt><dd>'+esc(r.tags)+'</dd></div>';
   var contacts=[];
   if(r.email_count>0) contacts.push(r.email_count+' with email');
   if(r.linkedin_count>0) contacts.push(r.linkedin_count+' with LinkedIn');
@@ -202,10 +232,22 @@ function detailGrid(r){
 function nameCell(r){
   var nm = esc(r.name||'(unnamed)');
   var head = r.website ? '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+nm+'</a>' : nm;
-  var sub = '<span>ID '+esc(r.id)+'</span>';
-  if(r.website) sub += '<span>· '+esc(shortUrl(r.website))+'</span>';
-  sub += contactPills(r);
-  return '<span class="buyer-name">'+head+'</span><div class="buyer-sub">'+sub+'</div>';
+  // clean meta line — plain text + small inline icons, dot-separated
+  var meta = 'ID '+esc(r.id);
+  if(r.website) meta += ' &middot; '+esc(shortUrl(r.website));
+  if(r.no_of_employees) meta += ' &middot; '+ICO_PERSON+' '+Number(r.no_of_employees).toLocaleString();
+  if(r.email_count>0) meta += ' &middot; '+ICO_MAIL+' '+r.email_count;
+  if(r.linkedin_count>0) meta += ' &middot; '+ICO_LI+' '+r.linkedin_count;
+  // tags on their own line
+  var tags = '';
+  if(r.tags){
+    var ts = r.tags.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+    if(ts.length){
+      tags = '<div class="buyer-tags-row"><span class="tag-label">Tags</span>'
+           + ts.map(function(t){ return '<span class="buyer-tag">'+esc(t)+'</span>'; }).join('') + '</div>';
+    }
+  }
+  return '<span class="buyer-name">'+head+'</span><div class="buyer-sub">'+meta+'</div>'+tags;
 }
 
 function scoreCell(r){
@@ -215,18 +257,33 @@ function scoreCell(r){
        + '<div class="score-bar"><div class="score-bar-fill" style="width:'+pct.toFixed(0)+'%"></div></div></div>';
 }
 
+// a labelled field, clamped to ~2 lines with a "more"/"less" toggle
+function fieldHtml(label, text){
+  if(!text) return '';
+  var long = String(text).length > 150;
+  return '<div><div class="flabel">'+label+'</div>'
+    + '<div class="ftext'+(long?' clamp':'')+'">'+highlight(esc(text),queryWords)+'</div>'
+    + (long ? '<span class="more-toggle" onclick="moreTog(this)">more</span>' : '') + '</div>';
+}
+function moreTog(el){
+  var ft = el.previousElementSibling;
+  el.textContent = ft.classList.toggle('clamp') ? 'more' : 'less';
+}
 function rowHtml(r, rank, idPrefix, showScore){
   r = r||{};
-  var toggleId = idPrefix+rank;
-  var main = '<tr>'
+  var cols = showScore ? 4 : 3;
+  var hasFields = !!(r.description || r.investment_thesis);
+  // compact top row: rank | name+tags | score | keywords
+  var main = '<tr class="buyer-main'+(hasFields?'':' bordered')+'">'
     + '<td class="num">'+rank+'</td>'
-    + '<td>'+nameCell(r)+'<div style="margin-top:4px"><span class="row-toggle" onclick="tog(\''+toggleId+'\')">details &#9662;</span></div></td>'
+    + '<td>'+nameCell(r)+'</td>'
     + (showScore ? '<td>'+scoreCell(r)+'</td>' : '')
     + '<td>'+keywordPillsHtml(r)+'</td>'
     + '</tr>';
-  var cols = showScore ? 4 : 3;
-  var detail = '<tr class="detail-row" id="'+toggleId+'" style="display:none"><td colspan="'+cols+'">'+detailGrid(r)+'</td></tr>';
-  return main + detail;
+  if(!hasFields) return main;
+  // description + investment thesis span the FULL width, 2 columns, clamped to 2 lines
+  var f = fieldHtml('Description', r.description) + fieldHtml('Investment thesis', r.investment_thesis);
+  return main + '<tr class="fields-row"><td colspan="'+cols+'"><div class="buyer-fields">'+f+'</div></td></tr>';
 }
 
 function tableHead(showScore){
@@ -275,6 +332,11 @@ function buildCluster(){
 async function doSearch(){
   var q = document.getElementById('query').value.trim();
   if(!q) return;
+  // leaving any keyword view — restore search chrome before running a fresh search
+  currentView='search';
+  activeKeywords=[];
+  document.getElementById('kw-view').style.display='none';
+  document.getElementById('search-meta').style.display='';
   var btn = document.getElementById('search-btn');
   btn.disabled=true; btn.textContent='Searching…';
   document.getElementById('search-meta').innerHTML='<span class="spin"></span> searching all buyers…';
@@ -306,6 +368,7 @@ async function doSearch(){
     displayed=0;
     renderMore();
     buildCluster();
+    history.pushState({view:'search'}, '', '/buyer-match');
   }catch(e){
     document.getElementById('search-meta').textContent='';
     document.getElementById('results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
@@ -381,90 +444,162 @@ function renderKwList(filter){
   }).join('')+'</div>';
 }
 
-function renderActivePills(){
-  var wrap=document.getElementById('active-wrap');
-  if(!activeKeywords.length){ wrap.style.display='none'; return; }
-  wrap.style.display='block';
-  document.getElementById('active-pills').innerHTML = activeKeywords.map(function(k){
+// --- keyword VIEW (view-swap, mirrors the standalone tool) -----------------
+// URL <-> keyword helpers. Page is served at /buyer-match, so keyword deep-links
+// live under /buyer-match/keywords/<enc kw>/<enc kw2>...
+function keywordsToUrl(keywords){
+  return KW_BASE + keywords.map(function(k){ return encodeURIComponent(k); }).join('/');
+}
+function urlToKeywords(path){
+  if(!path || path.indexOf(KW_BASE)!==0) return [];
+  return path.slice(KW_BASE.length).split('/').map(function(s){
+    try{ return decodeURIComponent(s); }catch(_){ return s; }
+  }).filter(Boolean);
+}
+function pushKeywordState(){
+  history.pushState({view:'keywords', keywords:activeKeywords.slice()}, '', keywordsToUrl(activeKeywords));
+}
+
+function renderActiveKeywordPills(){
+  document.getElementById('kw-active-pills').innerHTML = activeKeywords.map(function(k){
     return '<span class="kw active">'+esc(k)+' <span class="rm" data-remove="'+esc(k)+'">&times;</span></span>';
   }).join('');
 }
 
-function toggleKeyword(k){
-  var i = activeKeywords.indexOf(k);
-  if(i===-1) activeKeywords.push(k); else activeKeywords.splice(i,1);
-  document.getElementById('kb-details').open = true;
-  renderKwList(document.getElementById('kw-filter').value);
-  renderActivePills();
-  loadKeywordBuyers();
-}
-
-async function loadKeywordBuyers(){
-  if(!activeKeywords.length){
-    document.getElementById('kb-meta').textContent='';
-    document.getElementById('kb-results').innerHTML='';
-    return;
-  }
-  document.getElementById('kb-meta').innerHTML='<span class="spin"></span> loading buyers…';
-  document.getElementById('kb-results').innerHTML='';
-  try{
-    var resp = await fetch('/buyer-match/keyword-buyers', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keywords:activeKeywords})
-    });
-    var data = await resp.json();
-    var buyers = data.buyers || [];
-    var kws = (data.keywords||activeKeywords).map(function(k){ return '"'+k+'"'; }).join(', ');
-    document.getElementById('kb-meta').innerHTML = '<b>'+(data.count!=null?data.count:buyers.length)+'</b> buyer'
-      + ((data.count===1)?'':'s') + ' matching ' + (activeKeywords.length>1?'any of ':'') + esc(kws);
-    if(!buyers.length){ document.getElementById('kb-results').innerHTML='<div class="empty-box">No buyers for these keywords.</div>'; return; }
-    var savedQW = queryWords; queryWords=[];   // no query-term highlighting in keyword view
-    var rows=''; buyers.forEach(function(r,i){ rows += rowHtml(r, i+1, 'kb', false); });
-    queryWords = savedQW;
-    document.getElementById('kb-results').innerHTML = tableHead(false)+rows+'</tbody></table></div>';
-  }catch(e){
-    document.getElementById('kb-meta').textContent='';
-    document.getElementById('kb-results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
-  }
-}
-
-async function doSimilar(){
-  var kw = document.getElementById('sim-input').value.trim();
-  if(!kw) return;
-  var btn=document.getElementById('sim-btn'); btn.disabled=true; btn.textContent='…';
-  var pills=document.getElementById('sim-pills');
+// similar keywords for the last-selected keyword (POST /similar-keywords {keyword})
+async function loadSimilarKeywords(){
+  var pills = document.getElementById('kw-similar-pills');
+  var kw = activeKeywords[activeKeywords.length-1];
+  if(!kw){ pills.innerHTML=''; return; }
   pills.innerHTML='<span class="empty-box"><span class="spin"></span> finding similar keywords…</span>';
   try{
     var resp = await fetch('/buyer-match/similar-keywords', {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keyword:kw})
     });
     var data = await resp.json();
-    var sim = data.similar || [];
-    if(!sim.length){ pills.innerHTML='<span class="empty-box">No similar keywords found for "'+esc(kw)+'".</span>'; return; }
+    var sim = (data.similar || []).filter(function(s){ return activeKeywords.indexOf(s.keyword)===-1; });
+    if(!sim.length){ pills.innerHTML='<span class="empty-box">No similar keywords for "'+esc(kw)+'".</span>'; return; }
     pills.innerHTML = sim.map(function(s){
       return '<span class="kw clickable" data-keyword="'+esc(s.keyword)+'" title="Similarity: '+Number(s.score||0).toFixed(3)+'">'
         + esc(s.keyword) + ' ('+(s.count!=null?s.count:0)+')</span>';
     }).join('');
   }catch(e){
-    pills.innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
-  }finally{
-    btn.disabled=false; btn.textContent='Find similar';
+    pills.innerHTML='<div class="error-box">Failed to load similar keywords: '+esc(e && e.message ? e.message : e)+'</div>';
   }
 }
 
-// --- delegated keyword clicks (results, cluster, browser list, similar) ----
+// Enter keyword view from search view: save the search results, then swap.
+function enterKeywordView(keyword){
+  savedResultsHtml = document.getElementById('results').innerHTML;
+  savedMetaHtml = document.getElementById('search-meta').innerHTML;
+  activeKeywords = [keyword];
+  currentView = 'keywords';
+  pushKeywordState();
+  refreshKeywordView();
+}
+
+// Render the keyword view for the current activeKeywords (buyers matching ANY / union).
+async function refreshKeywordView(){
+  if(!activeKeywords.length) return;
+  document.getElementById('search-meta').style.display='none';
+  document.getElementById('kw-view').style.display='block';
+  renderActiveKeywordPills();
+  loadSimilarKeywords();
+  document.getElementById('kw-meta').innerHTML='<span class="spin"></span> loading buyers…';
+  document.getElementById('results').innerHTML='';
+  try{
+    var resp = await fetch('/buyer-match/keyword-buyers', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({keywords:activeKeywords})
+    });
+    var data = await resp.json();
+    var buyers = data.buyers || [];
+    var count = (data.count!=null) ? data.count : buyers.length;
+    var kws = activeKeywords.map(function(k){ return '"'+k+'"'; }).join(', ');
+    document.getElementById('kw-meta').innerHTML = '<b>'+count+'</b> buyer'+(count===1?'':'s')
+      + ' matching ' + (activeKeywords.length>1?'one of ':'') + esc(kws);
+    if(!buyers.length){ document.getElementById('results').innerHTML='<div class="empty-box">No buyers match these keywords.</div>'; return; }
+    var savedQW = queryWords; queryWords = activeKeywords.slice();   // highlight the active keywords in the rows
+    var rows=''; buyers.forEach(function(r,i){ rows += rowHtml(r, i+1, 'kb', false); });
+    queryWords = savedQW;
+    document.getElementById('results').innerHTML = tableHead(false)+rows+'</tbody></table></div>';
+  }catch(e){
+    document.getElementById('kw-meta').textContent='';
+    document.getElementById('results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
+  }
+}
+
+// Restore the saved search view (no history push — used by popstate + Back).
+function restoreSearchView(){
+  currentView='search';
+  activeKeywords=[];
+  document.getElementById('kw-view').style.display='none';
+  var meta=document.getElementById('search-meta');
+  meta.style.display=''; meta.innerHTML=savedMetaHtml;
+  document.getElementById('results').innerHTML=savedResultsHtml;
+}
+function backToResults(){
+  restoreSearchView();
+  history.pushState({view:'search'}, '', '/buyer-match');
+}
+
+// --- delegated keyword clicks (results, cluster, browse list, similar) ------
 document.addEventListener('click', function(e){
+  // removing an active-keyword pill
   var rm = e.target.closest('.rm');
-  if(rm && rm.dataset.remove){ toggleKeyword(rm.dataset.remove); return; }
+  if(rm && rm.dataset.remove){
+    var idx = activeKeywords.indexOf(rm.dataset.remove);
+    if(idx!==-1) activeKeywords.splice(idx,1);
+    if(!activeKeywords.length){ backToResults(); }
+    else { pushKeywordState(); refreshKeywordView(); }
+    return;
+  }
   var kwEl = e.target.closest('.kw.clickable');
-  if(kwEl && kwEl.dataset.keyword){ toggleKeyword(kwEl.dataset.keyword); }
+  if(!kwEl || !kwEl.dataset.keyword) return;
+  var keyword = kwEl.dataset.keyword;
+  if(currentView==='keywords'){
+    // toggle within the active set (AND semantics)
+    var i = activeKeywords.indexOf(keyword);
+    if(i!==-1){
+      activeKeywords.splice(i,1);
+      if(!activeKeywords.length){ backToResults(); return; }
+    } else {
+      activeKeywords.push(keyword);
+    }
+    pushKeywordState();
+    refreshKeywordView();
+  } else {
+    enterKeywordView(keyword);
+  }
 });
+
+// --- browser back/forward + deep-link ---------------------------------------
+window.addEventListener('popstate', function(e){
+  var kws = [];
+  try{ kws = urlToKeywords(window.location.pathname); }catch(_){ kws = []; }
+  if(kws.length){
+    activeKeywords = kws.slice();
+    currentView = 'keywords';
+    refreshKeywordView();
+  } else if(currentView==='keywords'){
+    restoreSearchView();
+  }
+});
+
+function handleInitialRoute(){
+  var kws = [];
+  try{ kws = urlToKeywords(window.location.pathname); }catch(_){ kws = []; }
+  if(kws.length){
+    activeKeywords = kws.slice();
+    currentView = 'keywords';
+    refreshKeywordView();
+  }
+}
 
 // --- init -----------------------------------------------------------------
 document.getElementById('query').addEventListener('keydown', function(e){
   if((e.metaKey||e.ctrlKey) && e.key==='Enter') doSearch();
 });
 document.getElementById('mandate-code').addEventListener('keydown', function(e){ if(e.key==='Enter') doLoadMandate(); });
-document.getElementById('sim-input').addEventListener('keydown', function(e){ if(e.key==='Enter') doSimilar(); });
 document.getElementById('kw-filter').addEventListener('input', function(e){ renderKwList(e.target.value); });
 
 // mandates dropdown
@@ -481,6 +616,7 @@ fetch('/buyer-match/mandates').then(function(r){ return r.json(); }).then(functi
 fetch('/buyer-match/keyword-counts').then(function(r){ return r.json(); }).then(function(data){
   keywordCounts = data || {};
   renderKwList('');
+  handleInitialRoute();
 }).catch(function(){ document.getElementById('kw-list').innerHTML='<span class="empty-box">Failed to load keywords.</span>'; });
 
 // ---- Sync (refresh replica from the source DB; re-embeds only changed buyers) ----
