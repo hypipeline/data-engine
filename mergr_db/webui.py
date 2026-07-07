@@ -575,3 +575,62 @@ def bm_keyword_buyers(req: _KeywordsReq):
 def bm_similar_keywords(req: _KeywordReq):
     kw = (req.keyword or "").strip()
     return JSONResponse({"keyword": kw, "similar": _bm(bm_svc.similar_keywords, kw)})
+
+
+import queue as _queue                               # noqa: E402
+import threading as _threading                       # noqa: E402
+from fastapi.responses import StreamingResponse      # noqa: E402
+from buyer_match import sync as bm_sync              # noqa: E402
+
+
+@app.get("/buyer-match/sync-status")
+def bm_sync_status():
+    """Last-sync info + a cheap 'records changed since' nudge (from the source DB)."""
+    st = None
+    try:
+        st = query("SELECT last_sync_at, last_buyers_embedded, last_keywords_embedded, "
+                   "last_mandates_synced, last_cost_usd FROM buyer_match.sync_state WHERE id=1", one=True)
+    except Exception:
+        pass
+    last = st["last_sync_at"] if st else None
+    since = {}
+    if last:
+        try:
+            since = bm_sync.since_counts(last)
+        except Exception:
+            since = {}
+    stats = {}
+    if st:
+        stats = {"buyers_embedded": st["last_buyers_embedded"],
+                 "keywords_embedded": st["last_keywords_embedded"],
+                 "mandates_synced": st["last_mandates_synced"],
+                 "cost_usd": float(st["last_cost_usd"]) if st["last_cost_usd"] is not None else 0}
+    return JSONResponse({"last_sync_at": last.isoformat() if last else None,
+                         "stats": stats, "since": since})
+
+
+@app.get("/buyer-match/sync")
+def bm_run_sync():
+    """Run the sync worker, streaming progress as SSE (GET so EventSource can consume it)."""
+    q = _queue.Queue()
+
+    def worker():
+        try:
+            stats = bm_sync.run_sync(progress=lambda m: q.put(("log", m)), pg_dsn=DSN)
+            q.put(("result", stats))
+        except Exception as e:                        # noqa: BLE001
+            q.put(("error", str(e)))
+        finally:
+            q.put(("__done__", None))
+
+    _threading.Thread(target=worker, daemon=True).start()
+
+    def gen():
+        while True:
+            kind, data = q.get()
+            if kind == "__done__":
+                yield "event: done\ndata: {}\n\n"
+                break
+            yield f"event: {kind}\ndata: {json.dumps(data)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")

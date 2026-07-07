@@ -66,11 +66,20 @@
 
   .kw-list { max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; background:var(--bg-2); }
   .bm-details summary { cursor:pointer; font-weight:700; font-size:13px; color:var(--text); }
+  .bm-syncbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:2px 0 14px; }
+  .bm-syncstatus { font-size:13px; color:var(--muted); }
+  .bm-synclog { max-width:900px; margin:0 0 16px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; font-family:var(--mono); font-size:12px; line-height:1.6; max-height:240px; overflow:auto; white-space:pre-wrap; }
 </style>
 {% endblock %}
 {% block body %}
 <h1 class="page">Buyer Match</h1>
 <p class="sub">Semantic buyer&#8596;mandate matching via embeddings. Load a live mandate (or paste a target profile), then rank all buyers by cosine similarity of their OpenAI embeddings. Browse and pivot on sector keywords.</p>
+
+<div class="bm-syncbar">
+  <button id="sync-btn" class="btn" onclick="bmSync()">Sync now</button>
+  <span id="sync-status" class="bm-syncstatus">Loading sync status…</span>
+</div>
+<div id="sync-log" class="bm-synclog" style="display:none"></div>
 
 <!-- Load from mandate -->
 <div class="bm-panel">
@@ -473,5 +482,27 @@ fetch('/buyer-match/keyword-counts').then(function(r){ return r.json(); }).then(
   keywordCounts = data || {};
   renderKwList('');
 }).catch(function(){ document.getElementById('kw-list').innerHTML='<span class="empty-box">Failed to load keywords.</span>'; });
+
+// ---- Sync (refresh replica from the source DB; re-embeds only changed buyers) ----
+function bmSyncStatus(){
+  fetch('/buyer-match/sync-status').then(function(r){ return r.json(); }).then(function(d){
+    var el=document.getElementById('sync-status'); if(!el) return;
+    var when = d.last_sync_at ? new Date(d.last_sync_at).toLocaleString() : 'never';
+    var since = (d.since && d.since.buyers!=null) ? (' · ~'+d.since.buyers.toLocaleString()+' buyers changed since') : '';
+    el.textContent = 'Last synced: '+when+since;
+  }).catch(function(){});
+}
+function bmSync(){
+  var btn=document.getElementById('sync-btn'), log=document.getElementById('sync-log');
+  btn.disabled=true; btn.textContent='Syncing…'; log.style.display='block'; log.textContent='';
+  var done=false, es=new EventSource('/buyer-match/sync');
+  es.addEventListener('log', function(e){ log.textContent += JSON.parse(e.data)+'\n'; log.scrollTop=log.scrollHeight; });
+  es.addEventListener('result', function(e){ var s=JSON.parse(e.data);
+    log.textContent += '\n✓ '+s.buyers_embedded.toLocaleString()+' buyers re-embedded, '+s.keywords_embedded.toLocaleString()+' new keywords, '+s.mandates_synced.toLocaleString()+' mandates · $'+s.cost_usd+'\n';
+    log.scrollTop=log.scrollHeight; });
+  es.addEventListener('done', function(){ done=true; es.close(); btn.disabled=false; btn.textContent='Sync now'; bmSyncStatus(); });
+  es.addEventListener('error', function(e){ if(done) return; try{ log.textContent+='\nError: '+JSON.parse(e.data)+'\n'; }catch(_){ log.textContent+='\nConnection error.\n'; } es.close(); btn.disabled=false; btn.textContent='Sync now'; });
+}
+bmSyncStatus();
 </script>
 {% endblock %}

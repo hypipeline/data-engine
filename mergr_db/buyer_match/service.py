@@ -36,6 +36,20 @@ def embed(text: str):
     return d["data"][0]["embedding"], d.get("usage", {})
 
 
+def embed_batch(texts):
+    """Batch embeddings (sync re-embed). Returns (list-of-vectors in input order, usage)."""
+    r = httpx.post(
+        "https://api.openai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {_openai_key()}", "Content-Type": "application/json"},
+        json={"model": EMBED_MODEL, "input": texts},
+        timeout=120,
+    )
+    r.raise_for_status()
+    d = r.json()
+    vecs = [it["embedding"] for it in sorted(d["data"], key=lambda x: x["index"])]
+    return vecs, d.get("usage", {})
+
+
 def _vec(emb) -> str:
     return "[" + ",".join(repr(float(x)) for x in emb) + "]"
 
