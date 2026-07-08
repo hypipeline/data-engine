@@ -34,6 +34,13 @@
   .mandate-info { margin:6px 0 0; padding:12px 14px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; }
   .mandate-info .mh { font-weight:600; color:var(--text); margin-bottom:6px; }
   .mandate-info .md { font-size:12px; color:var(--muted); }
+  .mandate-dd { position:absolute; top:100%; left:0; right:0; z-index:40; margin-top:2px; background:var(--panel); border:1px solid var(--border-2); border-radius:var(--radius-sm); max-height:340px; overflow-y:auto; box-shadow:var(--shadow); }
+  .mandate-item { padding:8px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border); line-height:1.4; }
+  .mandate-item:last-child { border-bottom:none; }
+  .mandate-item:hover, .mandate-item.active { background:var(--bg-2); }
+  .mandate-item .mi-code { color:var(--muted); font-size:11px; font-family:var(--mono); margin-left:4px; }
+  .mandate-item mark { background:#fff3b0; color:var(--text); padding:0 1px; border-radius:2px; }
+  .mandate-empty { padding:10px 12px; font-size:13px; color:var(--muted); }
 
   .meta-line { font-size:13px; color:var(--muted); margin:2px 0 12px; min-height:18px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:12px 14px; color:#991b1b; margin:8px 0 14px; }
@@ -206,11 +213,11 @@
 <!-- Load from mandate -->
 <div class="bm-panel">
   <div class="bm-h">Load from mandate</div>
-  <div class="bm-row">
-    <select class="bm-select grow" id="mandate-select">
-      <option value="">Loading mandates…</option>
-    </select>
-    <input class="bm-input" id="mandate-code" type="text" placeholder="…or type a code / id" autocomplete="off" style="width:200px">
+  <div class="bm-row" style="align-items:flex-start">
+    <div class="grow" style="position:relative; min-width:280px">
+      <input class="bm-input" id="mandate-search" type="text" placeholder="Loading mandates…" autocomplete="off" style="width:100%; box-sizing:border-box">
+      <div class="mandate-dd" id="mandate-results" style="display:none"></div>
+    </div>
     <button class="search-btn" id="load-mandate-btn" onclick="doLoadMandate()">Load Mandate</button>
   </div>
   <div class="mandate-info" id="mandate-info" style="display:none">
@@ -644,8 +651,10 @@ async function doSearch(){
 
 // --- load mandate ---------------------------------------------------------
 async function doLoadMandate(){
-  var id = document.getElementById('mandate-code').value.trim() || document.getElementById('mandate-select').value.trim();
+  var el = document.getElementById('mandate-search');
+  var id = ((el.dataset.code || el.value) || '').trim();   // a picked result, else raw typed code
   if(!id){ return; }
+  document.getElementById('mandate-results').style.display = 'none';
   var btn = document.getElementById('load-mandate-btn');
   btn.disabled=true; btn.textContent='Loading…';
   var info = document.getElementById('mandate-info');
@@ -869,18 +878,58 @@ function handleInitialRoute(){
 document.getElementById('query').addEventListener('keydown', function(e){
   if((e.metaKey||e.ctrlKey) && e.key==='Enter') doSearch();
 });
-document.getElementById('mandate-code').addEventListener('keydown', function(e){ if(e.key==='Enter') doLoadMandate(); });
+// --- mandate typeahead (search-based selection, replaces the dropdown) ---------
+var mandatesList = [];
+function markSub(escaped, q){
+  if(!q) return escaped;
+  var i = escaped.toLowerCase().indexOf(q.toLowerCase());
+  return i===-1 ? escaped : escaped.slice(0,i)+'<mark>'+escaped.slice(i,i+q.length)+'</mark>'+escaped.slice(i+q.length);
+}
+function mandateFilter(q){
+  q = (q||'').trim().toLowerCase(); if(!q) return [];
+  var out=[];
+  for(var i=0;i<mandatesList.length && out.length<40;i++){
+    var m=mandatesList[i];
+    if(((m.label||'')+' '+(m.code||'')).toLowerCase().indexOf(q)!==-1) out.push(m);
+  }
+  return out;
+}
+function renderMandateDD(matches, q){
+  var dd=document.getElementById('mandate-results');
+  if(!q.trim()){ dd.style.display='none'; return; }
+  if(!matches.length){ dd.innerHTML='<div class="mandate-empty">No mandate matches “'+esc(q)+'”. Enter to try it as a code/id.</div>'; dd.style.display='block'; return; }
+  dd.innerHTML = matches.map(function(m,i){
+    var idv = m.code || String(m.id);
+    return '<div class="mandate-item'+(i===0?' active':'')+'" data-code="'+esc(idv)+'" data-label="'+esc(m.label||idv)+'">'
+      + markSub(esc(m.label||idv), q.trim()) + '<span class="mi-code">'+esc(idv)+'</span></div>';
+  }).join('');
+  dd.style.display='block';
+}
+(function(){
+  var mEl=document.getElementById('mandate-search'), mDD=document.getElementById('mandate-results');
+  function choose(it){ mEl.value=it.dataset.label; mEl.dataset.code=it.dataset.code; mDD.style.display='none'; doLoadMandate(); }
+  mEl.addEventListener('input', function(){ mEl.removeAttribute('data-code'); renderMandateDD(mandateFilter(mEl.value), mEl.value); });
+  mEl.addEventListener('focus', function(){ if(mEl.value.trim()) renderMandateDD(mandateFilter(mEl.value), mEl.value); });
+  mEl.addEventListener('blur', function(){ setTimeout(function(){ mDD.style.display='none'; }, 150); });
+  mEl.addEventListener('keydown', function(e){
+    var items=[].slice.call(mDD.querySelectorAll('.mandate-item')), act=mDD.querySelector('.mandate-item.active');
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){ e.preventDefault(); if(!items.length) return;
+      var idx=items.indexOf(act); idx = e.key==='ArrowDown' ? Math.min(items.length-1, idx+1) : Math.max(0, idx-1);
+      items.forEach(function(x){ x.classList.remove('active'); }); items[idx].classList.add('active'); items[idx].scrollIntoView({block:'nearest'});
+    } else if(e.key==='Enter'){ e.preventDefault(); if(act && mDD.style.display!=='none'){ choose(act); } else { doLoadMandate(); } }
+    else if(e.key==='Escape'){ mDD.style.display='none'; }
+  });
+  mDD.addEventListener('mousedown', function(e){ var it=e.target.closest('.mandate-item'); if(it){ e.preventDefault(); choose(it); } });
+})();
 document.getElementById('kw-filter').addEventListener('input', function(e){ renderKwList(e.target.value); });
 
 // mandates dropdown
 fetch('/buyer-match/mandates').then(function(r){ return r.json(); }).then(function(data){
-  var sel = document.getElementById('mandate-select');
-  var list = Array.isArray(data) ? data : [];
-  if(!list.length){ sel.innerHTML='<option value="">(no mandates)</option>'; return; }
-  sel.innerHTML = '<option value="">— select a mandate —</option>' + list.map(function(m){
-    return '<option value="'+esc(m.code||m.id)+'">'+esc(m.label||m.code||m.id)+'</option>';
-  }).join('');
-}).catch(function(){ document.getElementById('mandate-select').innerHTML='<option value="">(failed to load mandates)</option>'; });
+  mandatesList = Array.isArray(data) ? data : [];
+  document.getElementById('mandate-search').placeholder = mandatesList.length
+    ? 'Search '+mandatesList.length.toLocaleString()+' mandates — project, company, or code…'
+    : 'No mandates available';
+}).catch(function(){ document.getElementById('mandate-search').placeholder='(failed to load mandates)'; });
 
 // keyword counts
 fetch('/buyer-match/keyword-counts').then(function(r){ return r.json(); }).then(function(data){
