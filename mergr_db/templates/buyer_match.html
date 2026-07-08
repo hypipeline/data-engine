@@ -315,7 +315,8 @@ function bmCompact(r){
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
     description:r.description, is_specialist:r.is_specialist,
-    geographies:r.geographies, acquired_countries:r.acquired_countries};
+    geographies:r.geographies, acquired_countries:r.acquired_countries,
+    specific_matching_criteria:r.specific_matching_criteria};
 }
 function bmSelToggle(id){
   var o=bmSelLoad(), k=String(id), added;

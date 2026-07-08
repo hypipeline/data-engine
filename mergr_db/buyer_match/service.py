@@ -16,7 +16,7 @@ EMBED_MODEL = "text-embedding-3-small"
 # no_of_employees falls back to the enriched LinkedIn cache when the buyer has none of its own
 # (buyer_match.effective_employees). Transparent to callers — the column is still no_of_employees.
 BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
-              "website, tags, email_count, linkedin_count, is_specialist, "
+              "website, tags, email_count, linkedin_count, is_specialist, specific_matching_criteria, "
               "buyer_match.effective_employees(b.id, b.no_of_employees) AS no_of_employees")
 # Mergr attributes from the precomputed buyer_mergr link (fast PK join). All NULL when the
 # buyer isn't in Mergr. Keys kept as firm_* for the UI even for company matches (kind tells them apart).

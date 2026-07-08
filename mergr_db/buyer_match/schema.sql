@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS buyer_match.buyers (
     no_of_employees      int,
     email_domains        text[],                   -- distinct CORPORATE contact-email domains (ON side); firm email-domain match key
     is_specialist        boolean,                  -- ON buyers.is_specialist
+    specific_matching_criteria text,               -- ON buyers.specific_matching_criteria (review-gate warning)
     embedding            vector(1536),
     embed_model          text,
     embed_version        int  DEFAULT 1,           -- bump to force controlled re-embed
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS buyer_match.buyers (
 -- and an exact seq-scan over ~16k × 1536-d is only a few ms. (Re-add HNSW if scale grows.)
 ALTER TABLE buyer_match.buyers ADD COLUMN IF NOT EXISTS email_domains text[];
 ALTER TABLE buyer_match.buyers ADD COLUMN IF NOT EXISTS is_specialist boolean;
+ALTER TABLE buyer_match.buyers ADD COLUMN IF NOT EXISTS specific_matching_criteria text;
 
 -- Mandates: metadata only (embedded on-demand, NOT stored).
 CREATE TABLE IF NOT EXISTS buyer_match.mandates (

@@ -63,6 +63,10 @@
   .step-pill.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   .step-pill.active .step-n { background:rgba(255,255,255,.25); color:#fff; }
   .step-sep { color:var(--faint); font-size:16px; }
+  .step-warn { display:inline-block; margin-left:7px; background:#fde68a; color:#854d0e; border-radius:10px; padding:0 7px; font-size:11px; font-weight:800; }
+  .step-pill.active .step-warn { background:#fff3; color:#fff; }
+  .tag-crit { margin:8px 0 4px; padding:8px 12px; background:#fef9c3; border:1px solid #fde68a; border-radius:8px; font-size:12.5px; color:#854d0e; line-height:1.5; }
+  .tag-crit-lbl { font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; margin-right:6px; }
   .stage { margin:0 0 16px; }
   .stage-h { margin:0 0 10px; }
   .stage-sub { font-size:13px; color:var(--muted); }
@@ -87,15 +91,26 @@
 </div>
 <p class="sub">Every buyer you added across your searches and keyword views. Sort &amp; filter, then export the names for import into ON.</p>
 
-<!-- Two-step flow: process Sizing, then move on to Geography -->
+<!-- Three-step flow: review matching criteria → sizing → geography -->
 <div class="stepper">
-  <div class="step-pill active" id="pill1" onclick="goStep(1)"><span class="step-n">1</span> Sizing</div>
+  <div class="step-pill active" id="pill1" onclick="goStep(1)"><span class="step-n">1</span> Matching criteria<span class="step-warn" id="crit-badge" style="display:none"></span></div>
   <span class="step-sep">→</span>
-  <div class="step-pill" id="pill2" onclick="goStep(2)"><span class="step-n">2</span> Geography</div>
+  <div class="step-pill" id="pill2" onclick="goStep(2)"><span class="step-n">2</span> Sizing</div>
+  <span class="step-sep">→</span>
+  <div class="step-pill" id="pill3" onclick="goStep(3)"><span class="step-n">3</span> Geography</div>
 </div>
 
-<!-- STEP 1 · Sizing -->
+<!-- STEP 1 · Matching criteria (review gate) -->
 <div class="stage" id="stage1">
+  <div class="stage-h"><span class="stage-sub">Buyers below have a <b>Specific Matching Criteria</b> flagged in ON — review each and remove any that don't fit. Buyers <b>without</b> a criteria aren't shown here and pass straight through.</span></div>
+  <div class="step-nav">
+    <span class="tag-note" id="crit-note" style="margin:0; flex:1"></span>
+    <button class="btn2 primary" onclick="goStep(2)">Continue to Sizing &rarr;</button>
+  </div>
+</div>
+
+<!-- STEP 2 · Sizing -->
+<div class="stage" id="stage2" style="display:none">
   <div class="stage-h"><span class="stage-sub">Narrow the tag by size, AUM, activity and type. When you're happy, continue to geography.</span></div>
   <div class="tag-bar">
     <span class="fl">Tier</span>
@@ -116,18 +131,19 @@
     <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:150px">
   </div>
   <div class="step-nav">
+    <button class="btn2" onclick="goStep(1)">&larr; Back</button>
     <span class="tag-note" id="sized-note" style="margin:0; flex:1"></span>
     <button class="btn2" onclick="clearTag()">Clear tag</button>
-    <button class="btn2 primary" onclick="goStep(2)">Continue to Geography &rarr;</button>
+    <button class="btn2 primary" onclick="goStep(3)">Continue to Geography &rarr;</button>
   </div>
 </div>
 
-<!-- STEP 2 · Geography -->
-<div class="stage" id="stage2" style="display:none">
+<!-- STEP 3 · Geography -->
+<div class="stage" id="stage3" style="display:none">
   <div class="stage-h"><span class="stage-sub">Now narrow by geography — target regions and where they've acquired. Options &amp; counts reflect your sized set.</span></div>
   <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
   <div class="step-nav">
-    <button class="btn2" onclick="goStep(1)">&larr; Back to sizing</button>
+    <button class="btn2" onclick="goStep(2)">&larr; Back to sizing</button>
     <span class="tag-note" id="tag-note" style="margin:0; flex:1"></span>
     <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
     <button class="btn2" onclick="downloadJson()">.json</button>
@@ -232,16 +248,22 @@ function sortRows(rows){
   return rows.slice().sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
 }
 function currentRows(){ return sortRows(sizedRows().filter(passGeo)); }               // final set (sized + geo) — export
-function displayRows(){ return sortRows(step===1 ? sizedRows() : sizedRows().filter(passGeo)); }  // table, per step
+// Buyers flagged with a specific matching criteria (Step 1 review gate — does NOT filter downstream).
+function criteriaRows(){ return allRows().filter(function(r){ return r.specific_matching_criteria && String(r.specific_matching_criteria).trim(); }); }
+function displayRows(){                                                                // table, per step
+  if(step===1) return sortRows(criteriaRows());          // only the flagged subset
+  if(step===2) return sortRows(sizedRows());             // after sizing
+  return currentRows();                                  // after geography (sized + geo)
+}
 
-// two-step flow: process sizing, then move on to geography
+// three-step flow: matching-criteria review -> sizing -> geography
 var step = 1;
 function goStep(n){
   step = n;
-  document.getElementById('stage1').style.display = n===1 ? '' : 'none';
-  document.getElementById('stage2').style.display = n===2 ? '' : 'none';
-  document.getElementById('pill1').classList.toggle('active', n===1);
-  document.getElementById('pill2').classList.toggle('active', n===2);
+  [1,2,3].forEach(function(i){
+    document.getElementById('stage'+i).style.display = i===n ? '' : 'none';
+    document.getElementById('pill'+i).classList.toggle('active', i===n);
+  });
   render();
 }
 
@@ -252,6 +274,11 @@ function tierBadge(r){
   return '';
 }
 function specBadge(r){ return r.is_specialist ? '<span class="tier spec">Specialist</span>' : ''; }
+function critLine(r){
+  var c = r.specific_matching_criteria;
+  if(!c || !String(c).trim()) return '';
+  return '<div class="tag-crit"><span class="tag-crit-lbl">⚠ Specific matching criteria</span> '+esc(c)+'</div>';
+}
 // A buyer's geo as prominent chips. Matched (filter-selected) values come first and are
 // outlined, so on the Geography step you can see exactly why each buyer is (or isn't) a match.
 function geoChipRow(label, vals, sel, cls, cap){
@@ -278,15 +305,23 @@ function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/com
 function render(){
   renderFacets();
   var all = load(), total = Object.keys(all).length;
-  var nSized = sizedRows().length, nGeo = currentRows().length;
+  var nCrit = criteriaRows().length, nSized = sizedRows().length, nGeo = currentRows().length;
   var rows = displayRows();
+  // Step 1 warning badge on the stepper + note
+  var badge=document.getElementById('crit-badge');
+  if(nCrit>0){ badge.style.display=''; badge.textContent='⚠ '+nCrit; } else { badge.style.display='none'; }
+  var cn=document.getElementById('crit-note');
+  if(cn) cn.innerHTML = nCrit>0 ? '<b>'+nCrit+'</b> buyer'+(nCrit===1?'':'s')+' flagged — review and remove any that don’t fit'
+                                : '✓ None of your tagged buyers have a specific matching criteria';
   var fun='';
+  if(nCrit>0) fun += ' · <b>'+nCrit+'</b> flagged';
   if(nSized!==total) fun += ' · <b>'+nSized+'</b> after sizing';
-  if(step===2 && nGeo!==nSized) fun += ' · <b>'+nGeo+'</b> after geo';
+  if(step===3 && nGeo!==nSized) fun += ' · <b>'+nGeo+'</b> after geo';
   document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'+fun;
   var sn=document.getElementById('sized-note'); if(sn) sn.innerHTML = '<b>'+nSized+'</b> buyer'+(nSized===1?'':'s')+' after sizing';
   var body = document.getElementById('tag-body');
   if(!total){ body.innerHTML='<div class="empty-box">No buyers in the tag yet. Go to <a href="/buyer-match">Buyer Match</a>, tick buyers across your searches, then come back here.</div>'; document.getElementById('tag-note').textContent=''; return; }
+  if(step===1 && !rows.length){ body.innerHTML='<div class="empty-box">✓ No buyers in your tag have a specific matching criteria — nothing to review. <a href="#" onclick="goStep(2);return false;">Continue to Sizing &rarr;</a></div>'; return; }
   var head = COLS.map(function(c){
     var ar = sortKey===c.k ? '<span class="ar">'+(sortDir>0?'▲':'▼')+'</span>' : '';
     return '<th class="'+(c.r?'r':'')+'" onclick="setSort(\''+c.k+'\')">'+c.label+ar+'</th>';
@@ -304,7 +339,7 @@ function render(){
       + '<td class="num">'+(r.no_of_employees?nf(r.no_of_employees):'<span class="faint">—</span>')+'</td>'
       + '<td><span class="rm" title="Remove from tag" onclick="removeOne('+r.id+')">&times;</span></td>'
       + '</tr>';
-    var inner = tagGeoLine(r)
+    var inner = critLine(r) + tagGeoLine(r)
               + (r.description ? '<div class="tag-desc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+esc(r.description)+'</div>' : '');
     var desc = '<tr class="descrow"><td colspan="7">'+inner+'</td></tr>';
     return '<tbody>'+main+desc+'</tbody>';
@@ -353,7 +388,8 @@ function compactFromRow(r){
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
     description:r.description, is_specialist:r.is_specialist,
-    geographies:r.geographies, acquired_countries:r.acquired_countries};
+    geographies:r.geographies, acquired_countries:r.acquired_countries,
+    specific_matching_criteria:r.specific_matching_criteria};
 }
 function refreshFromServer(){
   var o = load(), ids = Object.keys(o).map(Number).filter(Boolean);
