@@ -140,7 +140,7 @@
 
 <!-- STEP 3 · Geography -->
 <div class="stage" id="stage3" style="display:none">
-  <div class="stage-h"><span class="stage-sub">Now narrow by geography — target regions and where they've acquired. Options &amp; counts reflect your sized set.</span></div>
+  <div class="stage-h"><span class="stage-sub">Prioritise by geography — pick target regions and/or where they've acquired; matching buyers <b>sort to the top</b>. Nothing is removed — everything still exports.</span></div>
   <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
   <div class="step-nav">
     <button class="btn2" onclick="goStep(2)">&larr; Back to sizing</button>
@@ -207,11 +207,13 @@ function passSizing(r){
   if(nm && (r.name||'').toLowerCase().indexOf(nm)===-1) return false;
   return true;
 }
-// STAGE 2 — geography, applied WITHIN Stage 1's output.
-function passGeo(r){
-  if(selRegions.size){ var g=r.geographies||[]; if(!g.some(function(x){ return selRegions.has(x); })) return false; }
-  if(selAcquired.size){ var a=r.acquired_countries||[]; if(!a.some(function(x){ return selAcquired.has(x); })) return false; }
-  return true;
+// STAGE 3 — geography. Selected geos DON'T filter; they BOOST sort order (buyers matching more
+// of the selected regions/countries rank first). Everything sized still shows.
+function geoScore(r){
+  var s=0;
+  if(selRegions.size && r.geographies) r.geographies.forEach(function(v){ if(selRegions.has(v)) s++; });
+  if(selAcquired.size && r.acquired_countries) r.acquired_countries.forEach(function(v){ if(selAcquired.has(v)) s++; });
+  return s;
 }
 function allRows(){ var s=load(); return Object.keys(s).map(function(k){ return s[k]; }); }
 function sizedRows(){ return allRows().filter(passSizing); }              // after Stage 1
@@ -245,9 +247,13 @@ document.getElementById('facet-bar').addEventListener('click', function(e){
 
 function sortRows(rows){
   var col = COLS.filter(function(c){ return c.k===sortKey; })[0] || COLS[0];
-  return rows.slice().sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
+  var geoOn = (selRegions.size + selAcquired.size) > 0;
+  return rows.slice().sort(function(a,b){
+    if(geoOn){ var d = geoScore(b) - geoScore(a); if(d) return d; }   // geo matches float to the top
+    var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir;
+  });
 }
-function currentRows(){ return sortRows(sizedRows().filter(passGeo)); }               // final set (sized + geo) — export
+function currentRows(){ return sortRows(sizedRows()); }   // geo sorts, never filters — the sized set, geo-ranked
 // Buyers flagged with a specific matching criteria (Step 1 review gate — does NOT filter downstream).
 function criteriaRows(){ return allRows().filter(function(r){ return r.specific_matching_criteria && String(r.specific_matching_criteria).trim(); }); }
 function displayRows(){                                                                // table, per step
@@ -305,7 +311,9 @@ function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/com
 function render(){
   renderFacets();
   var all = load(), total = Object.keys(all).length;
-  var nCrit = criteriaRows().length, nSized = sizedRows().length, nGeo = currentRows().length;
+  var nCrit = criteriaRows().length, nSized = sizedRows().length;
+  var geoSel = selRegions.size + selAcquired.size;
+  var nGeoMatch = geoSel ? sizedRows().filter(function(r){ return geoScore(r)>0; }).length : 0;
   var rows = displayRows();
   // Step 1 warning badge on the stepper + note
   var badge=document.getElementById('crit-badge');
@@ -316,7 +324,7 @@ function render(){
   var fun='';
   if(nCrit>0) fun += ' · <b>'+nCrit+'</b> flagged';
   if(nSized!==total) fun += ' · <b>'+nSized+'</b> after sizing';
-  if(step===3 && nGeo!==nSized) fun += ' · <b>'+nGeo+'</b> after geo';
+  if(step===3 && geoSel) fun += ' · <b>'+nGeoMatch+'</b> match geography (ranked to top)';
   document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'+fun;
   var sn=document.getElementById('sized-note'); if(sn) sn.innerHTML = '<b>'+nSized+'</b> buyer'+(nSized===1?'':'s')+' after sizing';
   var body = document.getElementById('tag-body');
