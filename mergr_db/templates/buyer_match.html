@@ -310,7 +310,8 @@ function bmCompact(r){
     email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
-    description:r.description, is_specialist:r.is_specialist};
+    description:r.description, is_specialist:r.is_specialist,
+    geographies:r.geographies, acquired_countries:r.acquired_countries};
 }
 function bmSelToggle(id){
   var o=bmSelLoad(), k=String(id), added;

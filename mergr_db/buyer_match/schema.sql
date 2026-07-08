@@ -115,17 +115,21 @@ $$;
 -- carries size_category + AUM + total_buys/largest_buy) or, failing that, a Mergr COMPANY
 -- (operating/strategic buyer — acquisitions + largest derived from transaction_parties).
 CREATE TABLE IF NOT EXISTS buyer_match.buyer_mergr (
-    buyer_id      bigint PRIMARY KEY,
-    kind          text,               -- 'firm' | 'company'
-    firm_id       bigint,
-    company_id    bigint,
-    size_category text,               -- firm only (Small/Middle-Market/Large/Mega)
-    aum           text,               -- firm only (pe_assets, e.g. 8.2BUSD)
-    acquisitions  int,                -- firm total_buys, or company acquirer count
-    largest       text,               -- firm largest_buy, or company's largest acquisition
-    matched_by    text,               -- 'domain' | 'name'
-    matched_at    timestamptz DEFAULT now()
+    buyer_id          bigint PRIMARY KEY,
+    kind              text,           -- 'firm' | 'company'
+    firm_id           bigint,
+    company_id        bigint,
+    size_category     text,           -- firm only (Small/Middle-Market/Large/Mega)
+    aum               text,           -- firm only (pe_assets, e.g. 8.2BUSD)
+    acquisitions      int,            -- firm total_buys, or company acquirer count
+    largest           text,           -- firm largest_buy, or company's largest acquisition
+    geographies       text[],         -- firm geographic_preferences (stated target regions)
+    acquired_countries text[],        -- raw last-token of acquisition target_location (states/countries as-is)
+    matched_by        text,           -- 'domain' | 'name' | 'email_domain'
+    matched_at        timestamptz DEFAULT now()
 );
+ALTER TABLE buyer_match.buyer_mergr ADD COLUMN IF NOT EXISTS geographies text[];
+ALTER TABLE buyer_match.buyer_mergr ADD COLUMN IF NOT EXISTS acquired_countries text[];
 
 -- Sync bookkeeping (single row).
 CREATE TABLE IF NOT EXISTS buyer_match.sync_state (

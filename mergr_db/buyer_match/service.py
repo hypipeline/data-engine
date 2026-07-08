@@ -22,7 +22,8 @@ BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
 # buyer isn't in Mergr. Keys kept as firm_* for the UI even for company matches (kind tells them apart).
 FIRM_COLS = ("bm.kind AS mergr_kind, bm.firm_id AS firm_id, bm.company_id AS company_id, "
              "bm.size_category AS firm_size, bm.aum AS firm_aum, "
-             "bm.acquisitions AS firm_acquisitions, bm.largest AS firm_largest")
+             "bm.acquisitions AS firm_acquisitions, bm.largest AS firm_largest, "
+             "bm.geographies AS geographies, bm.acquired_countries AS acquired_countries")
 
 
 def _openai_key():

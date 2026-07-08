@@ -90,12 +90,23 @@ comp_m AS (
     SELECT buyer_id, company_id, 'name'   AS mb FROM cn
 )
 INSERT INTO buyer_match.buyer_mergr
-    (buyer_id, kind, firm_id, company_id, size_category, aum, acquisitions, largest, matched_by)
+    (buyer_id, kind, firm_id, company_id, size_category, aum, acquisitions, largest,
+     geographies, acquired_countries, matched_by)
 -- `largest` = price paid only (no target entity). Firms: extract the $amount from the
 -- precomputed largest_buy text. Companies: format the deal_value of the biggest acquirer deal.
+-- geographies = firm's stated geographic_preferences (regions). acquired_countries = RAW last
+-- token of each acquisition target_location (US states / countries as-is, no normalization).
 SELECT buyer_id, 'firm', firm_id, NULL,
        size_category, pe_assets, total_buys,
-       substring(largest_buy from '\$[0-9][0-9.,]*[BMK]?'), mb
+       substring(largest_buy from '\$[0-9][0-9.,]*[BMK]?'),
+       (SELECT array_agg(DISTINCT btrim(x))
+          FROM firms fg, unnest(string_to_array(fg.geographic_preferences, ',')) x
+          WHERE fg.firm_id = firm_m.firm_id AND btrim(x) <> ''),
+       (SELECT array_agg(DISTINCT btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))))
+          FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+          WHERE tp.entity_type='firms' AND tp.entity_mergr_id=firm_m.firm_id AND tp.role='acquirer'
+            AND btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))) <> ''),
+       mb
 FROM firm_m
 UNION ALL
 SELECT cm.buyer_id, 'company', NULL, cm.company_id,
@@ -114,5 +125,10 @@ SELECT cm.buyer_id, 'company', NULL, cm.company_id,
                 WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id
                   AND tp.role='acquirer' AND t.deal_value > 0 AND fx.usd_per_unit IS NOT NULL) u
           ORDER BY u.usd DESC LIMIT 1),
+       NULL,                                            -- geographies: companies have no stated prefs
+       (SELECT array_agg(DISTINCT btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))))
+          FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+          WHERE tp.entity_type='company' AND tp.entity_mergr_id=cm.company_id AND tp.role='acquirer'
+            AND btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))) <> ''),
        cm.mb
 FROM comp_m cm;
