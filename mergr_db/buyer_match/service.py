@@ -173,9 +173,19 @@ def buyers_by_ids(conn, ids):
 
 def list_mandates(conn):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        # Dedupe by code: the same mandate can exist in BOTH source tables (opportunities +
+        # bs_opportunities). Keep one per code — prefer the active one, then opportunities.
+        # Mandates with no code aren't deduped (kept as-is).
         cur.execute(
             """SELECT id, source_table, code, project_name, company_name, summary, status
-               FROM buyer_match.mandates ORDER BY id DESC""")
+               FROM (
+                 SELECT *, CASE WHEN coalesce(code,'')='' THEN NULL
+                   ELSE row_number() OVER (PARTITION BY code
+                        ORDER BY (status=1) DESC, (source_table='opportunities') DESC, id DESC) END AS rn
+                 FROM buyer_match.mandates
+               ) x
+               WHERE rn IS NULL OR rn = 1
+               ORDER BY id DESC""")
         out = []
         for r in cur.fetchall():
             co = f" ({r['company_name']})" if r.get("company_name") else ""
