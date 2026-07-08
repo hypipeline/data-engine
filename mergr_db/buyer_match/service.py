@@ -156,6 +156,20 @@ def keyword_buyers(conn, keywords):
         return [dict(r) for r in cur.fetchall()]
 
 
+def buyers_by_ids(conn, ids):
+    """Full buyer rows (same cols as search, incl. description + Mergr) for a set of ids —
+    used by the tag page to always show fresh data regardless of when a buyer was tagged."""
+    if not ids:
+        return []
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            f"""SELECT {BUYER_COLS}, {FIRM_COLS} FROM buyer_match.buyers b
+                LEFT JOIN buyer_match.buyer_mergr bm ON bm.buyer_id = b.id
+                WHERE b.id = ANY(%s)""",
+            (list(ids),))
+        return [dict(r) for r in cur.fetchall()]
+
+
 def list_mandates(conn):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(

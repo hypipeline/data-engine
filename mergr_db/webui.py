@@ -541,6 +541,9 @@ class _KeywordsReq(BaseModel):
 class _KeywordReq(BaseModel):
     keyword: str = ""
 
+class _IdsReq(BaseModel):
+    ids: list[int] = []
+
 
 @app.get("/buyer-match", response_class=HTMLResponse)
 def buyer_match_page(request: Request):
@@ -597,6 +600,14 @@ def bm_keyword_buyers(req: _KeywordsReq):
 def bm_similar_keywords(req: _KeywordReq):
     kw = (req.keyword or "").strip()
     return JSONResponse({"keyword": kw, "similar": _bm(bm_svc.similar_keywords, kw)})
+
+
+@app.post("/buyer-match/by-ids")
+def bm_by_ids(req: _IdsReq):
+    """Fresh full rows for the tag page — so description + live Mergr data always show,
+    regardless of when a buyer was added to the tag."""
+    ids = list(dict.fromkeys(req.ids))[:5000]
+    return JSONResponse({"buyers": _bm(bm_svc.buyers_by_ids, ids) if ids else []})
 
 
 import queue as _queue                               # noqa: E402

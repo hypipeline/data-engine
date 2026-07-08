@@ -203,9 +203,33 @@ function downloadCsv(){
 }
 function flash(msg){ var n=document.getElementById('tag-note'); n.textContent=msg; n.style.color='var(--accent)'; setTimeout(function(){ n.style.color=''; render(); }, 1500); }
 
+// Refresh the tagged buyers from the server on load, so description + live Mergr data always
+// show — even for buyers added before the cart stored those fields. Falls back to stored data.
+function compactFromRow(r){
+  return {id:r.id, name:r.name, website:r.website, no_of_employees:r.no_of_employees,
+    email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
+    firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
+    mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
+    description:r.description};
+}
+function refreshFromServer(){
+  var o = load(), ids = Object.keys(o).map(Number).filter(Boolean);
+  if(!ids.length){ render(); return; }
+  fetch('/buyer-match/by-ids', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var byId={}; (d.buyers||[]).forEach(function(r){ byId[String(r.id)]=r; });
+      var cur=load(), n=0;
+      Object.keys(cur).forEach(function(k){ if(byId[k]){ cur[k]=compactFromRow(byId[k]); n++; } });
+      if(n){ save(cur); }
+      render();
+    })
+    .catch(function(){ render(); });
+}
+
 ['f-tier','f-aum','f-acq','f-emp','f-name'].forEach(function(id){
   document.getElementById(id).addEventListener('input', render);
 });
-render();
+refreshFromServer();
 </script>
 {% endblock %}
