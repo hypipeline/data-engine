@@ -50,8 +50,16 @@
   .tag-t .rm:hover { color:#dc2626; }
   .empty-box { color:var(--muted); font-size:14px; padding:22px 4px; }
   .tag-note { font-size:12px; color:var(--muted); margin-top:10px; }
-  .facet-bar { margin:0 0 12px; }
+  .stage { margin:0 0 16px; }
+  .stage-h { display:flex; align-items:baseline; gap:8px; font-size:14px; font-weight:700; color:var(--text); margin:0 0 8px; }
+  .stage-n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; font-weight:800; }
+  .stage-sub { font-size:11.5px; font-weight:500; color:var(--muted); }
+  .export-bar { display:flex; align-items:center; gap:10px; margin:0 0 14px; padding:10px 14px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius); }
+  .facet-bar { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; box-shadow:var(--shadow); }
+  .facet-n { color:var(--faint); font-weight:600; font-size:10px; }
+  .facet-chip.on .facet-n { color:#dbe4ff; }
   .facet-row { display:flex; flex-wrap:wrap; gap:5px; align-items:baseline; margin-bottom:7px; }
+  .facet-row:last-child { margin-bottom:0; }
   .facet-lbl { font-size:10px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin-right:6px; min-width:96px; }
   .facet-chip { display:inline-block; background:var(--panel); color:var(--muted); border:1px solid var(--border-2); border-radius:20px; padding:2px 10px; font-size:11.5px; cursor:pointer; user-select:none; }
   .facet-chip:hover { border-color:var(--accent); color:var(--accent); }
@@ -66,37 +74,44 @@
 </div>
 <p class="sub">Every buyer you added across your searches and keyword views. Sort &amp; filter, then export the names for import into ON.</p>
 
-<div class="tag-bar">
-  <span class="fl">Specialist</span>
-  <select id="f-spec">
-    <option value="">Any</option>
-    <option value="1">Yes</option>
-    <option value="0">No</option>
-  </select>
-  <span class="fl">Tier</span>
-  <select id="f-tier">
-    <option value="">Any</option>
-    <option value="Mega">Mega</option>
-    <option value="Large">Large</option>
-    <option value="Middle-Market">Middle-Market</option>
-    <option value="Small">Small</option>
-    <option value="_mergr">In Mergr</option>
-    <option value="_none">Not in Mergr</option>
-  </select>
-  <span class="fl">Min AUM $B</span><input class="num" id="f-aum" type="number" min="0" step="0.5" placeholder="any">
-  <span class="fl">Min acq.</span><input class="num" id="f-acq" type="number" min="0" step="1" placeholder="any">
-  <span class="fl">Min staff</span><input class="num" id="f-emp" type="number" min="0" step="10" placeholder="any">
-  <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:160px">
-  <span class="grow"></span>
+<!-- Stage 1 · Sizing — the original filters, reframed as the sizing pass -->
+<div class="stage">
+  <div class="stage-h"><span class="stage-n">1</span> Sizing <span class="stage-sub">size · AUM · activity · type</span></div>
+  <div class="tag-bar">
+    <span class="fl">Tier</span>
+    <select id="f-tier">
+      <option value="">Any</option>
+      <option value="Mega">Mega</option>
+      <option value="Large">Large</option>
+      <option value="Middle-Market">Middle-Market</option>
+      <option value="Small">Small</option>
+      <option value="_mergr">In Mergr</option>
+      <option value="_none">Not in Mergr</option>
+    </select>
+    <span class="fl">Min AUM $B</span><input class="num" id="f-aum" type="number" min="0" step="0.5" placeholder="any">
+    <span class="fl">Min acq.</span><input class="num" id="f-acq" type="number" min="0" step="1" placeholder="any">
+    <span class="fl">Min staff</span><input class="num" id="f-emp" type="number" min="0" step="10" placeholder="any">
+    <span class="fl">Specialist</span>
+    <select id="f-spec"><option value="">Any</option><option value="1">Yes</option><option value="0">No</option></select>
+    <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:150px">
+  </div>
+</div>
+
+<!-- Stage 2 · Geography — geo-focused, filters within Stage 1's output -->
+<div class="stage">
+  <div class="stage-h"><span class="stage-n">2</span> Geography <span class="stage-sub">target regions &amp; where they've acquired · counts reflect Stage 1</span></div>
+  <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
+</div>
+
+<div class="export-bar">
+  <span class="tag-note" id="tag-note" style="margin:0; flex:1"></span>
   <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
   <button class="btn2" onclick="downloadJson()">.json</button>
   <button class="btn2" onclick="downloadCsv()">.csv</button>
   <button class="btn2 danger" onclick="clearTag()">Clear</button>
 </div>
 
-<div class="facet-bar" id="facet-bar"></div>
 <div id="tag-body"></div>
-<div class="tag-note" id="tag-note"></div>
 
 <script>
 var KEY = 'bm_tag_selection';
@@ -130,38 +145,14 @@ var COLS = [
   {k:'emp', label:'Staff', r:true, get:function(r){ return r.no_of_employees==null?-1:Number(r.no_of_employees); }},
 ];
 
-// Geography facets (multi-select, OR within a facet): target regions + acquired-in countries.
+// Stage 2 geography facets (multi-select, OR within a facet). selected sets:
 var selRegions = new Set(), selAcquired = new Set();
-function distinctArrayValues(key){
-  var all=load(), s={};
-  Object.keys(all).forEach(function(k){ (all[k][key]||[]).forEach(function(v){ if(v) s[v]=1; }); });
-  return Object.keys(s).sort(function(a,b){ return a.toLowerCase()<b.toLowerCase()?-1:1; });
-}
-function facetChips(title, values, sel){
-  if(!values.length) return '';
-  return '<div class="facet-row"><span class="facet-lbl">'+title+'</span>'
-    + values.map(function(v){
-        return '<span class="facet-chip'+(sel.has(v)?' on':'')+'" data-facet="'+esc(title)+'" data-val="'+esc(v)+'">'+esc(v)+'</span>';
-      }).join('') + '</div>';
-}
-function renderFacets(){
-  document.getElementById('facet-bar').innerHTML =
-    facetChips('Target regions', distinctArrayValues('geographies'), selRegions)
-  + facetChips('Acquired in', distinctArrayValues('acquired_countries'), selAcquired);
-}
-document.getElementById('facet-bar').addEventListener('click', function(e){
-  var c=e.target.closest('.facet-chip'); if(!c) return;
-  var set = c.dataset.facet==='Target regions' ? selRegions : selAcquired, v=c.dataset.val;
-  if(set.has(v)) set.delete(v); else set.add(v);
-  render();
-});
 
-function passFilters(r){
+// STAGE 1 — sizing pass (size tier, AUM, activity, staff, specialist type, name).
+function passSizing(r){
   var sp = document.getElementById('f-spec').value;
   if(sp==='1' && !r.is_specialist) return false;
   if(sp==='0' && r.is_specialist) return false;
-  if(selRegions.size){ var g=r.geographies||[]; if(!g.some(function(x){ return selRegions.has(x); })) return false; }
-  if(selAcquired.size){ var a=r.acquired_countries||[]; if(!a.some(function(x){ return selAcquired.has(x); })) return false; }
   var t = document.getElementById('f-tier').value;
   if(t==='_mergr' && !(r.firm_id||r.company_id)) return false;
   if(t==='_none' && (r.firm_id||r.company_id)) return false;
@@ -176,10 +167,44 @@ function passFilters(r){
   if(nm && (r.name||'').toLowerCase().indexOf(nm)===-1) return false;
   return true;
 }
+// STAGE 2 — geography, applied WITHIN Stage 1's output.
+function passGeo(r){
+  if(selRegions.size){ var g=r.geographies||[]; if(!g.some(function(x){ return selRegions.has(x); })) return false; }
+  if(selAcquired.size){ var a=r.acquired_countries||[]; if(!a.some(function(x){ return selAcquired.has(x); })) return false; }
+  return true;
+}
+function allRows(){ var s=load(); return Object.keys(s).map(function(k){ return s[k]; }); }
+function sizedRows(){ return allRows().filter(passSizing); }              // after Stage 1
+
+// facet options + counts computed over the Stage-1 (sized) set
+function facetCounts(rows, key){
+  var c={}; rows.forEach(function(r){ (r[key]||[]).forEach(function(v){ if(v) c[v]=(c[v]||0)+1; }); });
+  return c;
+}
+function facetChips(title, counts, sel){
+  var vals = Object.keys(counts).sort(function(a,b){ return a.toLowerCase()<b.toLowerCase()?-1:1; });
+  if(!vals.length) return '';
+  return '<div class="facet-row"><span class="facet-lbl">'+title+'</span>'
+    + vals.map(function(v){
+        return '<span class="facet-chip'+(sel.has(v)?' on':'')+'" data-facet="'+esc(title)+'" data-val="'+esc(v)+'">'
+             + esc(v)+' <span class="facet-n">'+counts[v]+'</span></span>';
+      }).join('') + '</div>';
+}
+function renderFacets(){
+  var sized = sizedRows();
+  var html = facetChips('Target regions', facetCounts(sized,'geographies'), selRegions)
+           + facetChips('Acquired in', facetCounts(sized,'acquired_countries'), selAcquired);
+  document.getElementById('facet-bar').innerHTML = html || '<span class="empty-box" style="padding:4px 0">No geography on the current set.</span>';
+}
+document.getElementById('facet-bar').addEventListener('click', function(e){
+  var c=e.target.closest('.facet-chip'); if(!c) return;
+  var set = c.dataset.facet==='Target regions' ? selRegions : selAcquired, v=c.dataset.val;
+  if(set.has(v)) set.delete(v); else set.add(v);
+  render();
+});
 
 function currentRows(){
-  var sel = load();
-  var rows = Object.keys(sel).map(function(k){ return sel[k]; }).filter(passFilters);
+  var rows = sizedRows().filter(passGeo);
   var col = COLS.filter(function(c){ return c.k===sortKey; })[0] || COLS[0];
   rows.sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
   return rows;
@@ -207,8 +232,10 @@ function render(){
   renderFacets();
   var all = load(), total = Object.keys(all).length;
   var rows = currentRows();
-  document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'
-    + (rows.length!==total ? ' · <b>'+rows.length+'</b> after filters' : '');
+  var nSized = sizedRows().length, fun='';
+  if(nSized!==total) fun += ' · <b>'+nSized+'</b> after sizing';
+  if(rows.length!==nSized) fun += ' · <b>'+rows.length+'</b> after geo';
+  document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'+fun;
   var body = document.getElementById('tag-body');
   if(!total){ body.innerHTML='<div class="empty-box">No buyers in the tag yet. Go to <a href="/buyer-match">Buyer Match</a>, tick buyers across your searches, then come back here.</div>'; document.getElementById('tag-note').textContent=''; return; }
   var head = COLS.map(function(c){
