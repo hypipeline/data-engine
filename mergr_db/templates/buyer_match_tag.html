@@ -28,9 +28,13 @@
   .tag-t thead th { text-align:left; font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); padding:11px 14px; background:var(--bg-2); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
   .tag-t thead th.r { text-align:right; }
   .tag-t thead th .ar { color:var(--accent); margin-left:3px; }
-  .tag-t tbody tr { border-top:1px solid var(--border); }
-  .tag-t tbody tr:hover { background:var(--bg-2); }
-  .tag-t td { padding:10px 14px; vertical-align:top; }
+  .tag-t tbody { border-top:1px solid var(--border); }
+  .tag-t tbody:first-of-type { border-top:none; }
+  .tag-t tbody:hover { background:var(--bg-2); }
+  .tag-t tr.main-r td { padding:10px 14px 4px; vertical-align:top; }
+  .tag-t tr.descrow td { padding:0 14px 12px; }
+  .tag-desc { font-size:12px; color:var(--muted); line-height:1.5; max-width:920px; }
+  .tag-desc.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }
   .tag-t td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
   .tag-t td.num.gold { color:#92400e; font-weight:700; }
   .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
@@ -157,7 +161,7 @@ function render(){
     var href = mergrHref(r);
     var nm = href ? '<a href="'+href+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>' : esc(r.name||'(unnamed)');
     if(r.website) nm = '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>';
-    return '<tr>'
+    var main = '<tr class="main-r">'
       + '<td><div class="nm">'+nm+tierBadge(r)+'</div><div class="site">'+esc(shortUrl(r.website))+'</div></td>'
       + '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
@@ -166,8 +170,12 @@ function render(){
       + '<td class="num">'+(r.no_of_employees?nf(r.no_of_employees):'<span class="faint">—</span>')+'</td>'
       + '<td><span class="rm" title="Remove from tag" onclick="removeOne('+r.id+')">&times;</span></td>'
       + '</tr>';
+    var desc = r.description
+      ? '<tr class="descrow"><td colspan="7"><div class="tag-desc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+esc(r.description)+'</div></td></tr>'
+      : '';
+    return '<tbody>'+main+desc+'</tbody>';
   }).join('');
-  body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
+  body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead>'+trs+'</table></div>';
   document.getElementById('tag-note').textContent = 'Names export uses the '+rows.length+' buyer'+(rows.length===1?'':'s')+' currently shown (after filters).';
 }
 
@@ -188,9 +196,9 @@ function dl(filename, text, type){
 function downloadTxt(){ dl('buyer_tag_names.txt', namesList().join('\n'), 'text/plain'); }
 function downloadCsv(){
   var rows=currentRows();
-  var head='name,website,size,aum,acquisitions,largest,employees';
+  var head='name,website,size,aum,acquisitions,largest,employees,description';
   var esc2=function(s){ s=(s==null?'':String(s)); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  var lines=rows.map(function(r){ return [r.name,shortUrl(r.website),r.firm_size,r.firm_aum,r.firm_acquisitions,r.firm_largest,r.no_of_employees].map(esc2).join(','); });
+  var lines=rows.map(function(r){ return [r.name,shortUrl(r.website),r.firm_size,r.firm_aum,r.firm_acquisitions,r.firm_largest,r.no_of_employees,r.description].map(esc2).join(','); });
   dl('buyer_tag.csv', head+'\n'+lines.join('\n'), 'text/csv');
 }
 function flash(msg){ var n=document.getElementById('tag-note'); n.textContent=msg; n.style.color='var(--accent)'; setTimeout(function(){ n.style.color=''; render(); }, 1500); }

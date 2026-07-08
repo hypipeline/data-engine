@@ -301,7 +301,8 @@ function bmCompact(r){
   return {id:r.id, name:r.name, website:r.website, no_of_employees:r.no_of_employees,
     email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
-    mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags};
+    mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
+    description:r.description};
 }
 function bmSelToggle(id){
   var o=bmSelLoad(), k=String(id), added;
