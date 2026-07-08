@@ -11,3 +11,25 @@ services:
     ports: !override
       - "80:80"
       - "443:443"
+
+  # Buyer Match sync + mandate docs on prod:
+  #  - source DB = the live ON origryxd_main via the `on-db-tunnel` systemd service (172.17.0.1:3307)
+  #  - mandate documents fetched on-demand over SFTP from the cPanel storage dir
+  # Secret (BM_SRC_PASSWORD) lives in the box-only, gitignored buyer_match.prod.env.
+  web:
+    env_file:
+      - entity.secrets.env
+      - buyer_match.prod.env
+    environment:
+      BM_SRC_HOST: "172.17.0.1"
+      BM_SRC_PORT: "3307"
+      BM_SRC_USER: "origryxd_readonly"
+      BM_SRC_DB: "origryxd_main"
+      BM_DOCS_BASE: "/docs-not-mounted"     # no local doc disk on prod → SFTP fallback
+      BM_SFTP_HOST: "162.254.35.104"
+      BM_SFTP_PORT: "22"
+      BM_SFTP_USER: "origryxd"
+      BM_SFTP_KEY: "/keys/cpanel_origryxd"
+      BM_SFTP_BASE: "/home/origryxd/public_html/library/storage/app/public"
+    volumes:
+      - /home/ec2-user/.ssh/cpanel_origryxd:/keys/cpanel_origryxd:ro
