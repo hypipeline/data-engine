@@ -21,6 +21,11 @@ import psycopg2
 import psycopg2.extras
 import pymysql
 
+try:
+    from buyer_match.email_domains import corporate_domains
+except ImportError:                       # when run as a plain script from this dir
+    from email_domains import corporate_domains
+
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_VERSION = 1
 PG_DSN = os.environ.get("DATABASE_URL", "postgres://mergr:mergr@127.0.0.1:5433/mergr")
@@ -73,6 +78,20 @@ def load_active_buyers(my):
             if r["buyer_id"] in buyers:
                 buyers[r["buyer_id"]]["email_count"] = int(r["ec"] or 0)
                 buyers[r["buyer_id"]]["linkedin_count"] = int(r["lc"] or 0)
+        # distinct CORPORATE contact-email domains per buyer (buyer↔firm email-domain match key)
+        try:
+            cur.execute("SET SESSION group_concat_max_len = 100000")
+        except Exception:                 # noqa: BLE001
+            pass
+        cur.execute("""SELECT buyer_id,
+              GROUP_CONCAT(DISTINCT LOWER(TRIM(SUBSTRING_INDEX(email,'@',-1))) SEPARATOR ',') AS doms
+            FROM buyer_contacts
+            WHERE deleted_at IS NULL AND sandboxed != 1 AND email LIKE '%@%'
+            GROUP BY buyer_id""")
+        for r in cur.fetchall():
+            if r["buyer_id"] in buyers:
+                doms = corporate_domains((r["doms"] or "").split(","))
+                buyers[r["buyer_id"]]["email_domains"] = doms or None
     return buyers
 
 
@@ -93,7 +112,7 @@ def backfill_buyers(pg, buyers):
             bid, b.get("name"), b.get("description"), b.get("investment_thesis"),
             b.get("sector_keywords"), b.get("website"), b.get("tags"),
             int(b.get("email_count") or 0), int(b.get("linkedin_count") or 0),
-            b.get("no_of_employees"),
+            b.get("no_of_employees"), b.get("email_domains"),
             vec_literal(emb) if emb else None,
             EMBED_MODEL if emb else None, EMBED_VERSION,
             text_hash(txt) if emb else None,
@@ -103,19 +122,19 @@ def backfill_buyers(pg, buyers):
             with_emb += 1
     sql = """INSERT INTO buyer_match.buyers
         (id,name,description,investment_thesis,sector_keywords,website,tags,
-         email_count,linkedin_count,no_of_employees,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
+         email_count,linkedin_count,no_of_employees,email_domains,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
         VALUES %s
         ON CONFLICT (id) DO UPDATE SET
          name=EXCLUDED.name, description=EXCLUDED.description, investment_thesis=EXCLUDED.investment_thesis,
          sector_keywords=EXCLUDED.sector_keywords, website=EXCLUDED.website, tags=EXCLUDED.tags,
          email_count=EXCLUDED.email_count, linkedin_count=EXCLUDED.linkedin_count,
-         no_of_employees=EXCLUDED.no_of_employees,
+         no_of_employees=EXCLUDED.no_of_employees, email_domains=EXCLUDED.email_domains,
          embedding=EXCLUDED.embedding, embed_model=EXCLUDED.embed_model, embed_version=EXCLUDED.embed_version,
          embedding_text_hash=EXCLUDED.embedding_text_hash, embedded_at=EXCLUDED.embedded_at,
          synced_at=now()"""
     with pg.cursor() as cur:
         psycopg2.extras.execute_values(cur, sql, rows,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
+            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
     pg.commit()
     return len(rows), with_emb
 

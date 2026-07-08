@@ -1,8 +1,12 @@
 -- Rebuild buyer_match.buyer_mergr — the precomputed buyer -> Mergr link.
 -- One-time / periodic (re-run after a sync). Set-based, so the whole 16k runs in one pass.
--- Match precedence: firm-by-domain -> firm-by-name -> company-by-domain -> company-by-name.
+-- Match precedence: firm-by-domain -> firm-by-name -> firm-by-shared-corporate-email-domain
+--   -> company-by-domain -> company-by-name.
 -- Firms carry precomputed size/AUM/total_buys/largest_buy; companies derive acquisitions +
 -- largest from transaction_parties (role='acquirer') joined to transactions.
+-- The email-domain pass matches a buyer's corporate contact-email domains (buyers.email_domains,
+-- sampled at sync) against a firm's domain/website/email domains — free providers excluded
+-- (buyer_match.is_free_email_domain), single-firm domains only. Requires email_domains.ensure_schema().
 
 TRUNCATE buyer_match.buyer_mergr;
 
@@ -26,10 +30,46 @@ fn AS (   -- firm by exact name (buyers not matched by domain)
     WHERE b.id NOT IN (SELECT buyer_id FROM fd)
     ORDER BY b.id, f.firm_id
 ),
+-- firm CORPORATE candidate domains: the domain field, the website domain, and the email domain.
+fdoms AS (
+    SELECT firm_id, dom FROM (
+        SELECT firm_id, lower(domain) AS dom FROM firms WHERE coalesce(domain,'') <> ''
+        UNION
+        SELECT firm_id, split_part(lower(regexp_replace(regexp_replace(website,'^https?://',''),'^www\.','')),'/',1)
+          FROM firms WHERE coalesce(website,'') <> ''
+        UNION
+        SELECT firm_id, lower(btrim(regexp_replace(email,'^.*@',''))) FROM firms WHERE email LIKE '%@%'
+    ) x
+    WHERE dom <> '' AND NOT buyer_match.is_free_email_domain(dom)
+),
+-- only domains that identify EXACTLY ONE firm — never link on a domain shared by several firms
+fdoms_u AS (
+    SELECT dom, min(firm_id) AS firm_id FROM fdoms GROUP BY dom HAVING count(DISTINCT firm_id) = 1
+),
+-- buyer CORPORATE candidate domains (website + sampled contact-email domains), for buyers NOT
+-- already matched to a firm by domain or name.
+bdoms AS (
+    SELECT DISTINCT buyer_id, dom FROM (
+        SELECT b.id AS buyer_id, b.dom FROM b WHERE b.dom <> ''
+        UNION
+        SELECT id AS buyer_id, lower(unnest(email_domains)) FROM buyer_match.buyers WHERE email_domains IS NOT NULL
+    ) y
+    WHERE dom <> '' AND NOT buyer_match.is_free_email_domain(dom)
+      AND buyer_id NOT IN (SELECT buyer_id FROM fd)
+      AND buyer_id NOT IN (SELECT buyer_id FROM fn)
+),
+fe AS (   -- firm by a SHARED corporate domain (rescues e.g. HIG: buyer @higcapital.com = firm email domain)
+    SELECT DISTINCT ON (bd.buyer_id) bd.buyer_id, f.firm_id,
+           f.size_category, f.pe_assets, f.total_buys, f.largest_buy
+    FROM bdoms bd JOIN fdoms_u fu ON fu.dom = bd.dom JOIN firms f ON f.firm_id = fu.firm_id
+    ORDER BY bd.buyer_id, f.firm_id
+),
 firm_m AS (
-    SELECT buyer_id, firm_id, size_category, pe_assets, total_buys, largest_buy, 'domain' AS mb FROM fd
+    SELECT buyer_id, firm_id, size_category, pe_assets, total_buys, largest_buy, 'domain'       AS mb FROM fd
     UNION ALL
-    SELECT buyer_id, firm_id, size_category, pe_assets, total_buys, largest_buy, 'name'   AS mb FROM fn
+    SELECT buyer_id, firm_id, size_category, pe_assets, total_buys, largest_buy, 'name'         AS mb FROM fn
+    UNION ALL
+    SELECT buyer_id, firm_id, size_category, pe_assets, total_buys, largest_buy, 'email_domain' AS mb FROM fe
 ),
 cd AS (   -- company by domain (buyers not matched to any firm)
     SELECT DISTINCT ON (b.id) b.id AS buyer_id, c.company_id

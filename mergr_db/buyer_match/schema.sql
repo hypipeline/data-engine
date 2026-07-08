@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS buyer_match.buyers (
     email_count          int  DEFAULT 0,
     linkedin_count       int  DEFAULT 0,
     no_of_employees      int,
+    email_domains        text[],                   -- distinct CORPORATE contact-email domains (ON side); firm email-domain match key
     embedding            vector(1536),
     embed_model          text,
     embed_version        int  DEFAULT 1,           -- bump to force controlled re-embed
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS buyer_match.buyers (
 );
 -- No HNSW index: matching requires EXACT cosine (parity with the tool's full NumPy scan),
 -- and an exact seq-scan over ~16k × 1536-d is only a few ms. (Re-add HNSW if scale grows.)
+ALTER TABLE buyer_match.buyers ADD COLUMN IF NOT EXISTS email_domains text[];
 
 -- Mandates: metadata only (embedded on-demand, NOT stored).
 CREATE TABLE IF NOT EXISTS buyer_match.mandates (

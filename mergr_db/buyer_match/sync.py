@@ -19,6 +19,7 @@ import psycopg2.extras
 import pymysql
 
 from buyer_match import service as svc
+from buyer_match import email_domains as edoms
 from buyer_match.backfill import (
     load_active_buyers, build_text, text_hash, vec_literal, backfill_mandates,
     EMBED_MODEL, EMBED_VERSION,
@@ -74,19 +75,19 @@ def _sync_buyers(pg, buyers, log):
             bid, b.get("name"), b.get("description"), b.get("investment_thesis"),
             b.get("sector_keywords"), b.get("website"), b.get("tags"),
             int(b.get("email_count") or 0), int(b.get("linkedin_count") or 0),
-            b.get("no_of_employees"),
+            b.get("no_of_employees"), b.get("email_domains"),
             vec_literal(v) if v else None, EMBED_MODEL if v else None, EMBED_VERSION,
             new_hash.get(bid) if v else None, ts if v else None,
         ))
     # metadata always overwritten; embedding/hash only when re-embedded (COALESCE keeps old)
     sql = """INSERT INTO buyer_match.buyers
         (id,name,description,investment_thesis,sector_keywords,website,tags,
-         email_count,linkedin_count,no_of_employees,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
+         email_count,linkedin_count,no_of_employees,email_domains,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
         VALUES %s ON CONFLICT (id) DO UPDATE SET
          name=EXCLUDED.name, description=EXCLUDED.description, investment_thesis=EXCLUDED.investment_thesis,
          sector_keywords=EXCLUDED.sector_keywords, website=EXCLUDED.website, tags=EXCLUDED.tags,
          email_count=EXCLUDED.email_count, linkedin_count=EXCLUDED.linkedin_count,
-         no_of_employees=EXCLUDED.no_of_employees,
+         no_of_employees=EXCLUDED.no_of_employees, email_domains=EXCLUDED.email_domains,
          embedding=COALESCE(EXCLUDED.embedding, buyer_match.buyers.embedding),
          embed_model=COALESCE(EXCLUDED.embed_model, buyer_match.buyers.embed_model),
          embed_version=EXCLUDED.embed_version,
@@ -95,7 +96,7 @@ def _sync_buyers(pg, buyers, log):
          synced_at=now()"""
     with pg.cursor() as cur:
         psycopg2.extras.execute_values(cur, sql, rows,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
+            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
         cur.execute("SELECT id FROM buyer_match.buyers")
         gone = [r[0] for r in cur.fetchall() if r[0] not in buyers]
         if gone:
@@ -151,6 +152,7 @@ def run_sync(progress=None, pg_dsn=None):
     my = pymysql.connect(**_src())
     pg = psycopg2.connect(pg_dsn or PG_DSN)
     try:
+        edoms.ensure_schema(pg)      # keep the free-email denylist table/function current
         log("Loading buyers from source…")
         buyers = load_active_buyers(my)
         nb, nemb, ndel, cost = _sync_buyers(pg, buyers, log)
