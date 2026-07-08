@@ -547,6 +547,12 @@ def buyer_match_page(request: Request):
     return render(request, "buyer_match.html", "buyer-match")
 
 
+@app.get("/buyer-match/tag", response_class=HTMLResponse)
+def buyer_match_tag_page(request: Request):
+    """The buyer 'tag' review page — sort/filter the client-side selection, export names for ON."""
+    return render(request, "buyer_match_tag.html", "buyer-match")
+
+
 @app.get("/linkedin", response_class=HTMLResponse)
 def linkedin_page(request: Request):
     """LinkedIn Finder — company domain/name → LinkedIn page + employee count.

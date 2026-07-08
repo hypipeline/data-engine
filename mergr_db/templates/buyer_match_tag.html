@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Tag list — Buyer Match{% endblock %}
+{% block head %}
+<style>
+  /* Buyer Match — "tag" review page. Reads the client-side selection (localStorage
+     bm_tag_selection) built up across searches/keyword views. Sort + filter, then export a
+     names list for import into ON. Pure client-side; the selection persists across screens. */
+  .tag-back { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:10px; }
+  .tag-back:hover { color:var(--text); }
+  .tag-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .tag-count { font-size:13px; color:var(--muted); }
+  .tag-count b { color:var(--text); }
+
+  .tag-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:14px 0 12px;
+    padding:12px 14px; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .tag-bar .fl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--faint); margin-right:2px; }
+  .tag-bar input, .tag-bar select { padding:7px 10px; font-size:13px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); color:var(--text); }
+  .tag-bar input.num { width:90px; }
+  .tag-bar .grow { flex:1; }
+  .btn2 { padding:8px 14px; background:var(--panel); border:1px solid var(--border-2); color:var(--text); border-radius:var(--radius-sm); font-size:13px; font-weight:600; cursor:pointer; }
+  .btn2:hover { border-color:var(--accent); color:var(--accent); }
+  .btn2.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .btn2.primary:hover { background:var(--accent-2); color:#fff; }
+  .btn2.danger:hover { border-color:#dc2626; color:#dc2626; }
+
+  .tag-twrap { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+  table.tag-t { width:100%; border-collapse:collapse; font-size:13px; }
+  .tag-t thead th { text-align:left; font-size:9.5px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); padding:11px 14px; background:var(--bg-2); border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+  .tag-t thead th.r { text-align:right; }
+  .tag-t thead th .ar { color:var(--accent); margin-left:3px; }
+  .tag-t tbody tr { border-top:1px solid var(--border); }
+  .tag-t tbody tr:hover { background:var(--bg-2); }
+  .tag-t td { padding:10px 14px; vertical-align:top; }
+  .tag-t td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
+  .tag-t td.num.gold { color:#92400e; font-weight:700; }
+  .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
+  .tag-t .site { color:var(--muted); font-size:11.5px; font-weight:400; }
+  .tag-t .faint { color:var(--faint); }
+  .tag-t .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
+  .tag-t .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .tag-t .tier.co { background:#eef2fb; color:#3a4a75; border-color:#e0e6f5; }
+  .tag-t .rm { cursor:pointer; color:var(--faint); font-weight:700; }
+  .tag-t .rm:hover { color:#dc2626; }
+  .empty-box { color:var(--muted); font-size:14px; padding:22px 4px; }
+  .tag-note { font-size:12px; color:var(--muted); margin-top:10px; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="tag-back" href="/buyer-match">&larr; Back to Buyer Match</a>
+<div class="tag-head">
+  <h1 class="page" style="margin-bottom:0">Tag list</h1>
+  <span class="tag-count" id="tag-count"></span>
+</div>
+<p class="sub">Every buyer you added across your searches and keyword views. Sort &amp; filter, then export the names for import into ON.</p>
+
+<div class="tag-bar">
+  <span class="fl">Tier</span>
+  <select id="f-tier">
+    <option value="">Any</option>
+    <option value="Mega">Mega</option>
+    <option value="Large">Large</option>
+    <option value="Middle-Market">Middle-Market</option>
+    <option value="Small">Small</option>
+    <option value="_mergr">In Mergr</option>
+    <option value="_none">Not in Mergr</option>
+  </select>
+  <span class="fl">Min AUM $B</span><input class="num" id="f-aum" type="number" min="0" step="0.5" placeholder="any">
+  <span class="fl">Min acq.</span><input class="num" id="f-acq" type="number" min="0" step="1" placeholder="any">
+  <span class="fl">Min staff</span><input class="num" id="f-emp" type="number" min="0" step="10" placeholder="any">
+  <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:160px">
+  <span class="grow"></span>
+  <button class="btn2 primary" onclick="copyNames()">Copy names</button>
+  <button class="btn2" onclick="downloadTxt()">Names .txt</button>
+  <button class="btn2" onclick="downloadCsv()">.csv</button>
+  <button class="btn2 danger" onclick="clearTag()">Clear</button>
+</div>
+
+<div id="tag-body"></div>
+<div class="tag-note" id="tag-note"></div>
+
+<script>
+var KEY = 'bm_tag_selection';
+var sortKey = 'name', sortDir = 1;
+
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(_){ return {}; } }
+function save(o){ localStorage.setItem(KEY, JSON.stringify(o)); }
+function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+
+// "65.0BUSD"/"744.0BUSD"/"353MUSD" -> number (USD). "$1.2B"/"$18M" -> number.
+function parseVal(s){
+  if(s==null||s==='') return null;
+  var m = String(s).replace(/[$,\s]/g,'').match(/^([\d.]+)\s*([TBMK])?/i);
+  if(!m) return null;
+  var n = parseFloat(m[1]); if(isNaN(n)) return null;
+  var mult = {T:1e12,B:1e9,M:1e6,K:1e3}[(m[2]||'').toUpperCase()] || 1;
+  return n*mult;
+}
+function fmtAum(s){ if(!s) return ''; var m=String(s).trim().match(/^([\d.]+)\s*([MBT])?\s*([A-Z]{3})?$/); if(!m) return esc(s);
+  return ({USD:'$',EUR:'€',GBP:'£'}[m[3]]||(m[3]?m[3]+' ':''))+m[1]+(m[2]||''); }
+function sizeRank(s){ return {Mega:4,Large:3,'Middle-Market':2,Small:1}[s]||0; }
+function nf(n){ return n==null||n===''?'':Number(n).toLocaleString(); }
+
+var COLS = [
+  {k:'name', label:'Buyer', get:function(r){ return (r.name||'').toLowerCase(); }},
+  {k:'size', label:'Size', r:true, get:function(r){ return sizeRank(r.firm_size); }},
+  {k:'aum', label:'AUM', r:true, get:function(r){ return parseVal(r.firm_aum)||-1; }},
+  {k:'acq', label:'Acq.', r:true, get:function(r){ return r.firm_acquisitions==null?-1:Number(r.firm_acquisitions); }},
+  {k:'largest', label:'Largest', r:true, get:function(r){ return parseVal(r.firm_largest)||-1; }},
+  {k:'emp', label:'Staff', r:true, get:function(r){ return r.no_of_employees==null?-1:Number(r.no_of_employees); }},
+];
+
+function passFilters(r){
+  var t = document.getElementById('f-tier').value;
+  if(t==='_mergr' && !(r.firm_id||r.company_id)) return false;
+  if(t==='_none' && (r.firm_id||r.company_id)) return false;
+  if(t && t[0]!=='_' && r.firm_size!==t) return false;
+  var aum = parseFloat(document.getElementById('f-aum').value);
+  if(!isNaN(aum) && (parseVal(r.firm_aum)||0) < aum*1e9) return false;
+  var acq = parseFloat(document.getElementById('f-acq').value);
+  if(!isNaN(acq) && (Number(r.firm_acquisitions)||0) < acq) return false;
+  var emp = parseFloat(document.getElementById('f-emp').value);
+  if(!isNaN(emp) && (Number(r.no_of_employees)||0) < emp) return false;
+  var nm = document.getElementById('f-name').value.trim().toLowerCase();
+  if(nm && (r.name||'').toLowerCase().indexOf(nm)===-1) return false;
+  return true;
+}
+
+function currentRows(){
+  var sel = load();
+  var rows = Object.keys(sel).map(function(k){ return sel[k]; }).filter(passFilters);
+  var col = COLS.filter(function(c){ return c.k===sortKey; })[0] || COLS[0];
+  rows.sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
+  return rows;
+}
+
+function tierBadge(r){
+  if(r.firm_size==='Mega') return '<span class="tier mega">Mega</span>';
+  if(r.mergr_kind==='company') return '<span class="tier co">Company</span>';
+  if(r.mergr_kind==='firm') return '<span class="tier">'+esc(r.firm_size||'Firm')+'</span>';
+  return '';
+}
+function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/company/'+r.company_id:(r.firm_id?'/mergr/firm/'+r.firm_id:''); }
+
+function render(){
+  var all = load(), total = Object.keys(all).length;
+  var rows = currentRows();
+  document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'
+    + (rows.length!==total ? ' · <b>'+rows.length+'</b> after filters' : '');
+  var body = document.getElementById('tag-body');
+  if(!total){ body.innerHTML='<div class="empty-box">No buyers in the tag yet. Go to <a href="/buyer-match">Buyer Match</a>, tick buyers across your searches, then come back here.</div>'; document.getElementById('tag-note').textContent=''; return; }
+  var head = COLS.map(function(c){
+    var ar = sortKey===c.k ? '<span class="ar">'+(sortDir>0?'▲':'▼')+'</span>' : '';
+    return '<th class="'+(c.r?'r':'')+'" onclick="setSort(\''+c.k+'\')">'+c.label+ar+'</th>';
+  }).join('') + '<th></th>';
+  var trs = rows.map(function(r){
+    var href = mergrHref(r);
+    var nm = href ? '<a href="'+href+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>' : esc(r.name||'(unnamed)');
+    if(r.website) nm = '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>';
+    return '<tr>'
+      + '<td><div class="nm">'+nm+tierBadge(r)+'</div><div class="site">'+esc(shortUrl(r.website))+'</div></td>'
+      + '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
+      + '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
+      + '<td class="num">'+(r.firm_acquisitions?nf(r.firm_acquisitions):'<span class="faint">—</span>')+'</td>'
+      + '<td class="num">'+(r.firm_largest?esc(r.firm_largest):'<span class="faint">—</span>')+'</td>'
+      + '<td class="num">'+(r.no_of_employees?nf(r.no_of_employees):'<span class="faint">—</span>')+'</td>'
+      + '<td><span class="rm" title="Remove from tag" onclick="removeOne('+r.id+')">&times;</span></td>'
+      + '</tr>';
+  }).join('');
+  body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead><tbody>'+trs+'</tbody></table></div>';
+  document.getElementById('tag-note').textContent = 'Names export uses the '+rows.length+' buyer'+(rows.length===1?'':'s')+' currently shown (after filters).';
+}
+
+function setSort(k){ if(sortKey===k){ sortDir=-sortDir; } else { sortKey=k; sortDir = (k==='name')?1:-1; } render(); }
+function removeOne(id){ var o=load(); delete o[id]; save(o); render(); }
+function clearTag(){ if(confirm('Clear all buyers from the tag?')){ save({}); render(); } }
+
+function namesList(){ return currentRows().map(function(r){ return r.name||''; }).filter(Boolean); }
+function copyNames(){
+  var txt = namesList().join('\n');
+  navigator.clipboard.writeText(txt).then(function(){ flash('Copied '+namesList().length+' names'); },
+    function(){ prompt('Copy the names:', txt); });
+}
+function dl(filename, text, type){
+  var b=new Blob([text],{type:type}); var u=URL.createObjectURL(b); var a=document.createElement('a');
+  a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+}
+function downloadTxt(){ dl('buyer_tag_names.txt', namesList().join('\n'), 'text/plain'); }
+function downloadCsv(){
+  var rows=currentRows();
+  var head='name,website,size,aum,acquisitions,largest,employees';
+  var esc2=function(s){ s=(s==null?'':String(s)); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  var lines=rows.map(function(r){ return [r.name,shortUrl(r.website),r.firm_size,r.firm_aum,r.firm_acquisitions,r.firm_largest,r.no_of_employees].map(esc2).join(','); });
+  dl('buyer_tag.csv', head+'\n'+lines.join('\n'), 'text/csv');
+}
+function flash(msg){ var n=document.getElementById('tag-note'); n.textContent=msg; n.style.color='var(--accent)'; setTimeout(function(){ n.style.color=''; render(); }, 1500); }
+
+['f-tier','f-aum','f-acq','f-emp','f-name'].forEach(function(id){
+  document.getElementById(id).addEventListener('input', render);
+});
+render();
+</script>
+{% endblock %}

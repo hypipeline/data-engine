@@ -168,6 +168,21 @@
   .bmv-more { text-align:center; padding:16px; } .bmv-count { margin-top:8px; font-size:13px; color:var(--muted); }
   .bmv-mlink { color:#7c3aed; font-weight:600; font-size:12px; white-space:nowrap; }
   .bmv-taginline { display:inline-block; background:var(--bg-3); color:var(--muted); padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--border); font-weight:500; margin:0 4px 4px 0; }
+
+  /* Tag selection ("cart" that persists across screens) */
+  .bmv-t th.selh { width:34px; }
+  .bmv-t td.selc { padding-top:14px; }
+  .bmv-t input.bmsel, .bmv-t th.selh input { width:15px; height:15px; cursor:pointer; accent-color:var(--accent); }
+  .bmv-tagbtn { border:1px solid var(--border-2); background:var(--panel); color:var(--muted); font:600 12px inherit; padding:5px 11px; border-radius:7px; cursor:pointer; white-space:nowrap; margin-bottom:6px; }
+  .bmv-tagbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .bmv-tagbtn.on { background:#eef4ff; border-color:#bcd0f5; color:#1e40af; }
+  .bm-cart { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:60;
+    display:flex; align-items:center; gap:14px; background:var(--text); color:#fff; padding:11px 16px; border-radius:12px; box-shadow:0 12px 34px -8px rgba(0,0,0,.45); }
+  .bm-cart-n { font-size:13px; font-weight:600; } .bm-cart-n b { font-weight:800; }
+  .bm-cart a.bm-cart-btn { background:#fff; color:var(--text); font-size:13px; font-weight:700; padding:7px 14px; border-radius:8px; }
+  .bm-cart a.bm-cart-btn:hover { text-decoration:none; opacity:.92; }
+  .bm-cart-clear { background:transparent; border:1px solid rgba(255,255,255,.35); color:#fff; font-size:12px; font-weight:600; padding:6px 11px; border-radius:8px; cursor:pointer; }
+  .bm-cart-clear:hover { border-color:#fff; }
 </style>
 {% endblock %}
 {% block body %}
@@ -249,6 +264,13 @@
   </details>
 </div>
 
+<!-- Selection "cart": persists across searches/keyword views (localStorage); Filter → tag page -->
+<div id="bm-cart" class="bm-cart" style="display:none">
+  <span class="bm-cart-n"><b id="bm-cart-count">0</b> buyers in tag</span>
+  <a class="bm-cart-btn" href="/buyer-match/tag">Filter &amp; export →</a>
+  <button class="bm-cart-clear" onclick="bmSelClearAll()">Clear</button>
+</div>
+
 <script>
 var PAGE_SIZE = 100;
 var allResults = [];      // full ranked list from /buyer-match/search
@@ -264,6 +286,45 @@ var KW_BASE = '/buyer-match/keywords/';
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function tog(id){ var el=document.getElementById(id); if(el) el.style.display=(el.style.display==='none'?'':'none'); }
+
+// --- Tag selection ("cart"): persists across screens via localStorage --------
+var BM_TAG_KEY = 'bm_tag_selection';
+var bmRowById = {};       // id -> full row, for looking up on toggle
+function bmSelLoad(){ try{ return JSON.parse(localStorage.getItem(BM_TAG_KEY)||'{}'); }catch(_){ return {}; } }
+function bmSelSave(o){ localStorage.setItem(BM_TAG_KEY, JSON.stringify(o)); }
+function bmSelHas(id){ return Object.prototype.hasOwnProperty.call(bmSelLoad(), String(id)); }
+function bmSelCount(){ return Object.keys(bmSelLoad()).length; }
+function bmCompact(r){
+  return {id:r.id, name:r.name, website:r.website, no_of_employees:r.no_of_employees,
+    email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
+    firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
+    mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags};
+}
+function bmSelToggle(id){
+  var o=bmSelLoad(), k=String(id);
+  if(o[k]){ delete o[k]; } else if(bmRowById[k]){ o[k]=bmCompact(bmRowById[k]); }
+  bmSelSave(o); updateCartBar();
+  document.querySelectorAll('[data-selid="'+k+'"]').forEach(function(el){ setSelControl(el, !!o[k]); });
+}
+function setSelControl(el, on){
+  if(el.tagName==='INPUT'){ el.checked=on; }
+  else { el.classList.toggle('on', on); el.textContent = on ? '✓ In tag' : '+ Tag'; }
+}
+function updateCartBar(){
+  var n=bmSelCount(); document.getElementById('bm-cart-count').textContent=n;
+  document.getElementById('bm-cart').style.display = n>0 ? 'flex' : 'none';
+}
+function bmSelClearAll(){ if(confirm('Clear the tag selection ('+bmSelCount()+' buyers)?')){ bmSelSave({}); updateCartBar(); repaintSelection(); } }
+function repaintSelection(){ if(currentView==='keywords') paintKeywordBuyers(); else if(allResults.length) paintResults(); }
+function bmSelToggleAllShown(cb){
+  var o=bmSelLoad();
+  document.querySelectorAll('#results input.bmsel').forEach(function(el){
+    var k=el.dataset.selid;
+    if(cb.checked){ if(!o[k] && bmRowById[k]) o[k]=bmCompact(bmRowById[k]); el.checked=true; }
+    else { delete o[k]; el.checked=false; }
+  });
+  bmSelSave(o); updateCartBar();
+}
 function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
 var ICO_PERSON = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z"/></svg>';
 var ICO_MAIL = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
@@ -375,6 +436,7 @@ function subDescHtml(r){
 // ---- TABLE ----
 function bmTableWrap(rows, showScore){
   var head = '<div class="bmv-twrap"><table class="bmv-t"><thead><tr>'
+    + '<th class="selh"><input type="checkbox" onclick="bmSelToggleAllShown(this)" title="Select all shown"></th>'
     + '<th>Buyer</th><th class="r">Match</th><th class="r">Size</th><th class="r">AUM</th>'
     + '<th class="r">Acq.</th><th class="r">Largest</th><th class="r">Staff</th><th class="r">Email &middot; LinkedIn</th>'
     + '</tr></thead>';
@@ -384,6 +446,7 @@ function bmTableWrap(rows, showScore){
       : '<span class="faint">—</span>';
     return '<tbody>'
       + '<tr class="m">'
+      +   '<td class="selc"><input type="checkbox" class="bmsel" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')"'+(bmSelHas(r.id)?' checked':'')+'></td>'
       +   '<td><div class="nm"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+tierBadge(r)+'</div>'
       +     '<div class="site">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+'</div></td>'
       +   '<td>'+scoreCell+'</td>'
@@ -394,7 +457,7 @@ function bmTableWrap(rows, showScore){
       +   '<td class="num">'+(r.no_of_employees?Number(r.no_of_employees).toLocaleString():'<span class="faint">—</span>')+'</td>'
       +   '<td class="cc">'+ICO_MAIL+' '+(r.email_count||0)+' &nbsp; '+ICO_LI+' '+(r.linkedin_count||0)+'</td>'
       + '</tr>'
-      + '<tr class="s"><td colspan="8">'
+      + '<tr class="s"><td></td><td colspan="8">'
       +   '<div class="subrow">'+(keywordPillsHtml(r)||'<div class="kw-wrap"></div>')+(mergrHref(r)?'<div>'+mergrLinkHtml(r)+'</div>':'')+'</div>'
       +   subDescHtml(r)
       +   bmExpand(r)
@@ -419,7 +482,9 @@ function bmSheets(rows, showScore){
       + '<div class="hd"><div>'
       +   '<div class="nm bmv-serif"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+'</div>'
       +   '<div class="dom">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+(mergrHref(r)?' &middot; '+mergrLinkHtml(r):'')+'</div>'
-      + '</div><div class="cons">'+contactsInline(r)+'</div></div>'
+      + '</div><div style="text-align:right;white-space:nowrap">'
+      +   '<button class="bmv-tagbtn'+(bmSelHas(r.id)?' on':'')+'" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')">'+(bmSelHas(r.id)?'✓ In tag':'+ Tag')+'</button>'
+      +   '<div class="cons">'+contactsInline(r)+'</div></div></div>'
       + '<div class="facts">'+f.join('')+'</div>'
       + '<div class="cols"><div class="main">'
       +   (r.description?'<div class="blk"><div class="l">Description</div><p>'+highlight(esc(r.description),queryWords)+'</p></div>':'')
@@ -494,6 +559,7 @@ async function doSearch(){
     var data = await resp.json();
     if(data.error){ document.getElementById('search-meta').textContent=''; document.getElementById('results').innerHTML='<div class="error-box">'+esc(data.error)+'</div>'; return; }
     allResults = data.results || [];
+    allResults.forEach(function(r){ bmRowById[String(r.id)]=r; });
     queryWords = getQueryWords(q);
     maxScore = allResults.length ? Math.max.apply(null, allResults.map(function(r){ return r.score||0; })) : 0;
     var count = (data.count!=null) ? data.count : allResults.length;
@@ -663,6 +729,7 @@ async function refreshKeywordView(){
     if(!buyers.length){ kwBuyers=[]; document.getElementById('results').innerHTML='<div class="empty-box">No buyers match these keywords.</div>'; return; }
     queryWords = activeKeywords.slice();   // highlight the active keywords in the rows
     kwBuyers = buyers;
+    buyers.forEach(function(r){ bmRowById[String(r.id)]=r; });
     paintKeywordBuyers();
   }catch(e){
     document.getElementById('kw-meta').textContent='';
@@ -784,5 +851,6 @@ function bmSync(){
   es.addEventListener('error', function(e){ if(done) return; try{ log.textContent+='\nError: '+JSON.parse(e.data)+'\n'; }catch(_){ log.textContent+='\nConnection error.\n'; } es.close(); btn.disabled=false; btn.textContent='Sync now'; });
 }
 bmSyncStatus();
+updateCartBar();   // show the tag cart if a selection persisted from a previous screen
 </script>
 {% endblock %}
