@@ -50,10 +50,16 @@
   .tag-t .rm:hover { color:#dc2626; }
   .empty-box { color:var(--muted); font-size:14px; padding:22px 4px; }
   .tag-note { font-size:12px; color:var(--muted); margin-top:10px; }
+  .stepper { display:flex; align-items:center; gap:10px; margin:4px 0 16px; }
+  .step-pill { display:flex; align-items:center; gap:8px; padding:8px 16px; border-radius:22px; border:1px solid var(--border-2); background:var(--panel); color:var(--muted); font-size:13.5px; font-weight:600; cursor:pointer; }
+  .step-pill .step-n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--bg-3); color:var(--muted); font-size:11px; font-weight:800; }
+  .step-pill.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .step-pill.active .step-n { background:rgba(255,255,255,.25); color:#fff; }
+  .step-sep { color:var(--faint); font-size:16px; }
   .stage { margin:0 0 16px; }
-  .stage-h { display:flex; align-items:baseline; gap:8px; font-size:14px; font-weight:700; color:var(--text); margin:0 0 8px; }
-  .stage-n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; font-size:11px; font-weight:800; }
-  .stage-sub { font-size:11.5px; font-weight:500; color:var(--muted); }
+  .stage-h { margin:0 0 10px; }
+  .stage-sub { font-size:13px; color:var(--muted); }
+  .step-nav { display:flex; align-items:center; gap:10px; margin-top:12px; }
   .export-bar { display:flex; align-items:center; gap:10px; margin:0 0 14px; padding:10px 14px; background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius); }
   .facet-bar { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px; box-shadow:var(--shadow); }
   .facet-n { color:var(--faint); font-weight:600; font-size:10px; }
@@ -74,9 +80,16 @@
 </div>
 <p class="sub">Every buyer you added across your searches and keyword views. Sort &amp; filter, then export the names for import into ON.</p>
 
-<!-- Stage 1 · Sizing — the original filters, reframed as the sizing pass -->
-<div class="stage">
-  <div class="stage-h"><span class="stage-n">1</span> Sizing <span class="stage-sub">size · AUM · activity · type</span></div>
+<!-- Two-step flow: process Sizing, then move on to Geography -->
+<div class="stepper">
+  <div class="step-pill active" id="pill1" onclick="goStep(1)"><span class="step-n">1</span> Sizing</div>
+  <span class="step-sep">→</span>
+  <div class="step-pill" id="pill2" onclick="goStep(2)"><span class="step-n">2</span> Geography</div>
+</div>
+
+<!-- STEP 1 · Sizing -->
+<div class="stage" id="stage1">
+  <div class="stage-h"><span class="stage-sub">Narrow the tag by size, AUM, activity and type. When you're happy, continue to geography.</span></div>
   <div class="tag-bar">
     <span class="fl">Tier</span>
     <select id="f-tier">
@@ -95,20 +108,24 @@
     <select id="f-spec"><option value="">Any</option><option value="1">Yes</option><option value="0">No</option></select>
     <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:150px">
   </div>
+  <div class="step-nav">
+    <span class="tag-note" id="sized-note" style="margin:0; flex:1"></span>
+    <button class="btn2" onclick="clearTag()">Clear tag</button>
+    <button class="btn2 primary" onclick="goStep(2)">Continue to Geography &rarr;</button>
+  </div>
 </div>
 
-<!-- Stage 2 · Geography — geo-focused, filters within Stage 1's output -->
-<div class="stage">
-  <div class="stage-h"><span class="stage-n">2</span> Geography <span class="stage-sub">target regions &amp; where they've acquired · counts reflect Stage 1</span></div>
+<!-- STEP 2 · Geography -->
+<div class="stage" id="stage2" style="display:none">
+  <div class="stage-h"><span class="stage-sub">Now narrow by geography — target regions and where they've acquired. Options &amp; counts reflect your sized set.</span></div>
   <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
-</div>
-
-<div class="export-bar">
-  <span class="tag-note" id="tag-note" style="margin:0; flex:1"></span>
-  <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
-  <button class="btn2" onclick="downloadJson()">.json</button>
-  <button class="btn2" onclick="downloadCsv()">.csv</button>
-  <button class="btn2 danger" onclick="clearTag()">Clear</button>
+  <div class="step-nav">
+    <button class="btn2" onclick="goStep(1)">&larr; Back to sizing</button>
+    <span class="tag-note" id="tag-note" style="margin:0; flex:1"></span>
+    <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
+    <button class="btn2" onclick="downloadJson()">.json</button>
+    <button class="btn2" onclick="downloadCsv()">.csv</button>
+  </div>
 </div>
 
 <div id="tag-body"></div>
@@ -203,11 +220,22 @@ document.getElementById('facet-bar').addEventListener('click', function(e){
   render();
 });
 
-function currentRows(){
-  var rows = sizedRows().filter(passGeo);
+function sortRows(rows){
   var col = COLS.filter(function(c){ return c.k===sortKey; })[0] || COLS[0];
-  rows.sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
-  return rows;
+  return rows.slice().sort(function(a,b){ var x=col.get(a), y=col.get(b); return (x<y?-1:x>y?1:0)*sortDir; });
+}
+function currentRows(){ return sortRows(sizedRows().filter(passGeo)); }               // final set (sized + geo) — export
+function displayRows(){ return sortRows(step===1 ? sizedRows() : sizedRows().filter(passGeo)); }  // table, per step
+
+// two-step flow: process sizing, then move on to geography
+var step = 1;
+function goStep(n){
+  step = n;
+  document.getElementById('stage1').style.display = n===1 ? '' : 'none';
+  document.getElementById('stage2').style.display = n===2 ? '' : 'none';
+  document.getElementById('pill1').classList.toggle('active', n===1);
+  document.getElementById('pill2').classList.toggle('active', n===2);
+  render();
 }
 
 function tierBadge(r){
@@ -231,11 +259,13 @@ function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/com
 function render(){
   renderFacets();
   var all = load(), total = Object.keys(all).length;
-  var rows = currentRows();
-  var nSized = sizedRows().length, fun='';
+  var nSized = sizedRows().length, nGeo = currentRows().length;
+  var rows = displayRows();
+  var fun='';
   if(nSized!==total) fun += ' · <b>'+nSized+'</b> after sizing';
-  if(rows.length!==nSized) fun += ' · <b>'+rows.length+'</b> after geo';
+  if(step===2 && nGeo!==nSized) fun += ' · <b>'+nGeo+'</b> after geo';
   document.getElementById('tag-count').innerHTML = '<b>'+total+'</b> buyer'+(total===1?'':'s')+' in tag'+fun;
+  var sn=document.getElementById('sized-note'); if(sn) sn.innerHTML = '<b>'+nSized+'</b> buyer'+(nSized===1?'':'s')+' after sizing';
   var body = document.getElementById('tag-body');
   if(!total){ body.innerHTML='<div class="empty-box">No buyers in the tag yet. Go to <a href="/buyer-match">Buyer Match</a>, tick buyers across your searches, then come back here.</div>'; document.getElementById('tag-note').textContent=''; return; }
   var head = COLS.map(function(c){
