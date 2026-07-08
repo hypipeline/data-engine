@@ -364,6 +364,13 @@ function firstSentence(t){
   var s = String(t).split('. ');
   return (s[0] && s[0].length<170) ? esc(s[0])+(s.length>1?'.':'') : esc(String(t).slice(0,150))+'…';
 }
+// table sub-line: a one-line description preview + tags
+function subDescHtml(r){
+  var prev = r.description ? highlight(firstSentence(r.description), queryWords) : '';
+  var tg = tagsInline(r);
+  if(!prev && !tg) return '';
+  return '<div class="subdesc">'+prev+(prev&&tg?' &nbsp;&middot;&nbsp; ':'')+tg+'</div>';
+}
 
 // ---- TABLE ----
 function bmTableWrap(rows, showScore){
@@ -389,7 +396,7 @@ function bmTableWrap(rows, showScore){
       + '</tr>'
       + '<tr class="s"><td colspan="8">'
       +   '<div class="subrow">'+(keywordPillsHtml(r)||'<div class="kw-wrap"></div>')+(mergrHref(r)?'<div>'+mergrLinkHtml(r)+'</div>':'')+'</div>'
-      +   (r.tags?'<div class="subdesc">'+tagsInline(r)+'</div>':'')
+      +   subDescHtml(r)
       +   bmExpand(r)
       + '</td></tr></tbody>';
   }).join('');
