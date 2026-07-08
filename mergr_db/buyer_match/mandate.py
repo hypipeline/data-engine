@@ -127,6 +127,44 @@ def _doc_hash(path):
     return hashlib.sha256((GPT_MODEL + "\n" + (path or "")).encode("utf-8")).hexdigest()
 
 
+def _sftp_fetch(doc_path):
+    """PROD: pull a mandate document from the ON storage server over SFTP to a temp file.
+    Returns the temp path (caller deletes) or None if SFTP isn't configured / the fetch fails.
+    Only hit on a doc_cache MISS, so at most once per document."""
+    host = os.environ.get("BM_SFTP_HOST")
+    if not host or not doc_path:
+        return None
+    import tempfile
+    try:
+        import paramiko
+    except ImportError:
+        return None
+    base = (os.environ.get("BM_SFTP_BASE", "") or "").rstrip("/")
+    remote = base + "/" + doc_path.lstrip("/")
+    fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(doc_path)[1] or ".bin")
+    os.close(fd)
+    cli = paramiko.SSHClient()
+    cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        cli.connect(host, port=int(os.environ.get("BM_SFTP_PORT", "22")),
+                    username=os.environ.get("BM_SFTP_USER"),
+                    key_filename=os.environ.get("BM_SFTP_KEY"), timeout=25)
+        sftp = cli.open_sftp()
+        try:
+            sftp.get(remote, tmp)
+        finally:
+            sftp.close()
+        return tmp
+    except Exception:  # noqa: BLE001 — missing file / auth / network → treat as not found
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return None
+    finally:
+        cli.close()
+
+
 def load_mandate(conn, identifier, docs_base=None):
     """Fetch a mandate (by code, else numeric id) and run the doc pipeline. Mirrors the tool."""
     docs_base = docs_base or os.environ.get("BM_DOCS_BASE", DOCS_BASE_DEFAULT)
@@ -162,16 +200,26 @@ def load_mandate(conn, identifier, docs_base=None):
             continue
 
         full_path = os.path.join(docs_base, doc_path)
+        tmp_path = None
+        if not os.path.exists(full_path):
+            tmp_path = _sftp_fetch(doc_path)            # prod: pull from ON storage over SFTP
+            if tmp_path:
+                full_path = tmp_path
         if not os.path.exists(full_path):
             doc_summaries.append({"title": title, "summary": "(File not found)"})
             continue
-        low = full_path.lower()
+        low = doc_path.lower()                           # match on the real name, not the temp suffix
         if low.endswith(".pdf"):
             summary, usage = _summarise_pdf(full_path)
         elif low.endswith((".xlsx", ".xls")):
             summary, usage = _summarise_excel(full_path)
         else:
-            summary, usage = f"(Unsupported file type: {os.path.splitext(full_path)[1]})", {}
+            summary, usage = f"(Unsupported file type: {os.path.splitext(doc_path)[1]})", {}
+        if tmp_path:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
         pt, ct = usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
         ptok += pt
         ctok += ct
