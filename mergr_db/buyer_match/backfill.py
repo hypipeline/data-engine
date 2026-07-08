@@ -59,7 +59,7 @@ def load_active_buyers(my):
     """Buyer metadata slice, mirroring match_server.py's startup load."""
     with my.cursor(pymysql.cursors.DictCursor) as cur:
         cur.execute("SELECT id, name, description, investment_thesis, sector_keywords, website, "
-                    "no_of_employees FROM buyers WHERE deleted_at IS NULL")
+                    "no_of_employees, is_specialist FROM buyers WHERE deleted_at IS NULL")
         buyers = {r["id"]: r for r in cur.fetchall()}
         cur.execute("SELECT id, name FROM tags")
         tag_names = {r["id"]: r["name"] for r in cur.fetchall()}
@@ -112,7 +112,7 @@ def backfill_buyers(pg, buyers):
             bid, b.get("name"), b.get("description"), b.get("investment_thesis"),
             b.get("sector_keywords"), b.get("website"), b.get("tags"),
             int(b.get("email_count") or 0), int(b.get("linkedin_count") or 0),
-            b.get("no_of_employees"), b.get("email_domains"),
+            b.get("no_of_employees"), b.get("email_domains"), bool(b.get("is_specialist")),
             vec_literal(emb) if emb else None,
             EMBED_MODEL if emb else None, EMBED_VERSION,
             text_hash(txt) if emb else None,
@@ -122,19 +122,19 @@ def backfill_buyers(pg, buyers):
             with_emb += 1
     sql = """INSERT INTO buyer_match.buyers
         (id,name,description,investment_thesis,sector_keywords,website,tags,
-         email_count,linkedin_count,no_of_employees,email_domains,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
+         email_count,linkedin_count,no_of_employees,email_domains,is_specialist,embedding,embed_model,embed_version,embedding_text_hash,embedded_at)
         VALUES %s
         ON CONFLICT (id) DO UPDATE SET
          name=EXCLUDED.name, description=EXCLUDED.description, investment_thesis=EXCLUDED.investment_thesis,
          sector_keywords=EXCLUDED.sector_keywords, website=EXCLUDED.website, tags=EXCLUDED.tags,
          email_count=EXCLUDED.email_count, linkedin_count=EXCLUDED.linkedin_count,
-         no_of_employees=EXCLUDED.no_of_employees, email_domains=EXCLUDED.email_domains,
+         no_of_employees=EXCLUDED.no_of_employees, email_domains=EXCLUDED.email_domains, is_specialist=EXCLUDED.is_specialist,
          embedding=EXCLUDED.embedding, embed_model=EXCLUDED.embed_model, embed_version=EXCLUDED.embed_version,
          embedding_text_hash=EXCLUDED.embedding_text_hash, embedded_at=EXCLUDED.embedded_at,
          synced_at=now()"""
     with pg.cursor() as cur:
         psycopg2.extras.execute_values(cur, sql, rows,
-            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
+            template="(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s)", page_size=500)
     pg.commit()
     return len(rows), with_emb
 

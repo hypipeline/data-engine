@@ -106,6 +106,8 @@
   .bmv-seg { display:inline-flex; background:var(--bg-3); border:1px solid var(--border-2); border-radius:10px; padding:3px; gap:2px; }
   .bmv-seg button { border:none; background:transparent; color:var(--muted); font:600 13px inherit; padding:6px 13px; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:6px; }
   .bmv-seg button.active { background:var(--panel); color:var(--text); box-shadow:0 1px 2px rgba(15,23,42,.09); }
+  .bmv-specsel { padding:6px 10px; font-size:13px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); color:var(--text); }
+  .bmv-spec-badge { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:1.5px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
   .bmv-seg button svg { width:14px; height:14px; }
 
   .bmv-twrap { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -242,6 +244,12 @@
 
 <!-- View toggle: table (default) | tearsheet — applies to search + keyword results -->
 <div class="bmv-toolbar" id="bmv-toolbar" style="display:none">
+  <span class="bmv-vlabel">Specialist</span>
+  <select id="bmv-spec" class="bmv-specsel" onchange="setSpecFilter(this.value)">
+    <option value="">Any</option>
+    <option value="1">Yes</option>
+    <option value="0">No</option>
+  </select>
   <span class="grow"></span>
   <span class="bmv-vlabel">View</span>
   <div class="bmv-seg">
@@ -302,7 +310,7 @@ function bmCompact(r){
     email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
-    description:r.description};
+    description:r.description, is_specialist:r.is_specialist};
 }
 function bmSelToggle(id){
   var o=bmSelLoad(), k=String(id), added;
@@ -405,6 +413,7 @@ function tierBadge(r){
   if(r.mergr_kind==='firm') return '<span class="tier">'+esc(r.firm_size||'Firm')+'</span>';
   return '';
 }
+function specBadge(r){ return r.is_specialist ? '<span class="bmv-spec-badge">Specialist</span>' : ''; }
 function tagsInline(r){
   if(!r.tags) return '';
   var ts = r.tags.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
@@ -458,7 +467,7 @@ function bmTableWrap(rows, showScore){
     return '<tbody>'
       + '<tr class="m">'
       +   '<td class="selc"><input type="checkbox" class="bmsel" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')"'+(bmSelHas(r.id)?' checked':'')+'></td>'
-      +   '<td><div class="nm"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+tierBadge(r)+'</div>'
+      +   '<td><div class="nm"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+tierBadge(r)+specBadge(r)+'</div>'
       +     '<div class="site">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+'</div></td>'
       +   '<td>'+scoreCell+'</td>'
       +   '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
@@ -491,7 +500,7 @@ function bmSheets(rows, showScore){
     if(showScore && r.score!=null) f.push('<div class="f"><div class="v">'+r.score.toFixed(3)+'</div><div class="l">Match</div></div>');
     return '<div class="bmv-ts '+cls+'"><div class="cap"></div><div class="in">'
       + '<div class="hd"><div>'
-      +   '<div class="nm bmv-serif"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+'</div>'
+      +   '<div class="nm bmv-serif"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+specBadge(r)+'</div>'
       +   '<div class="dom">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+(mergrHref(r)?' &middot; '+mergrLinkHtml(r):'')+'</div>'
       + '</div><div style="text-align:right;white-space:nowrap">'
       +   '<button class="bmv-tagbtn'+(bmSelHas(r.id)?' on':'')+'" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')">'+(bmSelHas(r.id)?'✓ In tag':'+ Tag')+'</button>'
@@ -518,22 +527,35 @@ function setViewMode(v){
 }
 
 // --- search ---------------------------------------------------------------
+// Specialist filter ('' any | '1' specialist | '0' non-specialist) — applies to search + keyword views.
+var specFilter = '';
+function specMatch(r){ return specFilter==='' ? true : (specFilter==='1' ? !!r.is_specialist : !r.is_specialist); }
+function curResults(){ return specFilter ? allResults.filter(specMatch) : allResults; }
+function setSpecFilter(v){
+  specFilter = v;
+  if(currentView==='keywords'){ paintKeywordBuyers(); }
+  else { displayed = Math.min(PAGE_SIZE, curResults().length); paintResults(); }
+}
 // Re-render the currently displayed search slice in the active view mode (paged).
 function paintResults(){
-  var slice = allResults.slice(0, displayed);
+  var list = curResults();
+  var slice = list.slice(0, displayed);
   var more;
-  if(displayed < allResults.length){
+  if(displayed < list.length){
     more = '<div class="bmv-more"><button class="search-btn" onclick="loadMore()">Load next '
-         + Math.min(PAGE_SIZE, allResults.length-displayed)+'</button>'
-         + '<div class="bmv-count">Showing '+displayed+' of '+allResults.length+' results</div></div>';
+         + Math.min(PAGE_SIZE, list.length-displayed)+'</button>'
+         + '<div class="bmv-count">Showing '+displayed+' of '+list.length+(specFilter?' '+(specFilter==='1'?'specialist':'non-specialist'):'')+' results</div></div>';
   } else {
-    more = '<div class="bmv-more"><div class="bmv-count">Showing all '+allResults.length+' result'+(allResults.length===1?'':'s')+'</div></div>';
+    more = '<div class="bmv-more"><div class="bmv-count">Showing all '+list.length+(specFilter?' '+(specFilter==='1'?'specialist':'non-specialist'):'')+' result'+(list.length===1?'':'s')+'</div></div>';
   }
   document.getElementById('results').innerHTML = renderBuyers(slice, true) + more;
   updateCartBar();
 }
-function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, allResults.length); paintResults(); }
-function paintKeywordBuyers(){ document.getElementById('results').innerHTML = renderBuyers(kwBuyers, false); updateCartBar(); }
+function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, curResults().length); paintResults(); }
+function paintKeywordBuyers(){
+  var list = specFilter ? kwBuyers.filter(specMatch) : kwBuyers;
+  document.getElementById('results').innerHTML = renderBuyers(list, false); updateCartBar();
+}
 
 function buildCluster(){
   var counts={};

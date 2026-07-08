@@ -43,6 +43,7 @@
   .tag-t .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
   .tag-t .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
   .tag-t .tier.co { background:#eef2fb; color:#3a4a75; border-color:#e0e6f5; }
+  .tag-t .tier.spec { background:#ecfdf5; color:#047857; border-color:#a7f3d0; }
   .tag-t .rm { cursor:pointer; color:var(--faint); font-weight:700; }
   .tag-t .rm:hover { color:#dc2626; }
   .empty-box { color:var(--muted); font-size:14px; padding:22px 4px; }
@@ -58,6 +59,12 @@
 <p class="sub">Every buyer you added across your searches and keyword views. Sort &amp; filter, then export the names for import into ON.</p>
 
 <div class="tag-bar">
+  <span class="fl">Specialist</span>
+  <select id="f-spec">
+    <option value="">Any</option>
+    <option value="1">Yes</option>
+    <option value="0">No</option>
+  </select>
   <span class="fl">Tier</span>
   <select id="f-tier">
     <option value="">Any</option>
@@ -73,8 +80,8 @@
   <span class="fl">Min staff</span><input class="num" id="f-emp" type="number" min="0" step="10" placeholder="any">
   <input id="f-name" type="text" placeholder="Filter by name…" style="min-width:160px">
   <span class="grow"></span>
-  <button class="btn2 primary" onclick="copyNames()">Copy names</button>
-  <button class="btn2" onclick="downloadTxt()">Names .txt</button>
+  <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
+  <button class="btn2" onclick="downloadJson()">.json</button>
   <button class="btn2" onclick="downloadCsv()">.csv</button>
   <button class="btn2 danger" onclick="clearTag()">Clear</button>
 </div>
@@ -115,6 +122,9 @@ var COLS = [
 ];
 
 function passFilters(r){
+  var sp = document.getElementById('f-spec').value;
+  if(sp==='1' && !r.is_specialist) return false;
+  if(sp==='0' && r.is_specialist) return false;
   var t = document.getElementById('f-tier').value;
   if(t==='_mergr' && !(r.firm_id||r.company_id)) return false;
   if(t==='_none' && (r.firm_id||r.company_id)) return false;
@@ -144,6 +154,7 @@ function tierBadge(r){
   if(r.mergr_kind==='firm') return '<span class="tier">'+esc(r.firm_size||'Firm')+'</span>';
   return '';
 }
+function specBadge(r){ return r.is_specialist ? '<span class="tier spec">Specialist</span>' : ''; }
 function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/company/'+r.company_id:(r.firm_id?'/mergr/firm/'+r.firm_id:''); }
 
 function render(){
@@ -162,7 +173,7 @@ function render(){
     var nm = href ? '<a href="'+href+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>' : esc(r.name||'(unnamed)');
     if(r.website) nm = '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>';
     var main = '<tr class="main-r">'
-      + '<td><div class="nm">'+nm+tierBadge(r)+'</div><div class="site">'+esc(shortUrl(r.website))+'</div></td>'
+      + '<td><div class="nm">'+nm+tierBadge(r)+specBadge(r)+'</div><div class="site">'+esc(shortUrl(r.website))+'</div></td>'
       + '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_acquisitions?nf(r.firm_acquisitions):'<span class="faint">—</span>')+'</td>'
@@ -176,24 +187,32 @@ function render(){
     return '<tbody>'+main+desc+'</tbody>';
   }).join('');
   body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead>'+trs+'</table></div>';
-  document.getElementById('tag-note').textContent = 'Names export uses the '+rows.length+' buyer'+(rows.length===1?'':'s')+' currently shown (after filters).';
+  var noWeb = rows.filter(function(r){ return !(r.website||'').trim(); }).length;
+  document.getElementById('tag-note').textContent = 'Export = JSON array of the ON website URLs for the '
+    + rows.length + ' buyer' + (rows.length===1?'':'s') + ' shown (after filters)'
+    + (noWeb ? ' · '+noWeb+' have no website and are omitted' : '') + '.';
 }
 
 function setSort(k){ if(sortKey===k){ sortDir=-sortDir; } else { sortKey=k; sortDir = (k==='name')?1:-1; } render(); }
 function removeOne(id){ var o=load(); delete o[id]; save(o); render(); }
 function clearTag(){ if(confirm('Clear all buyers from the tag?')){ save({}); render(); } }
 
-function namesList(){ return currentRows().map(function(r){ return r.name||''; }).filter(Boolean); }
-function copyNames(){
-  var txt = namesList().join('\n');
-  navigator.clipboard.writeText(txt).then(function(){ flash('Copied '+namesList().length+' names'); },
-    function(){ prompt('Copy the names:', txt); });
+// Export = a JSON array of the buyers' ON website URLs (the key ON matches on). Deduped.
+function urlList(){
+  var seen={}, out=[];
+  currentRows().forEach(function(r){ var w=(r.website||'').trim(); if(w && !seen[w]){ seen[w]=1; out.push(w); } });
+  return out;
+}
+function copyUrls(){
+  var arr=urlList(), txt=JSON.stringify(arr);
+  navigator.clipboard.writeText(txt).then(function(){ flash('Copied '+arr.length+' website URLs (JSON)'); },
+    function(){ prompt('Copy the URLs (JSON):', txt); });
 }
 function dl(filename, text, type){
   var b=new Blob([text],{type:type}); var u=URL.createObjectURL(b); var a=document.createElement('a');
   a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
 }
-function downloadTxt(){ dl('buyer_tag_names.txt', namesList().join('\n'), 'text/plain'); }
+function downloadJson(){ dl('buyer_tag_urls.json', JSON.stringify(urlList()), 'application/json'); }
 function downloadCsv(){
   var rows=currentRows();
   var head='name,website,size,aum,acquisitions,largest,employees,description';
@@ -210,7 +229,7 @@ function compactFromRow(r){
     email_count:r.email_count, linkedin_count:r.linkedin_count, firm_size:r.firm_size,
     firm_aum:r.firm_aum, firm_acquisitions:r.firm_acquisitions, firm_largest:r.firm_largest,
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags,
-    description:r.description};
+    description:r.description, is_specialist:r.is_specialist};
 }
 function refreshFromServer(){
   var o = load(), ids = Object.keys(o).map(Number).filter(Boolean);
@@ -227,7 +246,7 @@ function refreshFromServer(){
     .catch(function(){ render(); });
 }
 
-['f-tier','f-aum','f-acq','f-emp','f-name'].forEach(function(id){
+['f-spec','f-tier','f-aum','f-acq','f-emp','f-name'].forEach(function(id){
   document.getElementById(id).addEventListener('input', render);
 });
 refreshFromServer();
