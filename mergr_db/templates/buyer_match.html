@@ -183,6 +183,8 @@
   .bm-cart a.bm-cart-btn:hover { text-decoration:none; opacity:.92; }
   .bm-cart-clear { background:transparent; border:1px solid rgba(255,255,255,.35); color:#fff; font-size:12px; font-weight:600; padding:6px 11px; border-radius:8px; cursor:pointer; }
   .bm-cart-clear:hover { border-color:#fff; }
+  .bm-toast { position:fixed; left:50%; transform:translateX(-50%); bottom:74px; z-index:70; background:var(--accent); color:#fff; font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:8px; box-shadow:0 8px 20px -6px rgba(0,0,0,.35); opacity:0; transition:opacity .15s; pointer-events:none; }
+  .bm-toast.show { opacity:1; }
 </style>
 {% endblock %}
 {% block body %}
@@ -270,6 +272,7 @@
   <a class="bm-cart-btn" href="/buyer-match/tag">Filter &amp; export →</a>
   <button class="bm-cart-clear" onclick="bmSelClearAll()">Clear</button>
 </div>
+<div id="bm-toast" class="bm-toast"></div>
 
 <script>
 var PAGE_SIZE = 100;
@@ -301,10 +304,17 @@ function bmCompact(r){
     mergr_kind:r.mergr_kind, firm_id:r.firm_id, company_id:r.company_id, tags:r.tags};
 }
 function bmSelToggle(id){
-  var o=bmSelLoad(), k=String(id);
-  if(o[k]){ delete o[k]; } else if(bmRowById[k]){ o[k]=bmCompact(bmRowById[k]); }
+  var o=bmSelLoad(), k=String(id), added;
+  if(o[k]){ delete o[k]; added=false; } else if(bmRowById[k]){ o[k]=bmCompact(bmRowById[k]); added=true; } else { return; }
   bmSelSave(o); updateCartBar();
   document.querySelectorAll('[data-selid="'+k+'"]').forEach(function(el){ setSelControl(el, !!o[k]); });
+  bmToast((added?'Added':'Removed')+' · '+bmSelCount()+' in tag');
+}
+var _bmToastT=null;
+function bmToast(msg){
+  var t=document.getElementById('bm-toast'); if(!t) return;
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(_bmToastT); _bmToastT=setTimeout(function(){ t.classList.remove('show'); }, 1400);
 }
 function setSelControl(el, on){
   if(el.tagName==='INPUT'){ el.checked=on; }
@@ -519,9 +529,10 @@ function paintResults(){
     more = '<div class="bmv-more"><div class="bmv-count">Showing all '+allResults.length+' result'+(allResults.length===1?'':'s')+'</div></div>';
   }
   document.getElementById('results').innerHTML = renderBuyers(slice, true) + more;
+  updateCartBar();
 }
 function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, allResults.length); paintResults(); }
-function paintKeywordBuyers(){ document.getElementById('results').innerHTML = renderBuyers(kwBuyers, false); }
+function paintKeywordBuyers(){ document.getElementById('results').innerHTML = renderBuyers(kwBuyers, false); updateCartBar(); }
 
 function buildCluster(){
   var counts={};
