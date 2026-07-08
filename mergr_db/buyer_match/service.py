@@ -190,7 +190,7 @@ def list_mandates(conn):
         for r in cur.fetchall():
             co = f" ({r['company_name']})" if r.get("company_name") else ""
             inactive = "[Inactive] " if r.get("status") != 1 else ""
-            bs = "[BS] " if r["source_table"] == "bs_opportunities" else ""
+            bs = "(Buyer Outreach) " if r["source_table"] == "bs_opportunities" else ""
             out.append({
                 "id": r["id"], "code": r["code"], "table": r["source_table"],
                 "label": f"{inactive}{bs}{r['project_name']}{co} — {r['summary']} ({r['code']})",
