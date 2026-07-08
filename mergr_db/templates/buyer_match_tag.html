@@ -35,6 +35,8 @@
   .tag-t tr.descrow td { padding:0 14px 12px; }
   .tag-desc { font-size:12px; color:var(--muted); line-height:1.5; max-width:920px; }
   .tag-desc.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }
+  .tag-geoline { font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+  .tag-geo-lbl { font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin-right:3px; }
   .tag-t td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
   .tag-t td.num.gold { color:#92400e; font-weight:700; }
   .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
@@ -190,6 +192,15 @@ function tierBadge(r){
   return '';
 }
 function specBadge(r){ return r.is_specialist ? '<span class="tier spec">Specialist</span>' : ''; }
+function tagGeoLine(r){
+  var parts=[];
+  if(r.geographies && r.geographies.length) parts.push('<span class="tag-geo-lbl">Regions</span> '+esc(r.geographies.join(', ')));
+  if(r.acquired_countries && r.acquired_countries.length){
+    var a=r.acquired_countries, N=12;
+    parts.push('<span class="tag-geo-lbl">Acquired in</span> '+esc(a.slice(0,N).join(', '))+(a.length>N?' +'+(a.length-N):''));
+  }
+  return parts.length ? '<div class="tag-geoline">'+parts.join(' &nbsp;&middot;&nbsp; ')+'</div>' : '';
+}
 function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/company/'+r.company_id:(r.firm_id?'/mergr/firm/'+r.firm_id:''); }
 
 function render(){
@@ -217,9 +228,9 @@ function render(){
       + '<td class="num">'+(r.no_of_employees?nf(r.no_of_employees):'<span class="faint">—</span>')+'</td>'
       + '<td><span class="rm" title="Remove from tag" onclick="removeOne('+r.id+')">&times;</span></td>'
       + '</tr>';
-    var desc = r.description
-      ? '<tr class="descrow"><td colspan="7"><div class="tag-desc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+esc(r.description)+'</div></td></tr>'
-      : '';
+    var inner = (r.description ? '<div class="tag-desc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+esc(r.description)+'</div>' : '')
+              + tagGeoLine(r);
+    var desc = inner ? '<tr class="descrow"><td colspan="7">'+inner+'</td></tr>' : '';
     return '<tbody>'+main+desc+'</tbody>';
   }).join('');
   body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead>'+trs+'</table></div>';

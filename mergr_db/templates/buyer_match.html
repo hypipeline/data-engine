@@ -170,6 +170,10 @@
   .bmv-more { text-align:center; padding:16px; } .bmv-count { margin-top:8px; font-size:13px; color:var(--muted); }
   .bmv-mlink { color:#7c3aed; font-weight:600; font-size:12px; white-space:nowrap; }
   .bmv-taginline { display:inline-block; background:var(--bg-3); color:var(--muted); padding:1px 8px; border-radius:10px; font-size:11px; border:1px solid var(--border); font-weight:500; margin:0 4px 4px 0; }
+  .bmv-geoline { font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+  .bmv-geo-lbl { font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin-right:3px; }
+  .bmv-geo-chip { display:inline-block; background:#eef4ff; color:#2f45a8; border:1px solid #dbe4fb; border-radius:10px; padding:1px 8px; font-size:11px; margin:0 4px 4px 0; }
+  .bmv-geo-chip.acq { background:#f0fdf4; color:#166534; border-color:#c7f0d4; }
 
   /* Tag selection ("cart" that persists across screens) */
   .bmv-t th.selh { width:34px; }
@@ -415,6 +419,22 @@ function tierBadge(r){
   return '';
 }
 function specBadge(r){ return r.is_specialist ? '<span class="bmv-spec-badge">Specialist</span>' : ''; }
+function geoChips(vals, cls, cap){
+  cap = cap||14; vals = vals||[];
+  var h = vals.slice(0,cap).map(function(v){ return '<span class="bmv-geo-chip '+cls+'">'+esc(v)+'</span>'; }).join('');
+  if(vals.length>cap) h += '<span class="bmv-geo-chip '+cls+'">+'+(vals.length-cap)+' more</span>';
+  return h;
+}
+// compact one-liner for the table sub-row
+function geoLineHtml(r){
+  var parts=[];
+  if(r.geographies && r.geographies.length) parts.push('<span class="bmv-geo-lbl">Regions</span> '+esc(r.geographies.join(', ')));
+  if(r.acquired_countries && r.acquired_countries.length){
+    var a=r.acquired_countries, N=12;
+    parts.push('<span class="bmv-geo-lbl">Acquired in</span> '+esc(a.slice(0,N).join(', '))+(a.length>N?' +'+(a.length-N):''));
+  }
+  return parts.length ? '<div class="bmv-geoline">'+parts.join(' &nbsp;&middot;&nbsp; ')+'</div>' : '';
+}
 function tagsInline(r){
   if(!r.tags) return '';
   var ts = r.tags.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
@@ -481,6 +501,7 @@ function bmTableWrap(rows, showScore){
       + '<tr class="s"><td></td><td colspan="8">'
       +   '<div class="subrow">'+(keywordPillsHtml(r)||'<div class="kw-wrap"></div>')+(mergrHref(r)?'<div>'+mergrLinkHtml(r)+'</div>':'')+'</div>'
       +   subDescHtml(r)
+      +   geoLineHtml(r)
       +   bmExpand(r)
       + '</td></tr></tbody>';
   }).join('');
@@ -513,6 +534,8 @@ function bmSheets(rows, showScore){
       + '</div><div class="side">'
       +   '<div class="blk"><div class="l">Sectors</div>'+(keywordPillsHtml(r)||'<span class="empty-box">—</span>')+'</div>'
       +   (r.tags?'<div class="blk"><div class="l">Tags</div><div>'+tagsInline(r)+'</div></div>':'')
+      +   (r.geographies&&r.geographies.length?'<div class="blk"><div class="l">Target regions</div><div>'+geoChips(r.geographies,'',20)+'</div></div>':'')
+      +   (r.acquired_countries&&r.acquired_countries.length?'<div class="blk"><div class="l">Acquired in</div><div>'+geoChips(r.acquired_countries,'acq',20)+'</div></div>':'')
       + '</div></div></div></div>';
   }).join('') + '</div>';
 }
