@@ -58,9 +58,13 @@ def vec_literal(emb):
 def load_active_buyers(my):
     """Buyer metadata slice, mirroring match_server.py's startup load."""
     with my.cursor(pymysql.cursors.DictCursor) as cur:
+        # Exclude ON-flagged restricted buyers (is_restricted=1) — they must never surface in
+        # Buyer Match. Filtered here at the single source of the buyer set, so backfill AND every
+        # sync drop them (and a sync removes any that were flagged after they were first loaded).
         cur.execute("SELECT id, name, description, investment_thesis, sector_keywords, website, "
                     "no_of_employees, is_specialist, specific_matching_criteria "
-                    "FROM buyers WHERE deleted_at IS NULL")
+                    "FROM buyers WHERE deleted_at IS NULL "
+                    "AND (is_restricted IS NULL OR is_restricted = 0)")
         buyers = {r["id"]: r for r in cur.fetchall()}
         cur.execute("SELECT id, name FROM tags")
         tag_names = {r["id"]: r["name"] for r in cur.fetchall()}
