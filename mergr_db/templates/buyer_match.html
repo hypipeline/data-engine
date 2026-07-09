@@ -89,6 +89,9 @@
   .kw.clickable { cursor:pointer; color:color-mix(in srgb, var(--link) 72%, #000); font-weight:500; }
   .kw.clickable:hover { background:color-mix(in srgb, var(--link) 16%, transparent); border-color:var(--link); }
   .kw.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  /* already in the active set — shown in the cluster as added, not re-selectable */
+  .kw.selected { background:color-mix(in srgb, var(--accent) 13%, transparent); color:var(--accent); border-color:color-mix(in srgb, var(--accent) 42%, var(--border-2)); font-weight:600; cursor:default; }
+  .kw.selected::before { content:"\2713\00a0"; font-weight:800; }
   .kw .rm { margin-left:5px; cursor:pointer; font-weight:700; opacity:.7; }
   .kw .rm:hover { opacity:1; }
 
@@ -624,6 +627,22 @@ function buildCluster(){
     return '<span class="kw clickable" data-keyword="'+esc(x[0])+'">'+esc(x[0])+' ('+x[1]+')</span>';
   }).join('');
   panel.style.display='block';
+  refreshClusterSelected();
+}
+
+// Keep the "Top keywords in results" cluster in sync with the active set: a keyword already
+// selected shows as added (.selected) and drops .clickable so it can't be picked again. Removal
+// is via the green active-keyword pills' ×.
+function refreshClusterSelected(){
+  var pills = document.getElementById('cluster-pills');
+  if(!pills) return;
+  var active = {};
+  activeKeywords.forEach(function(k){ active[k]=1; });
+  pills.querySelectorAll('.kw').forEach(function(el){
+    var on = !!active[el.dataset.keyword];
+    el.classList.toggle('selected', on);
+    el.classList.toggle('clickable', !on);
+  });
 }
 
 async function doSearch(){
@@ -802,6 +821,7 @@ async function refreshKeywordView(){
   document.getElementById('search-meta').style.display='none';
   document.getElementById('kw-view').style.display='block';
   renderActiveKeywordPills();
+  refreshClusterSelected();
   loadSimilarKeywords();
   document.getElementById('kw-meta').innerHTML='<span class="spin"></span> loading buyers…';
   document.getElementById('results').innerHTML='';
@@ -837,6 +857,7 @@ function restoreSearchView(){
   queryWords = getQueryWords(document.getElementById('query').value);   // restore search-term highlighting
   document.getElementById('bmv-toolbar').style.display = allResults.length ? 'flex' : 'none';
   if(allResults.length) paintResults(); else document.getElementById('results').innerHTML='';
+  refreshClusterSelected();   // active set cleared → all cluster keywords selectable again
 }
 function backToResults(){
   restoreSearchView();
