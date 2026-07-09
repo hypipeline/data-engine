@@ -611,7 +611,7 @@ function paintResults(){
 function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, curResults().length); paintResults(); }
 function paintKeywordBuyers(){
   var list = specFilter ? kwBuyers.filter(specMatch) : kwBuyers;
-  document.getElementById('results').innerHTML = renderBuyers(list, false); updateCartBar();
+  document.getElementById('results').innerHTML = renderBuyers(list, false, true); updateCartBar();
 }
 
 function buildCluster(){
