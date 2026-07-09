@@ -48,6 +48,11 @@
   .tag-t td.num.gold { color:#92400e; font-weight:700; }
   .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
   .tag-t .site { color:var(--muted); font-size:11.5px; font-weight:400; }
+  .site-link { color:var(--muted); text-decoration:none; }
+  .site-link:hover { color:var(--link); text-decoration:underline; }
+  .on-link { color:var(--faint); text-decoration:none; font-size:.92em; font-weight:600; letter-spacing:.2px; }
+  .on-link:hover { color:var(--accent); text-decoration:underline; }
+  .on-sep { color:var(--border-2); }
   .tag-t .faint { color:var(--faint); }
   .tag-t .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
   .tag-t .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
@@ -147,6 +152,13 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(_){ return {}; } }
 function save(o){ localStorage.setItem(KEY, JSON.stringify(o)); }
 function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+// Live ON (Origination Network) buyer record + clickable website — mirrors the search page.
+var ON_BASE = 'https://originationnetwork.com';
+function onBuyerHref(r){ return ON_BASE + '/dashboard/buyers/' + encodeURIComponent(r.id) + '/edit'; }
+function onRecordLink(r){ return '<a class="on-link" href="'+onBuyerHref(r)+'" target="_blank" rel="noopener" title="Open this buyer in the live ON system">ON record &#8599;</a>'; }
+function siteLink(r){
+  return r.website ? '<a class="site-link" href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(shortUrl(r.website))+'</a>' : ('ID '+esc(r.id));
+}
 
 // "65.0BUSD"/"744.0BUSD"/"353MUSD" -> number (USD). "$1.2B"/"$18M" -> number.
 function parseVal(s){
@@ -313,7 +325,7 @@ function render(){
     var nm = href ? '<a href="'+href+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>' : esc(r.name||'(unnamed)');
     if(r.website) nm = '<a href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>';
     var main = '<tr class="main-r">'
-      + '<td><div class="nm">'+nm+tierBadge(r)+specBadge(r)+'</div><div class="site">'+esc(shortUrl(r.website))+'</div></td>'
+      + '<td><div class="nm">'+nm+tierBadge(r)+specBadge(r)+'</div><div class="site">'+siteLink(r)+' <span class="on-sep">&middot;</span> '+onRecordLink(r)+'</div></td>'
       + '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_acquisitions?nf(r.firm_acquisitions):'<span class="faint">—</span>')+'</td>'

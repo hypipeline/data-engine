@@ -147,6 +147,11 @@
   .bmv-t thead th.numh { text-align:right; padding-right:4px; width:34px; }
   .bmv-t td.rank { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--faint); text-align:right; padding:12px 4px 4px 16px; vertical-align:top; white-space:nowrap; }
   .bmv-rank { font-family:var(--mono); font-size:12px; font-weight:800; color:var(--faint); margin-right:6px; vertical-align:1px; }
+  .site-link { color:var(--muted); text-decoration:none; }
+  .site-link:hover { color:var(--link); text-decoration:underline; }
+  .on-link { color:var(--faint); text-decoration:none; font-size:.92em; font-weight:600; letter-spacing:.2px; }
+  .on-link:hover { color:var(--accent); text-decoration:underline; }
+  .on-sep { color:var(--border-2); }
 
   .bmv-sheets { display:flex; flex-direction:column; gap:16px; }
   .bmv-ts { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -361,6 +366,18 @@ function bmSelToggleAllShown(cb){
   bmSelSave(o); updateCartBar();
 }
 function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
+// Live ON (Origination Network) buyer record — the Filament admin edit page for this buyer id.
+var ON_BASE = 'https://originationnetwork.com';
+function onBuyerHref(r){ return ON_BASE + '/dashboard/buyers/' + encodeURIComponent(r.id) + '/edit'; }
+function onRecordLink(r){
+  return '<a class="on-link" href="'+onBuyerHref(r)+'" target="_blank" rel="noopener" title="Open this buyer in the live ON system">ON record &#8599;</a>';
+}
+// The buyer website as a clickable domain link (falls back to plain "ID n" when no website).
+function siteLink(r){
+  var s = shortUrl(r.website);
+  return r.website ? '<a class="site-link" href="'+esc(r.website)+'" target="_blank" rel="noopener">'+esc(s)+'</a>'
+                   : ('ID '+esc(r.id));
+}
 var ICO_PERSON = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5z"/></svg>';
 var ICO_MAIL = '<svg class="ci" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>';
 var ICO_LI = '<svg class="ci ci-li" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 118.3 6.5a1.78 1.78 0 01-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0013 14.19V19h-3v-9h2.9v1.3a3.11 3.11 0 012.7-1.4c1.55 0 3.36.86 3.36 3.66z"/></svg>';
@@ -502,7 +519,7 @@ function bmTableWrap(rows, showScore, numbered){
       +   (numbered?'<td class="rank">'+(i+1)+'</td>':'')
       +   '<td class="selc"><input type="checkbox" class="bmsel" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')"'+(bmSelHas(r.id)?' checked':'')+'></td>'
       +   '<td><div class="nm"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+tierBadge(r)+specBadge(r)+'</div>'
-      +     '<div class="site">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+'</div></td>'
+      +     '<div class="site">'+siteLink(r)+' <span class="on-sep">&middot;</span> '+onRecordLink(r)+'</div></td>'
       +   '<td>'+scoreCell+'</td>'
       +   '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
       +   '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
@@ -536,7 +553,7 @@ function bmSheets(rows, showScore, numbered){
     return '<div class="bmv-ts '+cls+'"><div class="cap"></div><div class="in">'
       + '<div class="hd"><div>'
       +   '<div class="nm bmv-serif">'+(numbered?'<span class="bmv-rank">#'+(i+1)+'</span> ':'')+'<a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+specBadge(r)+'</div>'
-      +   '<div class="dom">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+(mergrHref(r)?' &middot; '+mergrLinkHtml(r):'')+'</div>'
+      +   '<div class="dom">'+siteLink(r)+(mergrHref(r)?' &middot; '+mergrLinkHtml(r):'')+' <span class="on-sep">&middot;</span> '+onRecordLink(r)+'</div>'
       + '</div><div style="text-align:right;white-space:nowrap">'
       +   '<button class="bmv-tagbtn'+(bmSelHas(r.id)?' on':'')+'" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')">'+(bmSelHas(r.id)?'✓ In tag':'+ Tag')+'</button>'
       +   '<div class="cons">'+contactsInline(r)+'</div></div></div>'
