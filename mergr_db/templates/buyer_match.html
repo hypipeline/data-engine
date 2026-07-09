@@ -144,6 +144,9 @@
   .bmv-t .subrow { display:flex; gap:12px; align-items:baseline; }
   .bmv-t .subrow .kw-wrap { flex:1; }
   .bmv-t .subdesc { color:var(--muted); font-size:11.5px; margin-top:6px; }
+  .bmv-t thead th.numh { text-align:right; padding-right:4px; width:34px; }
+  .bmv-t td.rank { font-family:var(--mono); font-size:12px; font-weight:700; color:var(--faint); text-align:right; padding:12px 4px 4px 16px; vertical-align:top; white-space:nowrap; }
+  .bmv-rank { font-family:var(--mono); font-size:12px; font-weight:800; color:var(--faint); margin-right:6px; vertical-align:1px; }
 
   .bmv-sheets { display:flex; flex-direction:column; gap:16px; }
   .bmv-ts { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -483,18 +486,20 @@ function subDescHtml(r){
 }
 
 // ---- TABLE ----
-function bmTableWrap(rows, showScore){
+function bmTableWrap(rows, showScore, numbered){
   var head = '<div class="bmv-twrap"><table class="bmv-t"><thead><tr>'
+    + (numbered?'<th class="numh">#</th>':'')
     + '<th class="selh"><input type="checkbox" onclick="bmSelToggleAllShown(this)" title="Select all shown"></th>'
     + '<th>Buyer</th><th class="r">Match</th><th class="r">Size</th><th class="r">AUM</th>'
     + '<th class="r">Acq.</th><th class="r">Largest</th><th class="r">Staff</th><th class="r">Email &middot; LinkedIn</th>'
     + '</tr></thead>';
-  var body = rows.map(function(r){
+  var body = rows.map(function(r, i){
     var scoreCell = (showScore && r.score!=null)
       ? '<div class="sc"><span class="v">'+r.score.toFixed(3)+'</span><span class="bar"><i style="width:'+(maxScore>0?Math.round((r.score||0)/maxScore*100):0)+'%"></i></span></div>'
       : '<span class="faint">—</span>';
     return '<tbody>'
       + '<tr class="m">'
+      +   (numbered?'<td class="rank">'+(i+1)+'</td>':'')
       +   '<td class="selc"><input type="checkbox" class="bmsel" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')"'+(bmSelHas(r.id)?' checked':'')+'></td>'
       +   '<td><div class="nm"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+tierBadge(r)+specBadge(r)+'</div>'
       +     '<div class="site">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+'</div></td>'
@@ -506,7 +511,7 @@ function bmTableWrap(rows, showScore){
       +   '<td class="num">'+(r.no_of_employees?Number(r.no_of_employees).toLocaleString():'<span class="faint">—</span>')+'</td>'
       +   '<td class="cc">'+ICO_MAIL+' '+(r.email_count||0)+' &nbsp; '+ICO_LI+' '+(r.linkedin_count||0)+'</td>'
       + '</tr>'
-      + '<tr class="s"><td></td><td colspan="8">'
+      + '<tr class="s">'+(numbered?'<td></td>':'')+'<td></td><td colspan="8">'
       +   '<div class="subrow">'+(keywordPillsHtml(r)||'<div class="kw-wrap"></div>')+(mergrHref(r)?'<div>'+mergrLinkHtml(r)+'</div>':'')+'</div>'
       +   subDescHtml(r)
       +   geoLineHtml(r)
@@ -517,8 +522,8 @@ function bmTableWrap(rows, showScore){
 }
 
 // ---- TEARSHEET ----
-function bmSheets(rows, showScore){
-  return '<div class="bmv-sheets">' + rows.map(function(r){
+function bmSheets(rows, showScore, numbered){
+  return '<div class="bmv-sheets">' + rows.map(function(r, i){
     var mega = r.firm_size && /mega/i.test(r.firm_size);
     var cls = mega ? '' : (r.mergr_kind==='company' ? 'co' : (inMergr(r) ? '' : 'bare'));
     var f=[];
@@ -530,7 +535,7 @@ function bmSheets(rows, showScore){
     if(showScore && r.score!=null) f.push('<div class="f"><div class="v">'+r.score.toFixed(3)+'</div><div class="l">Match</div></div>');
     return '<div class="bmv-ts '+cls+'"><div class="cap"></div><div class="in">'
       + '<div class="hd"><div>'
-      +   '<div class="nm bmv-serif"><a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+specBadge(r)+'</div>'
+      +   '<div class="nm bmv-serif">'+(numbered?'<span class="bmv-rank">#'+(i+1)+'</span> ':'')+'<a href="'+esc(r.website||'#')+'" target="_blank" rel="noopener">'+esc(r.name||'(unnamed)')+'</a>'+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+specBadge(r)+'</div>'
       +   '<div class="dom">'+esc(shortUrl(r.website)||('ID '+esc(r.id)))+(mergrHref(r)?' &middot; '+mergrLinkHtml(r):'')+'</div>'
       + '</div><div style="text-align:right;white-space:nowrap">'
       +   '<button class="bmv-tagbtn'+(bmSelHas(r.id)?' on':'')+'" data-selid="'+r.id+'" onclick="bmSelToggle('+r.id+')">'+(bmSelHas(r.id)?'✓ In tag':'+ Tag')+'</button>'
@@ -548,8 +553,8 @@ function bmSheets(rows, showScore){
   }).join('') + '</div>';
 }
 
-function renderBuyers(rows, showScore){
-  return viewMode==='table' ? bmTableWrap(rows, showScore) : bmSheets(rows, showScore);
+function renderBuyers(rows, showScore, numbered){
+  return viewMode==='table' ? bmTableWrap(rows, showScore, numbered) : bmSheets(rows, showScore, numbered);
 }
 function setViewMode(v){
   viewMode = v;
@@ -580,7 +585,7 @@ function paintResults(){
   } else {
     more = '<div class="bmv-more"><div class="bmv-count">Showing all '+list.length+(specFilter?' '+(specFilter==='1'?'specialist':'non-specialist'):'')+' result'+(list.length===1?'':'s')+'</div></div>';
   }
-  document.getElementById('results').innerHTML = renderBuyers(slice, true) + more;
+  document.getElementById('results').innerHTML = renderBuyers(slice, true, true) + more;
   updateCartBar();
 }
 function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, curResults().length); paintResults(); }
