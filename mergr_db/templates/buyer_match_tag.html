@@ -132,6 +132,10 @@
 <!-- STEP 3 · Geography -->
 <div class="stage" id="stage3" style="display:none">
   <div class="stage-h"><span class="stage-sub">Prioritise by geography — pick target regions and/or where they've acquired; matching buyers <b>sort to the top</b>. Nothing is removed — everything still exports.</span></div>
+  <div class="tag-bar">
+    <span class="fl">Specialist</span>
+    <select id="f-spec-geo"><option value="">Any</option><option value="1">Yes</option><option value="0">No</option></select>
+  </div>
   <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
   <div class="step-nav">
     <button class="btn2" onclick="goStep(2)">&larr; Back to sizing</button>
@@ -295,6 +299,8 @@ function tagGeoLine(r){
 function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/company/'+r.company_id:(r.firm_id?'/mergr/firm/'+r.firm_id:''); }
 
 function render(){
+  // Geography step's Specialist control mirrors the Sizing one (they drive the same filter).
+  var fsg=document.getElementById('f-spec-geo'); if(fsg) fsg.value=document.getElementById('f-spec').value;
   renderFacets();
   var all = load(), total = Object.keys(all).length;
   var nCrit = criteriaRows().length, nSized = sizedRows().length;
@@ -401,6 +407,10 @@ function refreshFromServer(){
 }
 
 document.getElementById('f-spec').addEventListener('input', render);
+// Geography step's Specialist selector writes to the same filter as Sizing, then re-renders.
+document.getElementById('f-spec-geo').addEventListener('input', function(){
+  document.getElementById('f-spec').value = this.value; render();
+});
 refreshFromServer();
 </script>
 {% endblock %}
