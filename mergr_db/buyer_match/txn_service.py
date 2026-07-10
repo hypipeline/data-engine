@@ -52,6 +52,7 @@ def _deal(r):
         "target": r.get("target_name"),
         "desc": r.get("target_description"),
         "sector": r.get("target_sector"),
+        "location": r.get("target_location"),
         "value": float(r["deal_value"]) if r.get("deal_value") is not None else None,
         "value_ccy": r.get("deal_value_currency"),
         "url": r.get("transaction_url"),
@@ -84,8 +85,8 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
         cur.execute(
             """WITH top AS (
                  SELECT t.transaction_id, t.date, t.transaction_type, t.target_name, t.target_sector,
-                        t.target_description, t.deal_value, t.deal_value_currency, t.transaction_url,
-                        1 - (t.target_embedding <=> q.e) AS score
+                        t.target_description, t.target_location, t.deal_value, t.deal_value_currency,
+                        t.transaction_url, 1 - (t.target_embedding <=> q.e) AS score
                  FROM transactions t,
                       (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
                  WHERE t.target_embedding IS NOT NULL

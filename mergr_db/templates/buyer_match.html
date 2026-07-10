@@ -189,6 +189,8 @@
   .dh-route.platform { background:#eef2fb; color:#3a4a75; border:1px solid #e0e6f5; }
   .dh-route.addon { background:#f0f7ee; color:#3f6b3a; border:1px solid #dcecd6; }
   .dh-noweb { font-size:11px; color:var(--faint); font-style:italic; white-space:nowrap; }
+  .dh-nm .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
+  .dh-nm .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
 
   .bmv-sheets { display:flex; flex-direction:column; gap:16px; }
   .bmv-ts { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -751,7 +753,7 @@ function dhVal(d){                 // deal_value is stored in MILLIONS of its cu
   return s+(ccy?' '+ccy:'');
 }
 function dhDeal(d){
-  var meta = [d.type, d.date, d.sector, dhVal(d)].filter(Boolean).map(esc).join(' &middot; ');
+  var meta = [d.type, d.date, d.location, d.sector, dhVal(d)].filter(Boolean).map(esc).join(' &middot; ');
   var tgt = d.url ? '<a href="'+esc(d.url)+'" target="_blank" rel="noopener">'+esc(d.target||'(target)')+'</a>' : esc(d.target||'(target)');
   return '<div class="dh-deal"><span class="dh-ds">'+dhScore(d.score)+'</span>'
     + '<div class="dh-dmain"><div class="dh-dt">'+tgt+'</div>'
@@ -770,11 +772,17 @@ function dhRouteBadge(kind){
   if(kind==='firm') return '<span class="dh-route platform">Platform</span>';
   return '';
 }
+// Size only (Mega / firm tier) — firm-vs-company is already shown by the route badge, so no plain "Company".
+function dhTier(b){
+  if(b.firm_size && /mega/i.test(b.firm_size)) return '<span class="tier mega">Mega</span>';
+  if(b.mergr_kind==='firm' && b.firm_size) return '<span class="tier">'+esc(b.firm_size)+'</span>';
+  return '';
+}
 // ON buyer card (tag-able — reuses the buyer selection cart)
 function dhOnCard(b, i){
   return '<div class="dh-card">'
     + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
-    +   '<div class="dh-nmwrap"><div class="dh-nm"><a href="'+esc(b.website||'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>'+tierBadge(b)+specBadge(b)+dhRouteBadge(b.mergr_kind)+'</div>'
+    +   '<div class="dh-nmwrap"><div class="dh-nm"><a href="'+esc(b.website||'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>'+dhTier(b)+specBadge(b)+dhRouteBadge(b.mergr_kind)+'</div>'
     +     '<div class="dh-site">'+siteLink(b)+' <span class="on-sep">&middot;</span> '+onRecordLink(b)+'</div></div>'
     +   '<button class="bmv-tagbtn'+(bmSelHas(b.id)?' on':'')+'" data-selid="'+b.id+'" onclick="bmSelToggle('+b.id+')">'+(bmSelHas(b.id)?'✓ In tag':'+ Tag')+'</button>'
     + '</div>'
