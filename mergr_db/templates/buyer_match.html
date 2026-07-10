@@ -157,6 +157,32 @@
   .on-link { color:var(--faint); text-decoration:none; font-size:.92em; font-weight:600; letter-spacing:.2px; }
   .on-link:hover { color:var(--accent); text-decoration:underline; }
   .on-sep { color:var(--border-2); }
+  /* Deal-history mode */
+  .dh-modebar { display:flex; align-items:center; gap:10px; margin:0 0 14px; flex-wrap:wrap; }
+  .dh-mode-hint { font-size:12px; color:var(--muted); }
+  .dh-sec { margin-top:6px; }
+  .dh-sech { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin:20px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .dh-card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px 16px; margin-bottom:12px; }
+  .dh-card.disc { background:var(--bg-2); }
+  .dh-hd { display:flex; align-items:flex-start; gap:11px; }
+  .dh-rank { font-family:var(--mono); font-size:12px; font-weight:800; color:var(--faint); padding-top:2px; white-space:nowrap; }
+  .dh-nmwrap { flex:1; min-width:0; }
+  .dh-nm { font-weight:700; font-size:14.5px; } .dh-nm a { color:var(--link); }
+  .dh-site { color:var(--muted); font-size:11.5px; margin-top:2px; }
+  .dh-disc-badge { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; }
+  .bmv-tagbtn { background:var(--bg-2); border:1px solid var(--border-2); color:var(--text); font-size:12px; font-weight:700; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .bmv-tagbtn:hover { border-color:var(--accent); }
+  .bmv-tagbtn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .dh-stats { display:flex; align-items:center; gap:12px; margin:10px 0 4px; }
+  .dh-badge { font-size:12px; font-weight:800; color:var(--accent); background:color-mix(in srgb, var(--accent) 11%, transparent); border:1px solid color-mix(in srgb, var(--accent) 32%, var(--border-2)); padding:3px 10px; border-radius:20px; }
+  .dh-best { font-size:12px; color:var(--muted); } .dh-best b { font-family:var(--mono); color:var(--text); }
+  .dh-deals { border-top:1px dashed var(--border); margin-top:8px; padding-top:8px; }
+  .dh-deal { display:flex; gap:10px; align-items:baseline; padding:3px 0; }
+  .dh-ds { font-family:var(--mono); font-size:11.5px; font-weight:700; color:var(--accent); min-width:38px; }
+  .dh-dmain { flex:1; min-width:0; }
+  .dh-dt { font-size:12.5px; font-weight:600; } .dh-dt a { color:var(--link); }
+  .dh-dmeta { font-size:11px; color:var(--muted); margin-top:1px; }
+  .dh-dmore { font-size:11.5px; color:var(--faint); font-style:italic; padding-top:5px; }
 
   .bmv-sheets { display:flex; flex-direction:column; gap:16px; }
   .bmv-ts { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -241,6 +267,14 @@
 
 <!-- Search -->
 <div class="bm-panel">
+  <div class="dh-modebar">
+    <span class="bmv-vlabel">Match by</span>
+    <div class="bmv-seg" id="match-mode-seg">
+      <button data-m="thesis" class="active" onclick="setMatchMode('thesis')" title="Rank buyers on their stated thesis / description (what they say they want)">Thesis</button>
+      <button data-m="deal" onclick="setMatchMode('deal')" title="Rank buyers on comparable deals they've actually done (revealed preference)">Deal history</button>
+    </div>
+    <span class="dh-mode-hint" id="dh-mode-hint">Ranks buyers by similarity of their stated thesis to your target.</span>
+  </div>
   <div class="bm-h">Search text</div>
   <textarea class="bm-textarea" id="query" placeholder="e.g. UK-based lightning protection systems business. Revenue £3-5m, strong recurring maintenance contracts, serving construction and infrastructure sectors…"></textarea>
   <div style="margin-top:12px"><button class="search-btn" id="search-btn" onclick="doSearch()">Search Buyers</button></div>
@@ -684,7 +718,103 @@ function refreshClusterSelected(){
   });
 }
 
+// ── Deal-history mode ──────────────────────────────────────────────────────
+// 'thesis' = rank on stated thesis (default); 'deal' = rank on comparable deals actually done.
+var matchMode = 'thesis';
+function setMatchMode(m){
+  matchMode = m;
+  document.querySelectorAll('#match-mode-seg button').forEach(function(b){ b.classList.toggle('active', b.dataset.m===m); });
+  document.getElementById('search-btn').textContent = m==='deal' ? 'Find buyers by deals' : 'Search Buyers';
+  document.getElementById('dh-mode-hint').textContent = m==='deal'
+    ? 'Finds comparable historical deals, then the buyers who did them — plus discovery acquirers you don’t hold yet.'
+    : 'Ranks buyers by similarity of their stated thesis to your target.';
+}
+function dhScore(s){ return (s==null?0:s).toFixed(3); }
+function dhVal(d){                 // deal_value is stored in MILLIONS of its currency
+  if(d.value==null) return '';
+  var v=d.value, ccy=d.value_ccy||'';
+  var s = v>=1e6 ? (v/1e6).toFixed(1)+'T' : v>=1e3 ? (v/1e3).toFixed(1)+'B' : v>=1 ? v.toFixed(0)+'M' : (v*1000).toFixed(0)+'K';
+  return s+(ccy?' '+ccy:'');
+}
+function dhDeal(d){
+  var meta = [d.type, d.date, d.sector, dhVal(d)].filter(Boolean).map(esc).join(' &middot; ');
+  var tgt = d.url ? '<a href="'+esc(d.url)+'" target="_blank" rel="noopener">'+esc(d.target||'(target)')+'</a>' : esc(d.target||'(target)');
+  return '<div class="dh-deal"><span class="dh-ds">'+dhScore(d.score)+'</span>'
+    + '<div class="dh-dmain"><div class="dh-dt">'+tgt+'</div>'
+    + (meta?'<div class="dh-dmeta">'+meta+'</div>':'') + '</div></div>';
+}
+function dhDeals(o){
+  var deals = (o.deals||[]).map(dhDeal).join('');
+  var more = o.deal_count>(o.deals||[]).length ? '<div class="dh-dmore">+'+(o.deal_count-(o.deals||[]).length)+' more comparable deal'+((o.deal_count-(o.deals||[]).length)===1?'':'s')+'</div>' : '';
+  return '<div class="dh-deals">'+deals+more+'</div>';
+}
+// ON buyer card (tag-able — reuses the buyer selection cart)
+function dhOnCard(b, i){
+  return '<div class="dh-card">'
+    + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
+    +   '<div class="dh-nmwrap"><div class="dh-nm"><a href="'+esc(b.website||'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>'+tierBadge(b)+specBadge(b)+'</div>'
+    +     '<div class="dh-site">'+siteLink(b)+' <span class="on-sep">&middot;</span> '+onRecordLink(b)+'</div></div>'
+    +   '<button class="bmv-tagbtn'+(bmSelHas(b.id)?' on':'')+'" data-selid="'+b.id+'" onclick="bmSelToggle('+b.id+')">'+(bmSelHas(b.id)?'✓ In tag':'+ Tag')+'</button>'
+    + '</div>'
+    + '<div class="dh-stats"><span class="dh-badge">'+b.deal_count+' comparable deal'+(b.deal_count===1?'':'s')+'</span>'
+    +   '<span class="dh-best">best match <b>'+dhScore(b.best_score)+'</b></span></div>'
+    + dhDeals(b) + '</div>';
+}
+// Discovery acquirer card (not in your buyer set — no tag; links out to Mergr + website)
+function dhDiscCard(a, i){
+  var mh = a.mergr_kind==='company' ? '/mergr/company/'+a.entity_mergr_id : '/mergr/firm/'+a.entity_mergr_id;
+  return '<div class="dh-card disc">'
+    + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
+    +   '<div class="dh-nmwrap"><div class="dh-nm">'+(a.website?'<a href="'+esc(a.website)+'" target="_blank" rel="noopener">'+esc(a.name||'(unnamed)')+'</a>':esc(a.name||'(unnamed)'))+'<span class="dh-disc-badge">Not in ON</span></div>'
+    +     '<div class="dh-site">'+(a.website?'<a class="site-link" href="'+esc(a.website)+'" target="_blank" rel="noopener">'+esc(shortUrl(a.website))+'</a> <span class="on-sep">&middot;</span> ':'')+'<a class="on-link" href="'+mh+'" target="_blank" rel="noopener">Mergr '+esc(a.mergr_kind)+' &#8599;</a></div></div>'
+    + '</div>'
+    + '<div class="dh-stats"><span class="dh-badge">'+a.deal_count+' comparable deal'+(a.deal_count===1?'':'s')+'</span>'
+    +   '<span class="dh-best">best match <b>'+dhScore(a.best_score)+'</b></span></div>'
+    + dhDeals(a) + '</div>';
+}
+function renderTxnResults(data){
+  var on = data.on||[], disc = data.discovery||[];
+  on.forEach(function(b){ bmRowById[String(b.id)] = b; });     // so tagging stores full buyer data
+  var meta = document.getElementById('search-meta');
+  meta.style.display='';
+  meta.innerHTML = '<b>'+on.length+'</b> of your buyers &middot; <b>'+disc.length+'</b> discovery acquirer'+(disc.length===1?'':'s')
+    + ' across <b>'+(data.txn_count||0)+'</b> comparable deals';
+  var html = '';
+  html += '<div class="dh-sec"><div class="dh-sech">Your buyers — ranked by comparable deals</div>';
+  html += on.length ? on.map(dhOnCard).join('') : '<div class="empty-box">None of your ON buyers have a comparable deal on record.</div>';
+  html += '</div>';
+  html += '<div class="dh-sec"><div class="dh-sech">Discovery — strong acquirers you don’t hold yet</div>';
+  html += disc.length ? disc.map(dhDiscCard).join('') : '<div class="empty-box">No discovery acquirers for this search.</div>';
+  html += '</div>';
+  document.getElementById('results').innerHTML = html;
+  updateCartBar();
+}
+async function doTxnSearch(){
+  var q = document.getElementById('query').value.trim();
+  if(!q) return;
+  currentView='search'; activeKeywords=[];
+  document.getElementById('kw-view').style.display='none';
+  document.getElementById('cluster-panel').style.display='none';
+  document.getElementById('bmv-toolbar').style.display='none';
+  document.getElementById('search-meta').style.display='';
+  var btn=document.getElementById('search-btn'); btn.disabled=true; btn.textContent='Finding…';
+  document.getElementById('search-meta').innerHTML='<span class="spin"></span> finding comparable deals…';
+  document.getElementById('results').innerHTML='';
+  try{
+    var resp = await fetch('/buyer-match/txn-match', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:q})});
+    var data = await resp.json();
+    if(data.error){ document.getElementById('search-meta').textContent=''; document.getElementById('results').innerHTML='<div class="error-box">'+esc(data.error)+'</div>'; return; }
+    queryWords = getQueryWords(q);
+    renderTxnResults(data);
+    history.pushState({view:'search'}, '', '/buyer-match');
+  }catch(e){
+    document.getElementById('search-meta').textContent='';
+    document.getElementById('results').innerHTML='<div class="error-box">Request failed: '+esc(e && e.message ? e.message : e)+'</div>';
+  }finally{ btn.disabled=false; btn.textContent='Find buyers by deals'; }
+}
+
 async function doSearch(){
+  if(matchMode==='deal') return doTxnSearch();
   var q = document.getElementById('query').value.trim();
   if(!q) return;
   // leaving any keyword view — restore search chrome before running a fresh search

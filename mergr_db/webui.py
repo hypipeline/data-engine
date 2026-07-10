@@ -517,6 +517,7 @@ def entity_lookup(request: Request, domain: str):
 from fastapi.responses import JSONResponse            # noqa: E402
 from pydantic import BaseModel                          # noqa: E402
 from buyer_match import service as bm_svc, mandate as bm_mand  # noqa: E402
+from buyer_match import txn_service as bm_txn                   # noqa: E402
 
 
 def _bm(fn, *args):
@@ -608,6 +609,16 @@ def bm_by_ids(req: _IdsReq):
     regardless of when a buyer was added to the tag."""
     ids = list(dict.fromkeys(req.ids))[:5000]
     return JSONResponse({"buyers": _bm(bm_svc.buyers_by_ids, ids) if ids else []})
+
+
+@app.post("/buyer-match/txn-match")
+def bm_txn_match(req: _SearchReq):
+    """Deal-history mode: rank buyers by comparable historical deals (revealed preference).
+    Returns {on, discovery, txn_count, usage} — ON buyers + discovery acquirers, each with evidence."""
+    q = (req.query or "").strip()
+    if not q:
+        return JSONResponse({"on": [], "discovery": [], "txn_count": 0})
+    return JSONResponse(_bm(bm_txn.match_buyers_by_deals, q))
 
 
 import queue as _queue                               # noqa: E402
