@@ -191,6 +191,25 @@
   .dh-noweb { font-size:11px; color:var(--faint); font-style:italic; white-space:nowrap; }
   .dh-nm .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
   .dh-nm .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+  .dh-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:2px 0 14px; padding-bottom:11px; border-bottom:1px solid var(--border); }
+  .dh-toolbar .grow { flex:1; }
+  .dh-opt { font-size:12px; color:var(--muted); display:inline-flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap; }
+  .dh-secn { font-size:10px; color:var(--faint); font-weight:700; }
+  /* PE owner line (space-efficient) */
+  .dh-owner { font-size:11px; color:var(--muted); margin-top:3px; display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
+  .dh-owner-lbl { font-size:8.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); }
+  .dh-own { display:inline-flex; align-items:center; }
+  .dh-own-a { color:var(--link); }
+  .dh-own-on { color:var(--accent); font-weight:900; margin-left:2px; }
+  .dh-own-tag { font-size:10px; font-weight:800; line-height:1.35; padding:0 5px; margin-left:3px; border-radius:5px; border:1px solid var(--border-2); background:var(--bg-2); color:var(--muted); cursor:pointer; }
+  .dh-own-tag.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .dh-own-sep { color:var(--border-2); }
+  .dh-own-yr { color:var(--faint); }
+  /* compact multi-select table */
+  .dh-t td, .dh-t th { font-size:12.5px; }
+  .dh-t .dh-crank { font-family:var(--mono); color:var(--faint); font-size:11px; text-align:right; padding-right:2px; }
+  .dh-cnm { font-weight:700; } .dh-cnm a { color:var(--link); }
+  .dh-crec { font-weight:400; font-size:11px; }
 
   .bmv-sheets { display:flex; flex-direction:column; gap:16px; }
   .bmv-ts { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
@@ -778,12 +797,93 @@ function dhTier(b){
   if(b.mergr_kind==='firm' && b.firm_size) return '<span class="tier">'+esc(b.firm_size)+'</span>';
   return '';
 }
+// ── Deal-history view state (re-render from cached data on any toggle) ──
+var dhData = null;          // last txn-match payload
+var dhView = 'cards';       // 'cards' | 'compact'
+var dhShowOwners = true;    // show PE owner(s) of add-on results
+var dhTierFilter = '';      // '' both | 'on' in-ON-only | 'disc' discovery-only
+function dhRepaint(){ if(dhData) renderTxnResults(dhData); }
+function dhSetView(v){ dhView=v; dhRepaint(); }
+function dhSetOwners(v){ dhShowOwners=v; dhRepaint(); }
+function dhSetTier(v){ dhTierFilter=v; dhRepaint(); }
+
+// Register an entity's PE owners in bmRowById so their tag buttons store the right record.
+function registerOwners(entity){
+  (entity.owners||[]).forEach(function(o){
+    o._selid = o.buyer_id ? String(o.buyer_id) : ('m:firm:'+o.firm_id);
+    bmRowById[o._selid] = o.buyer_id
+      ? {id:o.buyer_id, name:o.name, website:o.website, mergr_kind:'firm', firm_id:o.firm_id}
+      : {discovery:true, _selid:o._selid, mergr_kind:'firm', entity_mergr_id:o.firm_id, name:o.name, website:o.website};
+  });
+}
+// Compact PE-owner line for an add-on (portfolio-company) result: firm(s) + tag + backing year.
+function dhOwners(entity){
+  if(!dhShowOwners) return '';
+  var os = entity.owners||[];
+  if(!os.length) return '';
+  var yr = os[0].year ? ' <span class="dh-own-yr">’'+String(os[0].year).slice(2)+'</span>' : '';
+  var parts = os.map(function(o){
+    var href = o.buyer_id ? (ON_BASE+'/dashboard/buyers/'+o.buyer_id+'/edit') : (o.website||('/mergr/firm/'+o.firm_id));
+    var nm = '<a class="dh-own-a" href="'+esc(href)+'" target="_blank" rel="noopener">'+esc(o.name||'(firm)')+'</a>';
+    var dot = o.buyer_id ? '<span class="dh-own-on" title="Already an ON buyer">•</span>' : '';
+    var tag = (o.website||o.buyer_id)
+      ? '<button class="dh-own-tag'+(bmSelHas(o._selid)?' on':'')+'" data-selid="'+esc(o._selid)+'" onclick="bmSelToggle(\''+esc(o._selid)+'\')" title="Tag this owner">'+(bmSelHas(o._selid)?'✓':'+')+'</button>'
+      : '';
+    return '<span class="dh-own">'+nm+dot+tag+'</span>';
+  }).join('<span class="dh-own-sep">·</span>');
+  return '<div class="dh-owner"><span class="dh-owner-lbl">PE owner</span>'+parts+yr+'</div>';
+}
+// Compact (multi-select table) row + table — reuses the buyer cart's checkboxes.
+function dhCompactRow(o, i, disc){
+  var sel = disc ? o._selid : String(o.id);
+  var canTag = disc ? !!o.website : true;
+  var nm = o.website ? '<a href="'+esc(o.website)+'" target="_blank" rel="noopener">'+esc(o.name||'(unnamed)')+'</a>' : esc(o.name||'(unnamed)');
+  var rec = disc
+    ? '<a class="on-link" href="'+(o.mergr_kind==='company'?'/mergr/company/'+o.entity_mergr_id:'/mergr/firm/'+o.entity_mergr_id)+'" target="_blank" rel="noopener">Mergr &#8599;</a>'
+    : onRecordLink(o);
+  return '<tbody><tr>'
+    + '<td class="selc">'+(canTag?'<input type="checkbox" class="bmsel" data-selid="'+esc(sel)+'"'+(bmSelHas(sel)?' checked':'')+' onclick="bmSelToggle(\''+esc(sel)+'\')">':'')+'</td>'
+    + '<td class="dh-crank">'+(i+1)+'</td>'
+    + '<td><div class="dh-cnm">'+nm+dhTier(o)+specBadge(o)+dhRouteBadge(o.mergr_kind)+(disc?'<span class="dh-disc-badge">Not in ON</span>':'')+' <span class="dh-crec">'+rec+'</span></div>'+dhOwners(o)+'</td>'
+    + '<td class="num">'+o.deal_count+'</td>'
+    + '<td class="num">'+dhScore(o.best_score)+'</td>'
+    + '</tr></tbody>';
+}
+function dhCompactTable(rows, disc){
+  return '<div class="bmv-twrap"><table class="bmv-t dh-t"><thead><tr>'
+    + '<th class="selh"><input type="checkbox" onclick="bmSelToggleAllShown(this)" title="Select all shown"></th>'
+    + '<th class="r"></th><th>Buyer / acquirer</th><th class="r">Deals</th><th class="r">Best</th></tr></thead>'
+    + rows.map(function(o,i){ return dhCompactRow(o,i,disc); }).join('')
+    + '</table></div>';
+}
+function dhSection(title, rows, disc, empty){
+  var inner = rows.length
+    ? (dhView==='compact' ? dhCompactTable(rows, disc) : rows.map(function(o,i){ return disc?dhDiscCard(o,i):dhOnCard(o,i); }).join(''))
+    : '<div class="empty-box">'+empty+'</div>';
+  return '<div class="dh-sec"><div class="dh-sech">'+title+' <span class="dh-secn">'+rows.length+'</span></div>'+inner+'</div>';
+}
+function dhToolbar(){
+  return '<div class="dh-toolbar">'
+    + '<span class="bmv-vlabel">Show</span>'
+    + '<select class="bmv-specsel" onchange="dhSetTier(this.value)">'
+    +   '<option value=""'+(dhTierFilter===''?' selected':'')+'>ON + Discovery</option>'
+    +   '<option value="on"'+(dhTierFilter==='on'?' selected':'')+'>In ON only</option>'
+    +   '<option value="disc"'+(dhTierFilter==='disc'?' selected':'')+'>Discovery only</option>'
+    + '</select>'
+    + '<label class="dh-opt"><input type="checkbox"'+(dhShowOwners?' checked':'')+' onchange="dhSetOwners(this.checked)"> Contact PE owners</label>'
+    + '<span class="grow"></span>'
+    + '<span class="bmv-vlabel">View</span>'
+    + '<div class="bmv-seg">'
+    +   '<button data-dv="cards" class="'+(dhView==='cards'?'active':'')+'" onclick="dhSetView(\'cards\')">Cards</button>'
+    +   '<button data-dv="compact" class="'+(dhView==='compact'?'active':'')+'" onclick="dhSetView(\'compact\')">Compact</button>'
+    + '</div></div>';
+}
 // ON buyer card (tag-able — reuses the buyer selection cart)
 function dhOnCard(b, i){
   return '<div class="dh-card">'
     + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
     +   '<div class="dh-nmwrap"><div class="dh-nm"><a href="'+esc(b.website||'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>'+dhTier(b)+specBadge(b)+dhRouteBadge(b.mergr_kind)+'</div>'
-    +     '<div class="dh-site">'+siteLink(b)+' <span class="on-sep">&middot;</span> '+onRecordLink(b)+'</div></div>'
+    +     '<div class="dh-site">'+siteLink(b)+' <span class="on-sep">&middot;</span> '+onRecordLink(b)+'</div>'+dhOwners(b)+'</div>'
     +   '<button class="bmv-tagbtn'+(bmSelHas(b.id)?' on':'')+'" data-selid="'+b.id+'" onclick="bmSelToggle('+b.id+')">'+(bmSelHas(b.id)?'✓ In tag':'+ Tag')+'</button>'
     + '</div>'
     + '<div class="dh-stats"><span class="dh-badge">'+b.deal_count+' comparable deal'+(b.deal_count===1?'':'s')+'</span>'
@@ -801,7 +901,7 @@ function dhDiscCard(a, i){
   return '<div class="dh-card disc">'
     + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
     +   '<div class="dh-nmwrap"><div class="dh-nm">'+(a.website?'<a href="'+esc(a.website)+'" target="_blank" rel="noopener">'+esc(a.name||'(unnamed)')+'</a>':esc(a.name||'(unnamed)'))+dhRouteBadge(a.mergr_kind)+'<span class="dh-disc-badge">Not in ON</span></div>'
-    +     '<div class="dh-site">'+(a.website?'<a class="site-link" href="'+esc(a.website)+'" target="_blank" rel="noopener">'+esc(shortUrl(a.website))+'</a> <span class="on-sep">&middot;</span> ':'')+'<a class="on-link" href="'+mh+'" target="_blank" rel="noopener">Mergr '+esc(a.mergr_kind)+' &#8599;</a></div></div>'
+    +     '<div class="dh-site">'+(a.website?'<a class="site-link" href="'+esc(a.website)+'" target="_blank" rel="noopener">'+esc(shortUrl(a.website))+'</a> <span class="on-sep">&middot;</span> ':'')+'<a class="on-link" href="'+mh+'" target="_blank" rel="noopener">Mergr '+esc(a.mergr_kind)+' &#8599;</a></div>'+dhOwners(a)+'</div>'
     +   tagBtn
     + '</div>'
     + '<div class="dh-stats"><span class="dh-badge">'+a.deal_count+' comparable deal'+(a.deal_count===1?'':'s')+'</span>'
@@ -809,22 +909,19 @@ function dhDiscCard(a, i){
     + dhDeals(a) + '</div>';
 }
 function renderTxnResults(data){
+  dhData = data;
   var on = data.on||[], disc = data.discovery||[];
-  on.forEach(function(b){ bmRowById[String(b.id)] = b; });     // so tagging stores full buyer data
+  on.forEach(function(b){ bmRowById[String(b.id)] = b; registerOwners(b); });     // tagging stores full data
   disc.forEach(function(a){                                    // discovery: taggable by synthetic key
-    a.discovery = true; a._selid = 'm:'+a.mergr_kind+':'+a.entity_mergr_id; bmRowById[a._selid] = a;
+    a.discovery = true; a._selid = 'm:'+a.mergr_kind+':'+a.entity_mergr_id; bmRowById[a._selid] = a; registerOwners(a);
   });
   var meta = document.getElementById('search-meta');
   meta.style.display='';
   meta.innerHTML = '<b>'+on.length+'</b> of your buyers &middot; <b>'+disc.length+'</b> discovery acquirer'+(disc.length===1?'':'s')
     + ' across <b>'+(data.txn_count||0)+'</b> comparable deals';
-  var html = '';
-  html += '<div class="dh-sec"><div class="dh-sech">Your buyers — ranked by comparable deals</div>';
-  html += on.length ? on.map(dhOnCard).join('') : '<div class="empty-box">None of your ON buyers have a comparable deal on record.</div>';
-  html += '</div>';
-  html += '<div class="dh-sec"><div class="dh-sech">Discovery — strong acquirers you don’t hold yet</div>';
-  html += disc.length ? disc.map(dhDiscCard).join('') : '<div class="empty-box">No discovery acquirers for this search.</div>';
-  html += '</div>';
+  var html = dhToolbar();
+  if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', on, false, 'None of your ON buyers have a comparable deal on record.');
+  if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', disc, true, 'No discovery acquirers for this search.');
   document.getElementById('results').innerHTML = html;
   updateCartBar();
 }

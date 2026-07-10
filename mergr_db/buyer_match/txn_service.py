@@ -147,4 +147,56 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
     keyf = lambda x: (-x["deal_count"], -x["best_score"])       # breadth first, then best single deal
     on_out.sort(key=keyf)
     disc_out.sort(key=keyf)
+
+    # Add-on (portfolio-company) results: attach the PE owner(s) so you can also contact the backer.
+    co_ids = set()
+    for b in on_out:
+        if b.get("mergr_kind") == "company" and b.get("company_id"):
+            co_ids.add(b["company_id"])
+    for a in disc_out:
+        if a.get("mergr_kind") == "company" and a.get("entity_mergr_id"):
+            co_ids.add(a["entity_mergr_id"])
+    owners = _resolve_owners(conn, co_ids) if co_ids else {}
+    for b in on_out:
+        if b.get("mergr_kind") == "company":
+            b["owners"] = owners.get(b.get("company_id"), [])
+    for a in disc_out:
+        if a.get("mergr_kind") == "company":
+            a["owners"] = owners.get(a.get("entity_mergr_id"), [])
+
     return {"on": on_out, "discovery": disc_out, "txn_count": len(rows), "usage": usage}
+
+
+def _resolve_owners(conn, company_ids):
+    """PE owner(s) of each portfolio company = the firm(s) that acquired it in its MOST RECENT
+    firm-acquirer deal (buyout/growth/majority). Joint deals → multiple owners. Batched by
+    target_mergr_id (100% populated). Marks whether each owner is already an ON buyer."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """WITH owned AS (
+                 SELECT t.target_mergr_id AS company_id, t.transaction_id, t.date,
+                        row_number() OVER (PARTITION BY t.target_mergr_id
+                            ORDER BY t.date DESC NULLS LAST, t.transaction_id DESC) AS rn
+                 FROM transactions t
+                 WHERE t.target_mergr_id = ANY(%s)
+                   AND EXISTS (SELECT 1 FROM transaction_parties tp
+                               WHERE tp.transaction_id=t.transaction_id
+                                 AND tp.role='acquirer' AND tp.entity_type='firms')
+               )
+               SELECT o.company_id, o.date, tp.entity_mergr_id AS firm_id, tp.name AS firm_name,
+                      f.name AS firm_fullname, f.website, bm.buyer_id
+               FROM owned o
+               JOIN transaction_parties tp ON tp.transaction_id=o.transaction_id
+                    AND tp.role='acquirer' AND tp.entity_type='firms'
+               LEFT JOIN firms f ON f.firm_id = tp.entity_mergr_id
+               LEFT JOIN buyer_match.buyer_mergr bm ON bm.firm_id = tp.entity_mergr_id
+               WHERE o.rn = 1""",
+            (list(company_ids),))
+        out = {}
+        for r in cur.fetchall():
+            out.setdefault(r["company_id"], []).append({
+                "firm_id": r["firm_id"], "name": r["firm_fullname"] or r["firm_name"],
+                "website": r["website"], "buyer_id": r["buyer_id"],
+                "year": str(r["date"])[:4] if r.get("date") else None,
+            })
+        return out
