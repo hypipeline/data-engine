@@ -15,10 +15,8 @@ import psycopg2
 from acquirer_gen import generate as gen
 from acquirer_gen import verify
 
-# (provider, model, {web})
+# (provider, model, {web}) — Claude dropped (too expensive at web-search input-token inflation).
 MATRIX = [
-    ("anthropic",  "claude-sonnet-4-6", {"web": True}),
-    ("anthropic",  "claude-opus-4-8",   {"web": True}),
     ("openai",     "gpt-4o",            {"web": True}),
     ("perplexity", "sonar",             {"web": True}),
     ("perplexity", "sonar-pro",         {"web": True}),
@@ -32,8 +30,10 @@ def main():
         print("usage: python -m acquirer_gen.evaluate \"<target profile>\" [--acq N --deals N --searches N]")
         sys.exit(1)
     target = args[0]
-    opt = {"n_acq": 40, "n_deals": 40, "max_searches": 15}
-    for flag, key in (("--acq", "n_acq"), ("--deals", "n_deals"), ("--searches", "max_searches")):
+    split = "--split" in args
+    opt = {"n_acq": 100, "n_deals": 100, "max_searches": 20, "max_tokens": 16000}
+    for flag, key in (("--acq", "n_acq"), ("--deals", "n_deals"),
+                      ("--searches", "max_searches"), ("--tokens", "max_tokens")):
         if flag in args:
             opt[key] = int(args[args.index(flag) + 1])
 
@@ -48,12 +48,14 @@ def main():
     print(hdr)
     print("-" * len(hdr))
     total_cost = 0.0
+    if split:
+        print("(split mode: separate ACQUIRERS + DEALS calls per model)\n")
     for provider, model, s in MATRIX:
         settings = dict(s, **opt)
-        res = gen.generate(conn, target, provider, model, settings, index=index)
+        res = (gen.generate_split if split else gen.generate)(conn, target, provider, model, settings, index=index)
         c = res["counts"]
         total_cost += res.get("cost_usd", 0)
-        label = f"{provider}/{model}"[:28]
+        label = f"{provider}/{res.get('model', model)}"[:28]
         if res.get("error"):
             print(f"{label:28} ERROR: {res['error'][:70]}")
             continue

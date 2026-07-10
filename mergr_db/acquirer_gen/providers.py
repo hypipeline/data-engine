@@ -36,19 +36,85 @@ def build_user(target, n_acq, n_deals):
             f"Include each acquirer's website domain wherever possible so it can be cross-referenced.")
 
 
+# ── Split mode: a focused ACQUIRERS-only and DEALS-only prompt, each fitting a smaller token budget
+# (so nothing truncates — esp. DeepSeek's ~8k ceiling) and getting the model's full attention. ──
+SYSTEM_ACQ = (
+    "You are an M&A research assistant. Given a target company profile, identify the most likely "
+    "ACQUIRERS (trade buyers, PE platforms/funds, infrastructure funds, strategics). Use web search "
+    "where available. Return ONLY a JSON object (no prose, no markdown fences):\n"
+    '{"acquirers":[{"name":"","website":"","type":"","geography":"","rationale":"","source_url":""}]}\n'
+    "website = the entity's primary domain (e.g. example.com) when known — do NOT invent domains; "
+    "type = trade/PE/infra/strategic; source_url = a citation URL when available. Prefer real, verifiable entities."
+)
+SYSTEM_DEALS = (
+    "You are an M&A research assistant. Given a target company profile, list relevant PRECEDENT "
+    "TRANSACTIONS in the same or the most closely adjacent sectors. Use web search where available to "
+    "include recent, verifiable, sourced deals. Return ONLY a JSON object (no prose, no markdown fences):\n"
+    '{"deals":[{"acquirer":"","acquirer_website":"","target":"","target_website":"","year":"","value":"","source_url":""}]}\n'
+    "value = deal value with currency if disclosed, else empty; website = primary domain when known (do NOT "
+    "invent); source_url = a citation URL when available. Prefer real, verifiable deals."
+)
+
+
+def build_user_acq(target, n):
+    return (f"Target company profile: {target}\n\nList up to {n} likely acquirers, "
+            f"with each acquirer's website domain wherever possible.")
+
+
+def build_user_deals(target, n):
+    return (f"Target company profile: {target}\n\nList up to {n} precedent M&A transactions in this or "
+            f"the most closely adjacent sectors, with acquirer/target websites and a source URL wherever possible.")
+
+
+def _prompt_for(target, s):
+    """(system, user) for the requested part — 'acquirers', 'deals', or 'both' (combined, default)."""
+    part = s.get("part", "both")
+    if part == "acquirers":
+        return SYSTEM_ACQ, build_user_acq(target, s.get("n_acq", 40))
+    if part == "deals":
+        return SYSTEM_DEALS, build_user_deals(target, s.get("n_deals", 40))
+    return SYSTEM, build_user(target, s.get("n_acq", 40), s.get("n_deals", 40))
+
+
+def _salvage(text):
+    """Recover as many complete objects as possible from truncated/dirty JSON — for each array
+    ("acquirers"/"deals") scan balanced {…} objects and json.load each individually, so a cut-off
+    final object is simply skipped rather than failing the whole parse."""
+    out = {"acquirers": [], "deals": []}
+    for key in ("acquirers", "deals"):
+        m = re.search(r'"' + key + r'"\s*:\s*\[', text)
+        if not m:
+            continue
+        region, depth, start = text[m.end():], 0, None
+        for j, ch in enumerate(region):
+            if ch == "{":
+                if depth == 0:
+                    start = j
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and start is not None:
+                    try:
+                        out[key].append(json.loads(region[start:j + 1]))
+                    except Exception:              # noqa: BLE001
+                        pass
+                    start = None
+            elif ch == "]" and depth == 0:
+                break
+    return out if (out["acquirers"] or out["deals"]) else None
+
+
 def _extract_json(text):
     if not text:
         return None
     m = re.search(r"\{.*\}", text, re.S)          # first { … last }
-    if not m:
-        return None
-    frag = m.group(0)
+    frag = m.group(0) if m else text
     for attempt in (frag, re.sub(r",\s*([}\]])", r"\1", frag)):
         try:
             return json.loads(attempt)
         except Exception:                          # noqa: BLE001
             continue
-    return None
+    return _salvage(text)                          # truncated output → keep the complete objects
 
 
 def _ok(provider, model, text, in_tok, out_tok, web, t0, citations=None):
@@ -78,9 +144,10 @@ def _err(provider, model, detail, t0):
 
 def call_anthropic(key, model, target, s):
     t0 = time.time()
+    system, user = _prompt_for(target, s)
     body = {
-        "model": model, "max_tokens": s.get("max_tokens", 6000), "system": SYSTEM,
-        "messages": [{"role": "user", "content": build_user(target, s.get("n_acq", 40), s.get("n_deals", 40))}],
+        "model": model, "max_tokens": s.get("max_tokens", 6000), "system": system,
+        "messages": [{"role": "user", "content": user}],
     }
     if s.get("web"):
         body["tools"] = [{"type": "web_search_20250305", "name": "web_search",
@@ -105,9 +172,9 @@ def call_anthropic(key, model, target, s):
 
 def call_openai(key, model, target, s):
     t0 = time.time()
+    system, user = _prompt_for(target, s)
     body = {
-        "model": model, "instructions": SYSTEM,
-        "input": build_user(target, s.get("n_acq", 40), s.get("n_deals", 40)),
+        "model": model, "instructions": system, "input": user,
         "max_output_tokens": s.get("max_tokens", 6000),
     }
     if s.get("web"):
@@ -137,10 +204,10 @@ def call_openai(key, model, target, s):
 
 def call_openai_compat(provider, base_url, key, model, target, s, web_native=False):
     t0 = time.time()
+    system, user = _prompt_for(target, s)
     body = {
         "model": model, "max_tokens": s.get("max_tokens", 6000),
-        "messages": [{"role": "system", "content": SYSTEM},
-                     {"role": "user", "content": build_user(target, s.get("n_acq", 40), s.get("n_deals", 40))}],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     if s.get("temperature") is not None:
         body["temperature"] = s["temperature"]
@@ -181,6 +248,7 @@ def run_provider(provider, model, target, settings):
         return call_openai_compat("perplexity", "https://api.perplexity.ai/chat/completions",
                                   key, model, target, settings, web_native=True)
     if provider == "deepseek":
+        s = dict(settings, max_tokens=min(settings.get("max_tokens", 6000), 8000))  # DeepSeek output ceiling
         return call_openai_compat("deepseek", "https://api.deepseek.com/chat/completions",
-                                  key, model, target, settings, web_native=False)
+                                  key, model, target, s, web_native=False)
     return _err(provider, model, f"unknown provider {provider}", time.time())
