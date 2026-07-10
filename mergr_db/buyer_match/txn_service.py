@@ -65,6 +65,7 @@ def _deal(r):
         "date": str(r["date"]) if r.get("date") else None,
         "type": r.get("transaction_type"),
         "target": r.get("target_name"),
+        "target_id": r.get("target_mergr_id"),
         "desc": r.get("target_description"),
         "sector": r.get("target_sector"),
         "location": r.get("target_location"),
@@ -99,9 +100,9 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             """WITH top AS (
-                 SELECT t.transaction_id, t.date, t.transaction_type, t.target_name, t.target_sector,
-                        t.target_description, t.target_location, t.deal_value, t.deal_value_currency,
-                        t.transaction_url, 1 - (t.target_embedding <=> q.e) AS score
+                 SELECT t.transaction_id, t.date, t.transaction_type, t.target_name, t.target_mergr_id,
+                        t.target_sector, t.target_description, t.target_location, t.deal_value,
+                        t.deal_value_currency, t.transaction_url, 1 - (t.target_embedding <=> q.e) AS score
                  FROM transactions t,
                       (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
                  WHERE t.target_embedding IS NOT NULL
@@ -188,7 +189,58 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
         if a.get("mergr_kind") == "company":
             a["owners"] = owners.get(a.get("entity_mergr_id"), [])
 
+    # Enrich each shown deal's TARGET company: website (to tag/contact) + its own acquisition profile
+    # (# acquisitions, largest deal, countries) so you can pick specific portfolio companies to contact.
+    tgt_ids = set()
+    for e in on_out + disc_out:
+        for dl in e.get("deals", []):
+            if dl.get("target_id"):
+                tgt_ids.add(dl["target_id"])
+    tinfo = _enrich_targets(conn, tgt_ids) if tgt_ids else {}
+    for e in on_out + disc_out:
+        for dl in e.get("deals", []):
+            info = tinfo.get(dl.get("target_id"))
+            if info:
+                dl["target_website"] = info["website"]
+                dl["target_acq_count"] = info["acq_count"]
+                dl["target_largest"] = info["largest"]
+                dl["target_geos"] = info["geos"]
+
     return {"on": on_out, "discovery": disc_out, "txn_count": len(rows), "usage": usage}
+
+
+def _enrich_targets(conn, company_ids):
+    """Per deal-target company: website (to tag/export) + its OWN acquisition profile — #acquisitions,
+    largest deal (USD-normalised via fx_rates, price only), acquired-in countries. Same math as the
+    company rows in link_mergr.sql, so it matches the buyer cards."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """SELECT c.company_id, c.website, c.name,
+                  (SELECT count(*) FROM transaction_parties tp
+                     WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id AND tp.role='acquirer') AS acq_count,
+                  (SELECT CASE WHEN u.usd >= 1000 THEN '$' || round(u.usd/1000,1) || 'B'
+                               WHEN u.usd >= 1    THEN '$' || round(u.usd,0) || 'M'
+                               ELSE '$' || round(u.usd*1000,0) || 'K' END
+                     FROM (SELECT t.deal_value * fx.usd_per_unit AS usd
+                           FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+                                JOIN fx_rates fx ON fx.currency = t.deal_value_currency
+                           WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id
+                             AND tp.role='acquirer' AND t.deal_value > 0 AND fx.usd_per_unit IS NOT NULL) u
+                     ORDER BY u.usd DESC LIMIT 1) AS largest,
+                  (SELECT array_agg(DISTINCT btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))))
+                     FROM transaction_parties tp JOIN transactions t USING (transaction_id)
+                     WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id AND tp.role='acquirer'
+                       AND btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))) <> '') AS geos
+               FROM companies c WHERE c.company_id = ANY(%s)""",
+            (list(company_ids),))
+        out = {}
+        for r in cur.fetchall():
+            out[r["company_id"]] = {
+                "website": r["website"], "name": r["name"],
+                "acq_count": int(r["acq_count"] or 0), "largest": r["largest"],
+                "geos": list(r["geos"] or [])[:8],
+            }
+        return out
 
 
 def _resolve_owners(conn, company_ids):
