@@ -37,6 +37,14 @@
   .al-deal .v { font-family:var(--mono); font-size:10.5px; color:#3f6b3a; }
   .al-err { color:#b91c1c; font-size:12px; }
   .al-hidden { display:none; }
+  .al-input { margin:14px 0 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg-2); }
+  .al-inhd { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); padding:10px 14px; cursor:pointer; }
+  .al-inbody { padding:0 14px 14px; }
+  .al-plabel { font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin-top:10px; }
+  .al-prompt { font-family:var(--mono); font-size:11.5px; white-space:pre-wrap; background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin:5px 0 4px; color:var(--text); max-height:260px; overflow:auto; }
+  .al-limits { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .al-lim { font-size:11.5px; background:var(--panel); border:1px solid var(--border-2); border-radius:6px; padding:4px 9px; }
+  .al-lim b { font-family:var(--mono); color:var(--text); }
 </style>
 {% endblock %}
 {% block body %}
@@ -51,6 +59,7 @@
   <div style="margin-bottom:6px"><span class="al-tlabel">Target</span></div>
   <select class="al-target" id="al-target" onchange="loadTarget(this.value)"></select>
 
+  <div id="al-input"></div>
   <div id="al-cmp"></div>
   <div id="al-detail"></div>
 </div>
@@ -123,12 +132,28 @@ function renderCompare(runs){
   }).join('');
 }
 
+function renderInput(p){
+  if(!p){ document.getElementById('al-input').innerHTML=''; return; }
+  var L=p.limits||{};
+  var lims=[['max acquirers',L.max_acquirers],['max deals',L.max_deals],['web-search cap',L.web_search_cap],
+            ['max output tokens',L.max_output_tokens],['temperature',L.temperature]]
+    .map(function(x){return '<span class="al-lim">'+esc(x[0])+' <b>'+esc(x[1])+'</b></span>';}).join('');
+  document.getElementById('al-input').innerHTML =
+    '<div class="al-input"><div class="al-inhd" onclick="var b=this.nextElementSibling; b.style.display=(b.style.display===\'none\'?\'\':\'none\')">Exact input &amp; limits sent to every model — click to toggle</div>'
+    + '<div class="al-inbody">'
+    +   '<div class="al-plabel">System prompt (identical for all models)</div><div class="al-prompt">'+esc(p.system||'—')+'</div>'
+    +   '<div class="al-plabel">User prompt</div><div class="al-prompt">'+esc(p.user||'—')+'</div>'
+    +   '<div class="al-plabel">Limits</div><div class="al-limits">'+lims+'<span class="al-lim">grounding <b>'+esc(L.grounding||'')+'</b></span></div>'
+    +   '<div class="al-sub" style="margin-top:8px">Web search: <b>on</b> for Claude / OpenAI / Perplexity · <b>off</b> for DeepSeek (knowledge-only). Each model is asked for the same JSON; we then parse it and grade every acquirer against your data.</div>'
+    + '</div></div>';
+}
 function loadTarget(t){
   fetch('/acquirer-finder/data'+(t?('?target='+encodeURIComponent(t)):''))
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.error){ document.getElementById('al-cmp').innerHTML='<div class="error-box">'+esc(d.error)+'</div>'; return; }
       document.getElementById('al-spend').textContent='total spend (all runs): $'+Number(d.total_spend||0).toFixed(4);
+      renderInput(d.prompt);
       var sel=document.getElementById('al-target');
       if(!sel.options.length && d.targets){ sel.innerHTML=d.targets.map(function(x){return '<option value="'+esc(x)+'"'+(x===d.target?' selected':'')+'>'+esc(x)+'</option>';}).join(''); }
       renderCompare(d.runs||[]);

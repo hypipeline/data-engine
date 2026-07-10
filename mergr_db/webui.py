@@ -638,7 +638,7 @@ def acquirer_finder_data(target: str = None):
         if not target:
             return JSONResponse({"target": None, "runs": [], "total_spend": 0, "targets": []})
         rows = query(
-            "SELECT provider, model, cost_usd, input_tokens, output_tokens, web_searches, latency_ms, "
+            "SELECT provider, model, settings, cost_usd, input_tokens, output_tokens, web_searches, latency_ms, "
             "n_acquirers, n_deals, n_in_on, n_in_mergr, n_net_new, parse_ok, error, result, created_at "
             "FROM acquirer_gen.runs WHERE target=%s ORDER BY id DESC", (target,))
         seen, out = set(), []
@@ -651,8 +651,23 @@ def acquirer_finder_data(target: str = None):
             out.append(r)
         total = query("SELECT COALESCE(SUM(cost_usd),0) t FROM acquirer_gen.runs", one=True)
         targets = query("SELECT target, max(id) mx FROM acquirer_gen.runs GROUP BY target ORDER BY mx DESC LIMIT 50")
+        # Exact input actually sent — surfaced verbatim for transparency/reproducibility.
+        s0 = (out[0].get("settings") or {}) if out else {}
+        n_acq, n_deals = s0.get("n_acq", 40), s0.get("n_deals", 30)
+        prompt = {"system": None, "user": None,
+                  "limits": {"max_acquirers": n_acq, "max_deals": n_deals,
+                             "web_search_cap": s0.get("max_searches", 12),
+                             "max_output_tokens": s0.get("max_tokens", 6000),
+                             "temperature": s0.get("temperature", "provider default"),
+                             "grounding": "exact domain-match, then normalized-name, vs ON + Mergr"}}
+        try:
+            from acquirer_gen import providers as _ag_prov
+            prompt["system"] = _ag_prov.SYSTEM
+            prompt["user"] = _ag_prov.build_user(target, n_acq, n_deals)
+        except Exception:                                # noqa: BLE001
+            pass
         return JSONResponse({"target": target, "runs": out, "total_spend": float(total["t"]),
-                             "targets": [t["target"] for t in targets]})
+                             "targets": [t["target"] for t in targets], "prompt": prompt})
     except Exception as e:                               # noqa: BLE001
         return JSONResponse({"error": str(e), "runs": [], "total_spend": 0, "targets": []})
 
