@@ -888,10 +888,15 @@ function dhToolbar(){
 }
 // Buyer-level Mergr profile — largest deal / AUM / acquisitions / geography, shown as context
 // regardless of whether the matched deals overlap. (Size shows as the tier badge, so not repeated.)
+function dhLargest(s){                     // price paid only (strip entity/date), per the largest-deal rule
+  if(!s) return '';
+  var m = String(s).match(/[£$€]\s?[\d.,]+\s?[MBTK]?/);
+  return m ? esc(m[0].replace(/\s/g,'')) : esc(s);
+}
 function dhFacts(e){
   var f=[];
   if(e.firm_aum) f.push('<span class="dh-f"><span class="dh-fl">AUM</span> '+fmtAum(e.firm_aum)+'</span>');
-  if(e.firm_largest) f.push('<span class="dh-f"><span class="dh-fl">Largest deal</span> '+esc(e.firm_largest)+'</span>');
+  if(e.firm_largest) f.push('<span class="dh-f"><span class="dh-fl">Largest deal</span> '+dhLargest(e.firm_largest)+'</span>');
   if(e.firm_acquisitions) f.push('<span class="dh-f"><span class="dh-fl">Acquisitions</span> '+Number(e.firm_acquisitions).toLocaleString()+'</span>');
   var g='';
   if(e.geographies && e.geographies.length) g+='<div class="dh-geoline"><span class="dh-fl">Target regions</span> '+geoChips(e.geographies,'',12)+'</div>';
