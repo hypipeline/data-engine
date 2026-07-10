@@ -621,6 +621,42 @@ def bm_txn_match(req: _SearchReq):
     return JSONResponse(_bm(bm_txn.match_buyers_by_deals, q))
 
 
+# ── Acquirer Finder · Model Lab — compare acquirer-generation runs (results + cost) across models ──
+@app.get("/acquirer-finder", response_class=HTMLResponse)
+def acquirer_finder_page(request: Request):
+    return render(request, "acquirer_finder.html", "acquirer-finder")
+
+
+@app.get("/acquirer-finder/data")
+def acquirer_finder_data(target: str = None):
+    """Read-only view of acquirer_gen.runs — a target's runs across every model + all-time spend.
+    No new LLM calls / no cost."""
+    try:
+        if not target:
+            latest = query("SELECT target FROM acquirer_gen.runs ORDER BY id DESC LIMIT 1", one=True)
+            target = latest["target"] if latest else None
+        if not target:
+            return JSONResponse({"target": None, "runs": [], "total_spend": 0, "targets": []})
+        rows = query(
+            "SELECT provider, model, cost_usd, input_tokens, output_tokens, web_searches, latency_ms, "
+            "n_acquirers, n_deals, n_in_on, n_in_mergr, n_net_new, parse_ok, error, result, created_at "
+            "FROM acquirer_gen.runs WHERE target=%s ORDER BY id DESC", (target,))
+        seen, out = set(), []
+        for r in rows:                                   # keep the latest run per model
+            if r["model"] in seen:
+                continue
+            seen.add(r["model"])
+            r["cost_usd"] = float(r["cost_usd"] or 0)
+            r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
+            out.append(r)
+        total = query("SELECT COALESCE(SUM(cost_usd),0) t FROM acquirer_gen.runs", one=True)
+        targets = query("SELECT target, max(id) mx FROM acquirer_gen.runs GROUP BY target ORDER BY mx DESC LIMIT 50")
+        return JSONResponse({"target": target, "runs": out, "total_spend": float(total["t"]),
+                             "targets": [t["target"] for t in targets]})
+    except Exception as e:                               # noqa: BLE001
+        return JSONResponse({"error": str(e), "runs": [], "total_spend": 0, "targets": []})
+
+
 import queue as _queue                               # noqa: E402
 import threading as _threading                       # noqa: E402
 from fastapi.responses import StreamingResponse      # noqa: E402
