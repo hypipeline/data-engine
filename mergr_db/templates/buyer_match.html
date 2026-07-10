@@ -826,7 +826,7 @@ function dhTier(b){
 // ── Deal-history view state (re-render from cached data on any toggle) ──
 var dhData = null;          // last txn-match payload
 var dhView = 'cards';       // 'cards' | 'compact'
-var dhAutoOwners = false;   // when on, tagging an acquirer also tags its PE owner(s)
+var dhAutoOwners = true;    // ON by default: tagging an acquirer also tags its PE owner(s)
 var dhTierFilter = '';      // '' both | 'on' in-ON-only | 'disc' discovery-only
 var dhKindFilter = '';      // '' both | 'firm' platforms | 'company' add-ons
 function dhRepaint(){ if(dhData) renderTxnResults(dhData); }
