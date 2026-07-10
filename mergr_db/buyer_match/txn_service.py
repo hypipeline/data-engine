@@ -210,35 +210,51 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
     return {"on": on_out, "discovery": disc_out, "txn_count": len(rows), "usage": usage}
 
 
+def _fmt_usd(u):
+    """USD millions -> compact price (matches link_mergr's company-largest format)."""
+    u = float(u)
+    if u >= 1000:
+        return "$" + str(round(u / 1000, 1)) + "B"
+    if u >= 1:
+        return "$" + str(round(u)) + "M"
+    return "$" + str(round(u * 1000)) + "K"
+
+
 def _enrich_targets(conn, company_ids):
     """Per deal-target company: website (to tag/export) + its OWN acquisition profile — #acquisitions,
-    largest deal (USD-normalised via fx_rates, price only), acquired-in countries. Same math as the
-    company rows in link_mergr.sql, so it matches the buyer cards."""
+    largest deal (USD-normalised via fx_rates, price only), acquired-in countries. One set-based pass
+    over transaction_parties (idx_party_entity) — not per-company subqueries. Matches the buyer cards."""
+    ids = list(company_ids)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
-            """SELECT c.company_id, c.website, c.name,
-                  (SELECT count(*) FROM transaction_parties tp
-                     WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id AND tp.role='acquirer') AS acq_count,
-                  (SELECT CASE WHEN u.usd >= 1000 THEN '$' || round(u.usd/1000,1) || 'B'
-                               WHEN u.usd >= 1    THEN '$' || round(u.usd,0) || 'M'
-                               ELSE '$' || round(u.usd*1000,0) || 'K' END
-                     FROM (SELECT t.deal_value * fx.usd_per_unit AS usd
-                           FROM transaction_parties tp JOIN transactions t USING (transaction_id)
-                                JOIN fx_rates fx ON fx.currency = t.deal_value_currency
-                           WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id
-                             AND tp.role='acquirer' AND t.deal_value > 0 AND fx.usd_per_unit IS NOT NULL) u
-                     ORDER BY u.usd DESC LIMIT 1) AS largest,
-                  (SELECT array_agg(DISTINCT btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))))
-                     FROM transaction_parties tp JOIN transactions t USING (transaction_id)
-                     WHERE tp.entity_type='company' AND tp.entity_mergr_id=c.company_id AND tp.role='acquirer'
-                       AND btrim(split_part(t.target_location, ',', array_length(string_to_array(t.target_location, ','), 1))) <> '') AS geos
-               FROM companies c WHERE c.company_id = ANY(%s)""",
-            (list(company_ids),))
+            """WITH buys AS (
+                 SELECT tp.entity_mergr_id AS company_id, tp.transaction_id,
+                        t.deal_value * fx.usd_per_unit AS usd,
+                        btrim(split_part(t.target_location, ',',
+                              array_length(string_to_array(t.target_location, ','), 1))) AS country
+                 FROM transaction_parties tp
+                 JOIN transactions t USING (transaction_id)
+                 LEFT JOIN fx_rates fx ON fx.currency = t.deal_value_currency
+                 WHERE tp.entity_type='company' AND tp.role='acquirer' AND tp.entity_mergr_id = ANY(%s)
+               ),
+               agg AS (
+                 SELECT company_id,
+                        count(DISTINCT transaction_id) AS acq_count,
+                        max(usd) FILTER (WHERE usd IS NOT NULL AND usd > 0) AS largest_usd,
+                        (array_agg(DISTINCT country) FILTER (WHERE country IS NOT NULL AND country <> ''))[1:8] AS geos
+                 FROM buys GROUP BY company_id
+               )
+               SELECT c.company_id, c.website, c.name,
+                      COALESCE(a.acq_count, 0) AS acq_count, a.largest_usd, a.geos
+               FROM companies c LEFT JOIN agg a ON a.company_id = c.company_id
+               WHERE c.company_id = ANY(%s)""",
+            (ids, ids))
         out = {}
         for r in cur.fetchall():
             out[r["company_id"]] = {
                 "website": r["website"], "name": r["name"],
-                "acq_count": int(r["acq_count"] or 0), "largest": r["largest"],
+                "acq_count": int(r["acq_count"] or 0),
+                "largest": _fmt_usd(r["largest_usd"]) if r["largest_usd"] else None,
                 "geos": list(r["geos"] or [])[:8],
             }
         return out
