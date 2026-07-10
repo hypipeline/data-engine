@@ -826,12 +826,24 @@ function dhTier(b){
 // ── Deal-history view state (re-render from cached data on any toggle) ──
 var dhData = null;          // last txn-match payload
 var dhView = 'cards';       // 'cards' | 'compact'
-var dhShowOwners = true;    // show PE owner(s) of add-on results
+var dhAutoOwners = false;   // when on, tagging an acquirer also tags its PE owner(s)
 var dhTierFilter = '';      // '' both | 'on' in-ON-only | 'disc' discovery-only
+var dhKindFilter = '';      // '' both | 'firm' platforms | 'company' add-ons
 function dhRepaint(){ if(dhData) renderTxnResults(dhData); }
 function dhSetView(v){ dhView=v; dhRepaint(); }
-function dhSetOwners(v){ dhShowOwners=v; dhRepaint(); }
+function dhSetAutoOwners(v){ dhAutoOwners=v; }
 function dhSetTier(v){ dhTierFilter=v; dhRepaint(); }
+function dhSetKind(v){ dhKindFilter=v; dhRepaint(); }
+// Tag an acquirer; when "Contact PE owners" is on, also tag/untag its PE owner(s) to match.
+function dhTagWithOwners(selid){
+  bmSelToggle(selid);
+  if(!dhAutoOwners) return;
+  var ent = bmRowById[selid];
+  if(!ent || !ent.owners) return;
+  var on = bmSelHas(selid);
+  ent.owners.forEach(function(o){ if(o._selid && bmSelHas(o._selid)!==on) bmSelToggle(o._selid); });
+}
+function dhKindMatch(e){ return dhKindFilter==='' ? true : e.mergr_kind===dhKindFilter; }
 
 // Register each shown deal's TARGET company so its per-deal tickbox can tag it (by website).
 function registerDealTargets(entity){
@@ -903,7 +915,15 @@ function dhToolbar(){
     +   '<option value=""'+(dhTierFilter===''?' selected':'')+'>ON + Discovery</option>'
     +   '<option value="on"'+(dhTierFilter==='on'?' selected':'')+'>In ON only</option>'
     +   '<option value="disc"'+(dhTierFilter==='disc'?' selected':'')+'>Discovery only</option>'
-    + '</select></div>';
+    + '</select>'
+    + '<span class="bmv-vlabel">Type</span>'
+    + '<select class="bmv-specsel" onchange="dhSetKind(this.value)">'
+    +   '<option value=""'+(dhKindFilter===''?' selected':'')+'>PE firms + companies</option>'
+    +   '<option value="firm"'+(dhKindFilter==='firm'?' selected':'')+'>PE firms (platforms)</option>'
+    +   '<option value="company"'+(dhKindFilter==='company'?' selected':'')+'>Companies (add-ons)</option>'
+    + '</select>'
+    + '<label class="dh-opt" title="When on, tagging an acquirer also tags its PE owner(s)"><input type="checkbox"'+(dhAutoOwners?' checked':'')+' onchange="dhSetAutoOwners(this.checked)"> Contact PE owners</label>'
+    + '</div>';
 }
 // Buyer-level Mergr profile — largest deal / AUM / acquisitions / geography, shown as context
 // regardless of whether the matched deals overlap. (Size shows as the tier badge, so not repeated.)
@@ -929,7 +949,7 @@ function dhOnCard(b, i){
     + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
     +   '<div class="dh-nmwrap"><div class="dh-nm"><a href="'+esc(b.website||'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>'+dhTier(b)+specBadge(b)+dhRouteBadge(b.mergr_kind)+'</div>'
     +     '<div class="dh-site">'+siteLink(b)+' <span class="on-sep">&middot;</span> '+onRecordLink(b)+'</div>'+dhOwners(b)+'</div>'
-    +   '<button class="bmv-tagbtn'+(bmSelHas(b.id)?' on':'')+'" data-selid="'+b.id+'" onclick="bmSelToggle('+b.id+')">'+(bmSelHas(b.id)?'✓ In tag':'+ Tag')+'</button>'
+    +   '<button class="bmv-tagbtn'+(bmSelHas(b.id)?' on':'')+'" data-selid="'+b.id+'" onclick="dhTagWithOwners(\''+b.id+'\')">'+(bmSelHas(b.id)?'✓ In tag':'+ Tag')+'</button>'
     + '</div>'
     + '<div class="dh-stats"><span class="dh-badge">'+b.deal_count+' comparable deal'+(b.deal_count===1?'':'s')+'</span>'
     +   '<span class="dh-best">best match <b>'+dhScore(b.best_score)+'</b></span></div>'
@@ -941,7 +961,7 @@ function dhDiscCard(a, i){
   var mh = a.mergr_kind==='company' ? '/mergr/company/'+a.entity_mergr_id : '/mergr/firm/'+a.entity_mergr_id;
   var sel = a._selid;
   var tagBtn = a.website
-    ? '<button class="bmv-tagbtn'+(bmSelHas(sel)?' on':'')+'" data-selid="'+esc(sel)+'" onclick="bmSelToggle(\''+esc(sel)+'\')">'+(bmSelHas(sel)?'✓ In tag':'+ Tag')+'</button>'
+    ? '<button class="bmv-tagbtn'+(bmSelHas(sel)?' on':'')+'" data-selid="'+esc(sel)+'" onclick="dhTagWithOwners(\''+esc(sel)+'\')">'+(bmSelHas(sel)?'✓ In tag':'+ Tag')+'</button>'
     : '<span class="dh-noweb" title="No website on the Mergr record — nothing to export">no website</span>';
   return '<div class="dh-card disc">'
     + '<div class="dh-hd"><span class="dh-rank">#'+(i+1)+'</span>'
@@ -964,9 +984,10 @@ function renderTxnResults(data){
   meta.style.display='';
   meta.innerHTML = '<b>'+on.length+'</b> of your buyers &middot; <b>'+disc.length+'</b> discovery acquirer'+(disc.length===1?'':'s')
     + ' across <b>'+(data.txn_count||0)+'</b> comparable deals';
+  var onF = on.filter(dhKindMatch), discF = disc.filter(dhKindMatch);
   var html = dhToolbar();
-  if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', on, false, 'None of your ON buyers have a comparable deal on record.');
-  if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', disc, true, 'No discovery acquirers for this search.');
+  if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', onF, false, 'None of your ON buyers match.');
+  if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', discF, true, 'No discovery acquirers match.');
   document.getElementById('results').innerHTML = html;
   updateCartBar();
 }
