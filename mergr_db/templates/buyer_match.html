@@ -853,8 +853,7 @@ function registerOwners(entity){
 }
 // Compact PE-owner line for an add-on (portfolio-company) result: firm(s) + tag + backing year.
 function dhOwners(entity){
-  if(!dhShowOwners) return '';
-  var os = entity.owners||[];
+  var os = entity.owners||[];       // always shown — PE owners are always a contact option
   if(!os.length) return '';
   var yr = os[0].year ? ' <span class="dh-own-yr">’'+String(os[0].year).slice(2)+'</span>' : '';
   var parts = os.map(function(o){
@@ -893,7 +892,7 @@ function dhCompactTable(rows, disc){
 }
 function dhSection(title, rows, disc, empty){
   var inner = rows.length
-    ? (dhView==='compact' ? dhCompactTable(rows, disc) : rows.map(function(o,i){ return disc?dhDiscCard(o,i):dhOnCard(o,i); }).join(''))
+    ? rows.map(function(o,i){ return disc?dhDiscCard(o,i):dhOnCard(o,i); }).join('')
     : '<div class="empty-box">'+empty+'</div>';
   return '<div class="dh-sec"><div class="dh-sech">'+title+' <span class="dh-secn">'+rows.length+'</span></div>'+inner+'</div>';
 }
@@ -904,14 +903,7 @@ function dhToolbar(){
     +   '<option value=""'+(dhTierFilter===''?' selected':'')+'>ON + Discovery</option>'
     +   '<option value="on"'+(dhTierFilter==='on'?' selected':'')+'>In ON only</option>'
     +   '<option value="disc"'+(dhTierFilter==='disc'?' selected':'')+'>Discovery only</option>'
-    + '</select>'
-    + '<label class="dh-opt"><input type="checkbox"'+(dhShowOwners?' checked':'')+' onchange="dhSetOwners(this.checked)"> Contact PE owners</label>'
-    + '<span class="grow"></span>'
-    + '<span class="bmv-vlabel">View</span>'
-    + '<div class="bmv-seg">'
-    +   '<button data-dv="cards" class="'+(dhView==='cards'?'active':'')+'" onclick="dhSetView(\'cards\')">Cards</button>'
-    +   '<button data-dv="compact" class="'+(dhView==='compact'?'active':'')+'" onclick="dhSetView(\'compact\')">Compact</button>'
-    + '</div></div>';
+    + '</select></div>';
 }
 // Buyer-level Mergr profile — largest deal / AUM / acquisitions / geography, shown as context
 // regardless of whether the matched deals overlap. (Size shows as the tier badge, so not repeated.)
