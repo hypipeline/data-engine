@@ -26,7 +26,7 @@ from buyer_match import service as svc
 from buyer_match.backfill import vec_literal, EMBED_MODEL
 
 PG_DSN = os.environ.get("DATABASE_URL", "postgres://mergr:mergr@127.0.0.1:5433/mergr")
-EMB_BATCH = 100
+EMB_BATCH = 500          # up to 2048 inputs/request; larger batches = fewer round-trips → faster
 MAX_RETRIES = 6
 
 
