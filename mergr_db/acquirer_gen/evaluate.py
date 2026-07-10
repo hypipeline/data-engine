@@ -17,10 +17,11 @@ from acquirer_gen import verify
 
 # (provider, model, {web}) — Claude dropped (too expensive at web-search input-token inflation).
 MATRIX = [
-    ("openai",     "gpt-4o",            {"web": True}),
-    ("perplexity", "sonar",             {"web": True}),
-    ("perplexity", "sonar-pro",         {"web": True}),
-    ("deepseek",   "deepseek-chat",     {"web": False}),
+    ("openai",     "gpt-4o",              {"web": True}),
+    ("perplexity", "sonar",               {"web": True}),
+    ("perplexity", "sonar-pro",           {"web": True}),
+    ("perplexity", "sonar-deep-research", {"web": True}),
+    ("deepseek",   "deepseek-chat",       {"web": False}),
 ]
 
 
@@ -31,6 +32,7 @@ def main():
         sys.exit(1)
     target = args[0]
     split = "--split" in args
+    only = args[args.index("--models") + 1].split(",") if "--models" in args else None
     opt = {"n_acq": 100, "n_deals": 100, "max_searches": 20, "max_tokens": 16000}
     for flag, key in (("--acq", "n_acq"), ("--deals", "n_deals"),
                       ("--searches", "max_searches"), ("--tokens", "max_tokens")):
@@ -51,6 +53,8 @@ def main():
     if split:
         print("(split mode: separate ACQUIRERS + DEALS calls per model)\n")
     for provider, model, s in MATRIX:
+        if only and model not in only:
+            continue
         settings = dict(s, **opt)
         res = (gen.generate_split if split else gen.generate)(conn, target, provider, model, settings, index=index)
         c = res["counts"]

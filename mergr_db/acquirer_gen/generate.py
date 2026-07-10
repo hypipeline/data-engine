@@ -41,7 +41,7 @@ def log_run(conn, target, res, settings):
 
 
 def generate(conn, target, provider, model, settings, index=None, do_log=True):
-    res = providers.run_provider(provider, model, target, settings)
+    res = providers.run_provider_retry(provider, model, target, settings)
     res["cost_usd"] = pricing.cost_usd(model, res["usage"])
     if index is None:
         index = verify.build_index(conn)
@@ -64,7 +64,7 @@ def generate_split(conn, target, provider, model, settings, index=None, do_log=T
         index = verify.build_index(conn)
 
     def one(part):
-        return providers.run_provider(provider, model, target, dict(settings, part=part))
+        return providers.run_provider_retry(provider, model, target, dict(settings, part=part))
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         fa, fd = ex.submit(one, "acquirers"), ex.submit(one, "deals")

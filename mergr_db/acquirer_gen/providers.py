@@ -15,7 +15,7 @@ import time
 
 import httpx
 
-TIMEOUT = 180
+TIMEOUT = 300          # deep-research models run for minutes
 
 SYSTEM = (
     "You are an M&A research assistant. Given a target company profile, identify likely ACQUIRERS "
@@ -26,7 +26,8 @@ SYSTEM = (
     '"deals":[{"acquirer":"","acquirer_website":"","target":"","target_website":"","year":"","value":"","source_url":""}]}\n'
     "Rules: website = the entity's primary domain (e.g. example.com) whenever known — do NOT invent domains; "
     "type = trade/PE/infra/strategic etc; value = deal value with currency if disclosed, else empty; "
-    "source_url = a citation URL when available. Prefer real, verifiable entities and deals."
+    "source_url = a citation URL when available. Keep every rationale to a TERSE phrase (max ~8 words) — "
+    "prioritise returning MORE items over long explanations. Prefer real, verifiable entities and deals."
 )
 
 
@@ -44,7 +45,8 @@ SYSTEM_ACQ = (
     "where available. Return ONLY a JSON object (no prose, no markdown fences):\n"
     '{"acquirers":[{"name":"","website":"","type":"","geography":"","rationale":"","source_url":""}]}\n'
     "website = the entity's primary domain (e.g. example.com) when known — do NOT invent domains; "
-    "type = trade/PE/infra/strategic; source_url = a citation URL when available. Prefer real, verifiable entities."
+    "type = trade/PE/infra/strategic; source_url = a citation URL when available. Keep every rationale to a "
+    "TERSE phrase (max ~8 words) — prioritise returning MORE acquirers over long explanations. Prefer real entities."
 )
 SYSTEM_DEALS = (
     "You are an M&A research assistant. Given a target company profile, list relevant PRECEDENT "
@@ -209,6 +211,8 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
         "model": model, "max_tokens": s.get("max_tokens", 6000),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
+    if web_native:                                  # ask Perplexity to search deeper/broader
+        body["web_search_options"] = {"search_context_size": s.get("search_context", "high")}
     if s.get("temperature") is not None:
         body["temperature"] = s["temperature"]
     try:
@@ -226,9 +230,8 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
     u = j.get("usage", {}) or {}
     srcs = j.get("search_results") or j.get("citations") or []
     cites = [x.get("url") if isinstance(x, dict) else x for x in srcs]
-    web = 0
-    if web_native:
-        web = u.get("num_search_queries") or (1 if srcs else 0)
+    # honest search depth: num_search_queries when given, else sources consulted (citation count)
+    web = (u.get("num_search_queries") or len(srcs)) if web_native else 0
     return _ok(provider, model, text, u.get("prompt_tokens", 0), u.get("completion_tokens", 0), web, t0, cites)
 
 
@@ -252,3 +255,15 @@ def run_provider(provider, model, target, settings):
         return call_openai_compat("deepseek", "https://api.deepseek.com/chat/completions",
                                   key, model, target, s, web_native=False)
     return _err(provider, model, f"unknown provider {provider}", time.time())
+
+
+def run_provider_retry(provider, model, target, settings, tries=2):
+    """Retry once on a hard error or an empty/failed parse (transient blips, rate limits)."""
+    last = None
+    for i in range(tries):
+        last = run_provider(provider, model, target, settings)
+        if not last.get("error") and (last.get("acquirers") or last.get("deals")):
+            return last
+        if i < tries - 1:
+            time.sleep(1.5 * (i + 1))
+    return last

@@ -17,6 +17,7 @@ PRICING = {
     "sonar":             {"in": 1.0,  "out": 1.0,  "search": 0.005},
     "sonar-pro":         {"in": 3.0,  "out": 15.0, "search": 0.008},
     "sonar-reasoning-pro": {"in": 2.0, "out": 8.0, "search": 0.008},
+    "sonar-deep-research": {"in": 2.0, "out": 8.0, "search": 0.005},  # + reasoning tokens; cost approx/under-counted
     # DeepSeek (knowledge-only)
     "deepseek-chat":     {"in": 0.27, "out": 1.10, "search": 0.0},
     "deepseek-reasoner": {"in": 0.55, "out": 2.19, "search": 0.0},
