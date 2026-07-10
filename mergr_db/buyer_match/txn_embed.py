@@ -103,6 +103,11 @@ def embed_transactions(pg, limit=None, log=print):
 def ensure_txn_index(pg, log=print):
     """HNSW cosine index for fast ANN over deal vectors (no parity constraint here, unlike buyers)."""
     with pg.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_indexes WHERE tablename='transactions' "
+                    "AND indexdef ILIKE '%hnsw%' AND indexdef ILIKE '%target_embedding%'")
+        if cur.fetchone():
+            log("HNSW index on target_embedding already exists — skipping build")
+            return
         cur.execute("SELECT count(target_embedding) FROM transactions")
         n = cur.fetchone()[0]
         if not n:

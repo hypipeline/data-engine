@@ -19,29 +19,30 @@ TXN_TOP = 500          # similar transactions pulled for the roll-up
 MAX_DEALS = 6          # precedent deals kept per buyer/acquirer (evidence)
 
 
-def _ensure_query_embedding(conn, query_text):
-    """Embed the query (or reuse the cached vector); returns (query_hash, usage). Same cache and
-    math as buyer thesis search, so a query maps into the same 1536-d space as the deal vectors."""
+def _query_vector(conn, query_text):
+    """Query embedding as a vector LITERAL (from cache or fresh). Returned as a bound value so the
+    ANN query can use `<=> %s::vector` — pgvector only uses the HNSW index when the probe vector is a
+    parameter/constant, NOT a joined subquery (that was forcing a full 220k seq scan). Returns (vec, usage)."""
     h = svc._query_hash(query_text)
     with conn.cursor() as cur:
-        cur.execute("SELECT 1 FROM buyer_match.query_cache WHERE query_hash=%s", (h,))
-        cached = cur.fetchone() is not None
-    usage = {}
-    if cached:
+        cur.execute("SELECT embedding::text FROM buyer_match.query_cache WHERE query_hash=%s", (h,))
+        row = cur.fetchone()
+    if row:
         with conn.cursor() as cur:
             cur.execute("UPDATE buyer_match.query_cache SET hits=hits+1, last_used_at=now() "
                         "WHERE query_hash=%s", (h,))
         conn.commit()
-    else:
-        qv, usage = svc.embed(query_text)
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO buyer_match.query_cache (query_hash, query_text, model, embedding) "
-                        "VALUES (%s,%s,%s,%s::vector) ON CONFLICT (query_hash) DO NOTHING",
-                        (h, (query_text or "")[:4000], svc.EMBED_MODEL, svc._vec(qv)))
-        conn.commit()
+        return row[0], {"cached": True}
+    qv, usage = svc.embed(query_text)
+    vec = svc._vec(qv)
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO buyer_match.query_cache (query_hash, query_text, model, embedding) "
+                    "VALUES (%s,%s,%s,%s::vector) ON CONFLICT (query_hash) DO NOTHING",
+                    (h, (query_text or "")[:4000], svc.EMBED_MODEL, vec))
+    conn.commit()
     usage = dict(usage or {})
-    usage["cached"] = cached
-    return h, usage
+    usage["cached"] = False
+    return vec, usage
 
 
 def _split_geo(s):
@@ -78,35 +79,35 @@ def _deal(r):
 
 def search_transactions(conn, query_text, top_n=TXN_TOP):
     """Top-N most similar historical deals to the query (for a raw precedent-deals view)."""
-    h, usage = _ensure_query_embedding(conn, query_text)
+    vec, usage = _query_vector(conn, query_text)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("SET LOCAL hnsw.ef_search = %s", (max(top_n + 100, 200),))
         cur.execute(
             """SELECT t.transaction_id, t.date, t.transaction_type, t.target_name, t.target_sector,
                       t.target_location, t.target_description, t.deal_value, t.deal_value_currency,
-                      t.transaction_url, 1 - (t.target_embedding <=> q.e) AS score
-               FROM transactions t,
-                    (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
+                      t.transaction_url, 1 - (t.target_embedding <=> %s::vector) AS score
+               FROM transactions t
                WHERE t.target_embedding IS NOT NULL
-               ORDER BY t.target_embedding <=> q.e
+               ORDER BY t.target_embedding <=> %s::vector
                LIMIT %s""",
-            (h, top_n))
+            (vec, vec, top_n))
         rows = [_deal(dict(r)) for r in cur.fetchall()]
     return rows, usage
 
 
 def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DEALS):
     """Rank buyers by comparable deals done. Returns {on, discovery, txn_count, usage}."""
-    h, usage = _ensure_query_embedding(conn, query_text)
+    vec, usage = _query_vector(conn, query_text)
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("SET LOCAL hnsw.ef_search = %s", (max(top_n_txns + 100, 200),))
         cur.execute(
             """WITH top AS (
                  SELECT t.transaction_id, t.date, t.transaction_type, t.target_name, t.target_mergr_id,
                         t.target_sector, t.target_description, t.target_location, t.deal_value,
-                        t.deal_value_currency, t.transaction_url, 1 - (t.target_embedding <=> q.e) AS score
-                 FROM transactions t,
-                      (SELECT embedding e FROM buyer_match.query_cache WHERE query_hash=%s) q
+                        t.deal_value_currency, t.transaction_url, 1 - (t.target_embedding <=> %s::vector) AS score
+                 FROM transactions t
                  WHERE t.target_embedding IS NOT NULL
-                 ORDER BY t.target_embedding <=> q.e
+                 ORDER BY t.target_embedding <=> %s::vector
                  LIMIT %s)
                SELECT top.*, tp.entity_type, tp.entity_mergr_id, tp.name AS acquirer_name,
                       bm.buyer_id,
@@ -122,7 +123,7 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
                     OR (tp.entity_type='company' AND bm.company_id = tp.entity_mergr_id)
                LEFT JOIN firms f      ON tp.entity_type='firms'   AND f.firm_id    = tp.entity_mergr_id
                LEFT JOIN companies c  ON tp.entity_type='company' AND c.company_id = tp.entity_mergr_id""",
-            (h, top_n_txns))
+            (vec, vec, top_n_txns))
         rows = [dict(r) for r in cur.fetchall()]
 
     on_acc, disc_acc = {}, {}
