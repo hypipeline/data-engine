@@ -190,6 +190,8 @@
   .dh-dtag.on { background:var(--accent); color:#fff; border-color:var(--accent); }
   .dh-dtag.off { border-style:dashed; opacity:.3; cursor:default; background:transparent; }
   .dh-dprofile { font-size:11px; color:#3f6b3a; margin-top:2px; } .dh-dprofile b { font-weight:800; }
+  .dh-dt .site-link, .dh-dt .on-link { font-size:11px; font-weight:600; }
+  .dh-notin { font-size:10.5px; color:var(--faint); font-weight:600; }
   .dh-route { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; }
   .dh-route.platform { background:#eef2fb; color:#3a4a75; border:1px solid #e0e6f5; }
   .dh-route.addon { background:#f0f7ee; color:#3f6b3a; border:1px solid #dcecd6; }
@@ -795,12 +797,18 @@ function dhDeal(d){
   var meta = [d.type, d.date, d.location, d.sector].filter(Boolean).map(esc).join(' &middot; ');
   var val = dhVal(d) ? '<span class="dh-dval" title="Deal size">'+esc(dhVal(d))+'</span>' : '';
   var tgt = d.url ? '<a href="'+esc(d.url)+'" target="_blank" rel="noopener">'+esc(d.target||'(target)')+'</a>' : esc(d.target||'(target)');
+  // inline: target company's website + whether it has an ON buyer record
+  var tlinks = '';
+  if(d.target_website) tlinks += ' <span class="on-sep">&middot;</span> <a class="site-link" href="'+esc(d.target_website)+'" target="_blank" rel="noopener">'+esc(shortUrl(d.target_website))+' &#8599;</a>';
+  tlinks += d.target_on_buyer_id
+    ? ' <span class="on-sep">&middot;</span> <a class="on-link" href="'+ON_BASE+'/dashboard/buyers/'+d.target_on_buyer_id+'/edit" target="_blank" rel="noopener" title="This company is in your ON buyers">ON record &#8599;</a>'
+    : ' <span class="dh-notin" title="Not in your ON buyers">not in ON</span>';
   // Per-deal tickbox — tag the TARGET company (contact it directly). Needs a website to export.
   var tick = (d.target_website && d._selid)
     ? '<button class="dh-dtag'+(bmSelHas(d._selid)?' on':'')+'" data-selid="'+esc(d._selid)+'" onclick="bmSelToggle(\''+esc(d._selid)+'\')" title="Tag this target company to contact it">'+(bmSelHas(d._selid)?'✓':'+')+'</button>'
     : '<span class="dh-dtag off" title="No website on the target — can’t export"></span>';
   return '<div class="dh-deal">'+tick+'<span class="dh-ds">'+dhScore(d.score)+'</span>'
-    + '<div class="dh-dmain"><div class="dh-dt">'+tgt+' '+val+'</div>'
+    + '<div class="dh-dmain"><div class="dh-dt">'+tgt+' '+val+tlinks+'</div>'
     + (meta?'<div class="dh-dmeta">'+meta+'</div>':'')
     + dhDealProfile(d)
     + (d.desc?'<div class="dh-ddesc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+highlight(esc(d.desc),queryWords)+'</div>':'')

@@ -206,6 +206,7 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
                 dl["target_acq_count"] = info["acq_count"]
                 dl["target_largest"] = info["largest"]
                 dl["target_geos"] = info["geos"]
+                dl["target_on_buyer_id"] = info["on_buyer_id"]
 
     return {"on": on_out, "discovery": disc_out, "txn_count": len(rows), "usage": usage}
 
@@ -245,7 +246,9 @@ def _enrich_targets(conn, company_ids):
                  FROM buys GROUP BY company_id
                )
                SELECT c.company_id, c.website, c.name,
-                      COALESCE(a.acq_count, 0) AS acq_count, a.largest_usd, a.geos
+                      COALESCE(a.acq_count, 0) AS acq_count, a.largest_usd, a.geos,
+                      (SELECT bm.buyer_id FROM buyer_match.buyer_mergr bm
+                         WHERE bm.company_id = c.company_id LIMIT 1) AS on_buyer_id
                FROM companies c LEFT JOIN agg a ON a.company_id = c.company_id
                WHERE c.company_id = ANY(%s)""",
             (ids, ids))
@@ -256,6 +259,7 @@ def _enrich_targets(conn, company_ids):
                 "acq_count": int(r["acq_count"] or 0),
                 "largest": _fmt_usd(r["largest_usd"]) if r["largest_usd"] else None,
                 "geos": list(r["geos"] or [])[:8],
+                "on_buyer_id": r["on_buyer_id"],
             }
         return out
 
