@@ -44,6 +44,21 @@ def _ensure_query_embedding(conn, query_text):
     return h, usage
 
 
+def _split_geo(s):
+    """Split a firm's geographic_preferences blob into a clean region list (discovery firms)."""
+    if not s:
+        return []
+    import re
+    parts = [p.strip() for p in re.split(r"[;,|\n/]+", str(s)) if p and p.strip()]
+    seen, out = set(), []
+    for p in parts:
+        k = p.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(p)
+    return out[:20]
+
+
 def _deal(r):
     return {
         "transaction_id": r["transaction_id"],
@@ -95,7 +110,9 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
                SELECT top.*, tp.entity_type, tp.entity_mergr_id, tp.name AS acquirer_name,
                       bm.buyer_id,
                       CASE WHEN tp.entity_type='firms' THEN f.name    ELSE c.name    END AS acq_fullname,
-                      CASE WHEN tp.entity_type='firms' THEN f.website ELSE c.website END AS acq_website
+                      CASE WHEN tp.entity_type='firms' THEN f.website ELSE c.website END AS acq_website,
+                      f.size_category AS acq_size, f.pe_assets AS acq_aum, f.largest_buy AS acq_largest,
+                      f.total_buys AS acq_acqs, f.geographic_preferences AS acq_geo
                FROM top
                JOIN transaction_parties tp
                     ON tp.transaction_id = top.transaction_id AND tp.role='acquirer'
@@ -119,7 +136,11 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
             a = disc_acc.setdefault(key, {"deals": [], "best": 0.0,
                 "name": r.get("acq_fullname") or r.get("acquirer_name"),
                 "website": r.get("acq_website"), "entity_type": r["entity_type"],
-                "entity_mergr_id": r["entity_mergr_id"]})
+                "entity_mergr_id": r["entity_mergr_id"],
+                # buyer-level Mergr profile (firms only) — shown as context regardless of deal match
+                "firm_size": r.get("acq_size"), "firm_aum": r.get("acq_aum"),
+                "firm_largest": r.get("acq_largest"), "firm_acquisitions": r.get("acq_acqs"),
+                "geographies": _split_geo(r.get("acq_geo"))})
         a["deals"].append(d)
         if d["score"] > a["best"]:
             a["best"] = d["score"]
@@ -142,6 +163,9 @@ def match_buyers_by_deals(conn, query_text, top_n_txns=TXN_TOP, max_deals=MAX_DE
             "mergr_kind": "firm" if a["entity_type"] == "firms" else "company",
             "entity_mergr_id": a["entity_mergr_id"], "name": a["name"], "website": a["website"],
             "deal_count": len(deals), "best_score": a["best"], "deals": deals[:max_deals],
+            "firm_size": a.get("firm_size"), "firm_aum": a.get("firm_aum"),
+            "firm_largest": a.get("firm_largest"), "firm_acquisitions": a.get("firm_acquisitions"),
+            "geographies": a.get("geographies") or [],
         })
 
     keyf = lambda x: (-x["deal_count"], -x["best_score"])       # breadth first, then best single deal
