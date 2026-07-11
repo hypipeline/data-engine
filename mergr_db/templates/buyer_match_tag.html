@@ -121,6 +121,8 @@
   <div class="tag-bar">
     <span class="fl">Specialist</span>
     <select id="f-spec"><option value="">Any</option><option value="1">Yes</option><option value="0">No</option></select>
+    <span class="fl">Filter</span>
+    <input id="f-txt" type="search" placeholder="keyword…" title="Show only buyers matching this keyword">
   </div>
   <div class="step-nav">
     <button class="btn2" onclick="goStep(1)">&larr; Back</button>
@@ -136,6 +138,8 @@
   <div class="tag-bar">
     <span class="fl">Specialist</span>
     <select id="f-spec-geo"><option value="">Any</option><option value="1">Yes</option><option value="0">No</option></select>
+    <span class="fl">Filter</span>
+    <input id="f-txt-geo" type="search" placeholder="keyword…" title="Show only buyers matching this keyword">
   </div>
   <div class="facet-bar" id="facet-bar"><span class="empty-box" style="padding:4px 0">No geography on the current set.</span></div>
   <div class="step-nav">
@@ -206,8 +210,18 @@ function geoScore(r){
   if(selAcquired.size && r.acquired_countries) r.acquired_countries.forEach(function(v){ if(selAcquired.has(v)) s++; });
   return s;
 }
+// Keyword "Filter" box (Sizing + Geography steps): substring match (multi-word = AND) over the
+// buyer's identifying + geography text. The two steps share one value (mirrored, like Specialist).
+function txtMatch(r){
+  var q=(document.getElementById('f-txt')||{}).value; q=(q||'').trim().toLowerCase();
+  if(!q) return true;
+  var hay=[r.name, r.website, r.description, r.specific_matching_criteria, r.firm_size,
+           (r.geographies||[]).join(' '), (r.acquired_countries||[]).join(' ')]
+    .filter(Boolean).join(' ').toLowerCase();
+  return q.split(/\s+/).every(function(w){ return hay.indexOf(w)!==-1; });
+}
 function allRows(){ var s=load(); return Object.keys(s).map(function(k){ return s[k]; }); }
-function sizedRows(){ return allRows().filter(passSizing); }              // after Stage 1
+function sizedRows(){ return allRows().filter(passSizing).filter(txtMatch); }   // after Stage 1 + keyword filter
 
 // facet options + counts computed over the Stage-1 (sized) set
 function facetCounts(rows, key){
@@ -300,8 +314,10 @@ function tagGeoLine(r){
 function mergrHref(r){ return r.mergr_kind==='company'&&r.company_id?'/mergr/company/'+r.company_id:(r.firm_id?'/mergr/firm/'+r.firm_id:''); }
 
 function render(){
-  // Geography step's Specialist control mirrors the Sizing one (they drive the same filter).
+  // Geography step's Specialist + Filter controls mirror the Sizing ones (they drive the same filters).
   var fsg=document.getElementById('f-spec-geo'); if(fsg) fsg.value=document.getElementById('f-spec').value;
+  var ftg=document.getElementById('f-txt-geo'), ftv=(document.getElementById('f-txt')||{}).value||'';
+  if(ftg && ftg.value!==ftv) ftg.value=ftv;   // guard so we don't reset the caret while typing
   renderFacets();
   var all = load(), total = Object.keys(all).length;
   var nCrit = criteriaRows().length, nSized = sizedRows().length;
@@ -415,6 +431,11 @@ document.getElementById('f-spec').addEventListener('input', render);
 // Geography step's Specialist selector writes to the same filter as Sizing, then re-renders.
 document.getElementById('f-spec-geo').addEventListener('input', function(){
   document.getElementById('f-spec').value = this.value; render();
+});
+// Keyword Filter: Sizing is the source of truth; Geography mirrors into it, then both re-render.
+document.getElementById('f-txt').addEventListener('input', render);
+document.getElementById('f-txt-geo').addEventListener('input', function(){
+  document.getElementById('f-txt').value = this.value; render();
 });
 refreshFromServer();
 </script>
