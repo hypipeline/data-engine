@@ -119,6 +119,8 @@
   .bmv-seg button { border:none; background:transparent; color:var(--muted); font:600 13px inherit; padding:6px 13px; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:6px; }
   .bmv-seg button.active { background:var(--panel); color:var(--text); box-shadow:0 1px 2px rgba(15,23,42,.09); }
   .bmv-specsel { padding:6px 10px; font-size:13px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); color:var(--text); }
+  .bmv-filter { padding:6px 10px; font-size:13px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); color:var(--text); width:150px; }
+  .bmv-filter::placeholder { color:var(--muted); }
   .bmv-spec-badge { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:6px; vertical-align:1.5px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
   .bmv-seg button svg { width:14px; height:14px; }
 
@@ -398,6 +400,8 @@
     <option value="sel">Selected</option>
     <option value="un">Not selected</option>
   </select>
+  <span class="bmv-vlabel">Filter</span>
+  <input id="bmv-txt" class="bmv-filter" type="search" placeholder="keyword…" title="Show only rows matching this keyword" oninput="setTxtFilter(this.value)">
   <span class="bmv-selcount" id="bmv-selcount" title="Buyers selected (in tag) out of those shown in this view"></span>
   <span class="grow"></span>
   <span class="bmv-vlabel">View</span>
@@ -729,15 +733,31 @@ function specMatch(r){ return specFilter==='' ? true : (specFilter==='1' ? !!r.i
 // buyers you've not yet tagged so you can decide on them.
 var selFilter = '';
 function selMatch(r){ return selFilter==='' ? true : (selFilter==='sel' ? bmSelHas(r.id) : !bmSelHas(r.id)); }
-// baseResults = the view universe (specialist-filtered); curResults = that, narrowed by selection filter.
+// Text "Filter" box (sits next to Selection everywhere): keyword substring match over a row's
+// identifying text — every space-separated word must appear (AND). Empty query matches all.
+function bmTextMatch(r, q){
+  q = (q||'').trim().toLowerCase();
+  if(!q) return true;
+  var hay = [r.name, r.website, r.description, r.investment_thesis, r.sector_keywords, r.rationale, r.type]
+    .filter(Boolean).join(' ').toLowerCase();
+  return q.split(/\s+/).every(function(w){ return hay.indexOf(w) !== -1; });
+}
+var txtFilter = '';
+// baseResults = the view universe (specialist-filtered); curResults = that, narrowed by selection + keyword filter.
 function baseResults(){ return specFilter ? allResults.filter(specMatch) : allResults; }
-function curResults(){ var b=baseResults(); return selFilter ? b.filter(selMatch) : b; }
+function curResults(){
+  var b = baseResults();
+  if(selFilter) b = b.filter(selMatch);
+  if(txtFilter) b = b.filter(function(r){ return bmTextMatch(r, txtFilter); });
+  return b;
+}
 function baseKw(){ return specFilter ? kwBuyers.filter(specMatch) : kwBuyers; }
 // Human-readable suffix describing the active filters, for the results-count line.
 function filterNote(){
   var s=[];
   if(specFilter) s.push(specFilter==='1'?'specialist':'non-specialist');
   if(selFilter) s.push(selFilter==='sel'?'selected':'not selected');
+  if(txtFilter.trim()) s.push('matching “'+txtFilter.trim()+'”');
   return s.length ? ' '+s.join(', ') : '';
 }
 // "N / M selected" over the current view's base list (denominator stable across the selection filter).
@@ -756,6 +776,11 @@ function setSpecFilter(v){
 }
 function setSelFilter(v){
   selFilter = v;
+  if(currentView==='keywords'){ paintKeywordBuyers(); }
+  else { displayed = Math.min(PAGE_SIZE, curResults().length); paintResults(); }
+}
+function setTxtFilter(v){
+  txtFilter = v;
   if(currentView==='keywords'){ paintKeywordBuyers(); }
   else { displayed = Math.min(PAGE_SIZE, curResults().length); paintResults(); }
 }
@@ -778,6 +803,7 @@ function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, curResults().leng
 function paintKeywordBuyers(){
   var list = baseKw();
   if(selFilter) list = list.filter(selMatch);
+  if(txtFilter) list = list.filter(function(r){ return bmTextMatch(r, txtFilter); });
   document.getElementById('results').innerHTML = renderBuyers(list, false, true); updateCartBar();
 }
 
@@ -888,15 +914,19 @@ var dhAutoOwners = true;    // ON by default: tagging an acquirer also tags its 
 var dhTierFilter = '';      // '' both | 'on' in-ON-only | 'disc' discovery-only
 var dhKindFilter = '';      // '' both | 'firm' platforms | 'company' add-ons
 var dhSelFilter = '';       // '' all | 'sel' selected (in tag) | 'un' not selected
+var dhTxtFilter = '';       // keyword "Filter" box
 function dhRepaint(){ if(dhData) renderTxnResults(dhData); }
 function dhSetView(v){ dhView=v; dhRepaint(); }
 function dhSetAutoOwners(v){ dhAutoOwners=v; }
-function dhSetTier(v){ dhTierFilter=v; dhRepaint(); }
-function dhSetKind(v){ dhKindFilter=v; dhRepaint(); }
-function dhSetSel(v){ dhSelFilter=v; dhRepaint(); }
+// tier/kind/selection/keyword filters only repaint the sections (not the toolbar) so the Filter box keeps focus.
+function dhSetTier(v){ dhTierFilter=v; dhPaintSections(); }
+function dhSetKind(v){ dhKindFilter=v; dhPaintSections(); }
+function dhSetSel(v){ dhSelFilter=v; dhPaintSections(); }
+function dhSetTxt(v){ dhTxtFilter=v; dhPaintSections(); }
 // selection membership for a deal-history entity (discovery keyed by _selid, ON buyer by id)
 function dhSelId(e){ return e.discovery ? e._selid : String(e.id); }
 function dhSelMatch(e){ return dhSelFilter==='' ? true : (dhSelFilter==='sel' ? bmSelHas(dhSelId(e)) : !bmSelHas(dhSelId(e))); }
+function dhTxtMatch(e){ return bmTextMatch(e, dhTxtFilter); }
 // "N / M selected" indicator over the tier/kind-filtered set (denominator stable across the selection filter)
 function updateDhSelCount(){
   var el=document.getElementById('dh-selcount'); if(!el||!dhData) return;
@@ -999,6 +1029,8 @@ function dhToolbar(){
     +   '<option value="sel"'+(dhSelFilter==='sel'?' selected':'')+'>Selected</option>'
     +   '<option value="un"'+(dhSelFilter==='un'?' selected':'')+'>Not selected</option>'
     + '</select>'
+    + '<span class="bmv-vlabel">Filter</span>'
+    + '<input class="bmv-filter" type="search" placeholder="keyword…" title="Show only rows matching this keyword" value="'+esc(dhTxtFilter)+'" oninput="dhSetTxt(this.value)">'
     + '<span class="bmv-selcount" id="dh-selcount" title="Acquirers selected (in tag) out of those shown in this view"></span>'
     + '<label class="dh-opt" title="When on, tagging an acquirer also tags its PE owner(s)"><input type="checkbox"'+(dhAutoOwners?' checked':'')+' onchange="dhSetAutoOwners(this.checked)"> Contact PE owners</label>'
     + '</div>';
@@ -1062,11 +1094,21 @@ function renderTxnResults(data){
   meta.style.display='';
   meta.innerHTML = '<b>'+on.length+'</b> of your buyers &middot; <b>'+disc.length+'</b> discovery acquirer'+(disc.length===1?'':'s')
     + ' across <b>'+(data.txn_count||0)+'</b> comparable deals';
-  var onF = on.filter(dhKindMatch).filter(dhSelMatch), discF = disc.filter(dhKindMatch).filter(dhSelMatch);
-  var html = dhToolbar();
+  // Toolbar rendered once; sections repaint independently so the Filter box keeps focus while typing.
+  document.getElementById('results').innerHTML = dhToolbar() + '<div id="dh-sections"></div>';
+  dhPaintSections();
+}
+// Repaint only the ON/discovery sections from cached data, applying tier + kind + selection + keyword filters.
+function dhPaintSections(){
+  if(!dhData) return;
+  var el = document.getElementById('dh-sections'); if(!el) return;
+  var on = dhData.on||[], disc = dhData.discovery||[];
+  var onF   = on.filter(dhKindMatch).filter(dhSelMatch).filter(dhTxtMatch);
+  var discF = disc.filter(dhKindMatch).filter(dhSelMatch).filter(dhTxtMatch);
+  var html = '';
   if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', onF, false, 'None of your ON buyers match.');
   if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', discF, true, 'No discovery acquirers match.');
-  document.getElementById('results').innerHTML = html;
+  el.innerHTML = html;
   updateDhSelCount();
   updateCartBar();
 }
@@ -1242,6 +1284,8 @@ function renderAiBuyers(res){
     +'<span class="bmv-vlabel" style="margin-left:10px">Selection</span>'
     +'<select class="bmv-specsel" onchange="setAiSelFilter(this.value)">'
     +'<option value="">All</option><option value="sel"'+(aiSelFilter==='sel'?' selected':'')+'>Selected</option><option value="un"'+(aiSelFilter==='un'?' selected':'')+'>Not selected</option></select>'
+    +'<span class="bmv-vlabel" style="margin-left:10px">Filter</span>'
+    +'<input class="bmv-filter" type="search" placeholder="keyword…" title="Show only rows matching this keyword" value="'+esc(aiTxtFilter)+'" oninput="setAiTxtFilter(this.value)">'
     +'<span class="bmv-selcount" id="ai-selcount"></span>'
     +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
     +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Condensed</button>'
@@ -1251,10 +1295,13 @@ function renderAiBuyers(res){
 }
 function setAiView(v){ aiView=v; var seg=document.getElementById('ai-viewseg'); if(seg)seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v===v); }); paintAi(); }
 function setAiSelFilter(v){ aiSelFilter=v; paintAi(); }
+var aiTxtFilter='';
+function setAiTxtFilter(v){ aiTxtFilter=v; paintAi(); }
 function aiVisible(){
   var b=aiSorted();
   if(aiSelFilter==='sel') b=b.filter(function(x){return x._selid&&bmSelHas(x._selid);});
   else if(aiSelFilter==='un') b=b.filter(function(x){return !(x._selid&&bmSelHas(x._selid));});
+  if(aiTxtFilter) b=b.filter(function(x){return bmTextMatch(x, aiTxtFilter);});
   return b;
 }
 function updateAiSelCount(){
