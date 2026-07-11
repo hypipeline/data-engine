@@ -44,6 +44,8 @@
   .tgeo-chip.hit { box-shadow:0 0 0 2px #16a34a; font-weight:700; }
   .tgeo-more { color:var(--faint); font-size:11px; align-self:center; }
   .tgeo-none { margin:8px 0 4px; font-size:11.5px; color:var(--faint); font-style:italic; }
+  .tag-t th.selc, .tag-t td.selc { width:34px; text-align:center; padding-left:10px; }
+  .tag-t td.selc input, .tag-t th.selc input { cursor:pointer; width:15px; height:15px; }
   .tag-t td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
   .tag-t td.num.gold { color:#92400e; font-weight:700; }
   .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
@@ -127,6 +129,7 @@
   <div class="step-nav">
     <button class="btn2" onclick="goStep(1)">&larr; Back</button>
     <span class="tag-note" id="sized-note" style="margin:0; flex:1"></span>
+    <button class="btn2 rm-selected" onclick="removeSelected()" disabled>Remove selected (0)</button>
     <button class="btn2" onclick="clearTag()">Clear tag</button>
     <button class="btn2 primary" onclick="goStep(3)">Continue to Geography &rarr;</button>
   </div>
@@ -145,6 +148,7 @@
   <div class="step-nav">
     <button class="btn2" onclick="goStep(2)">&larr; Back to sizing</button>
     <span class="tag-note" id="tag-note" style="margin:0; flex:1"></span>
+    <button class="btn2 rm-selected" onclick="removeSelected()" disabled>Remove selected (0)</button>
     <button class="btn2 primary" onclick="copyUrls()">Copy URLs (JSON)</button>
     <button class="btn2" onclick="downloadJson()">.json</button>
     <button class="btn2" onclick="downloadCsv()">.csv</button>
@@ -156,6 +160,8 @@
 <script>
 var KEY = 'bm_tag_selection';
 var sortKey = 'name', sortDir = 1;
+var marked = new Set();   // transient bulk-select (checkboxes) — the storage keys ticked for removal
+function rowKey(r){ return String(r._k!=null ? r._k : r.id); }
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(_){ return {}; } }
@@ -220,7 +226,7 @@ function txtMatch(r){
     .filter(Boolean).join(' ').toLowerCase();
   return q.split(/\s+/).every(function(w){ return hay.indexOf(w)!==-1; });
 }
-function allRows(){ var s=load(); return Object.keys(s).map(function(k){ return s[k]; }); }
+function allRows(){ var s=load(); return Object.keys(s).map(function(k){ var r=s[k]||{}; r._k=k; return r; }); }
 function sizedRows(){ return allRows().filter(passSizing).filter(txtMatch); }   // after Stage 1 + keyword filter
 
 // facet options + counts computed over the Stage-1 (sized) set
@@ -320,6 +326,7 @@ function render(){
   if(ftg && ftg.value!==ftv) ftg.value=ftv;   // guard so we don't reset the caret while typing
   renderFacets();
   var all = load(), total = Object.keys(all).length;
+  Array.from(marked).forEach(function(k){ if(!Object.prototype.hasOwnProperty.call(all,k)) marked.delete(k); }); // drop stale marks
   var nCrit = criteriaRows().length, nSized = sizedRows().length;
   var geoSel = selRegions.size + selAcquired.size;
   var nGeoMatch = geoSel ? sizedRows().filter(function(r){ return geoScore(r)>0; }).length : 0;
@@ -339,7 +346,8 @@ function render(){
   var body = document.getElementById('tag-body');
   if(!total){ body.innerHTML='<div class="empty-box">No buyers in the tag yet. Go to <a href="/buyer-match">Buyer Match</a>, tick buyers across your searches, then come back here.</div>'; document.getElementById('tag-note').textContent=''; return; }
   if(step===1 && !rows.length){ body.innerHTML='<div class="empty-box">✓ No buyers in your tag have a specific matching criteria — nothing to review. <a href="#" onclick="goStep(2);return false;">Continue to Sizing &rarr;</a></div>'; return; }
-  var head = COLS.map(function(c){
+  var head = '<th class="selc"><input type="checkbox" id="sel-all" title="Select / unselect all shown" onclick="toggleAllShown(this)"></th>'
+    + COLS.map(function(c){
     var ar = sortKey===c.k ? '<span class="ar">'+(sortDir>0?'▲':'▼')+'</span>' : '';
     return '<th class="'+(c.r?'r':'')+'" onclick="setSort(\''+c.k+'\')">'+c.label+ar+'</th>';
   }).join('') + '<th></th>';
@@ -351,7 +359,9 @@ function render(){
     var disc = r.discovery || isNaN(Number(r.id));
     var discBadge = disc ? '<span class="tag-disc">Discovery</span>' : '';
     var recLink = disc ? (href ? '<a class="on-link" href="'+href+'" target="_blank" rel="noopener">Mergr '+esc(r.mergr_kind||'record')+' &#8599;</a>' : '') : onRecordLink(r);
+    var k = rowKey(r);
     var main = '<tr class="main-r">'
+      + '<td class="selc"><input type="checkbox" class="rsel" data-k="'+esc(k)+'"'+(marked.has(k)?' checked':'')+' onclick="toggleMark(this)"></td>'
       + '<td><div class="nm">'+nm+tierBadge(r)+specBadge(r)+discBadge+'</div><div class="site">'+siteLink(r)+' <span class="on-sep">&middot;</span> '+recLink+'</div></td>'
       + '<td class="num gold">'+(r.firm_size?esc(r.firm_size):'<span class="faint">—</span>')+'</td>'
       + '<td class="num">'+(r.firm_aum?fmtAum(r.firm_aum):'<span class="faint">—</span>')+'</td>'
@@ -362,7 +372,7 @@ function render(){
       + '</tr>';
     var inner = critLine(r) + tagGeoLine(r)
               + (r.description ? '<div class="tag-desc clamp" onclick="this.classList.toggle(\'clamp\')" title="Click to expand / collapse">'+esc(r.description)+'</div>' : '');
-    var desc = '<tr class="descrow"><td colspan="7">'+inner+'</td></tr>';
+    var desc = '<tr class="descrow"><td colspan="8">'+inner+'</td></tr>';
     return '<tbody>'+main+desc+'</tbody>';
   }).join('');
   body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead>'+trs+'</table></div>';
@@ -370,6 +380,33 @@ function render(){
   document.getElementById('tag-note').textContent = 'Export = JSON array of the ON website URLs for the '
     + rows.length + ' buyer' + (rows.length===1?'':'s') + ' shown (after filters)'
     + (noWeb ? ' · '+noWeb+' have no website and are omitted' : '') + '.';
+  updateSelUI();
+}
+
+// ── Checkbox multi-select (Sizing + Geography): tick rows, or the header to (un)select all SHOWN,
+//    then "Remove selected" prunes them from the tag. Works with the keyword filter (select-all
+//    only covers the currently-shown, filtered rows). ──
+function shownKeys(){ return displayRows().map(rowKey); }
+function updateSelUI(){
+  var shown = shownKeys(), inSel = shown.filter(function(k){ return marked.has(k); });
+  var sa = document.getElementById('sel-all');
+  if(sa){ sa.checked = shown.length>0 && inSel.length===shown.length; sa.indeterminate = inSel.length>0 && inSel.length<shown.length; }
+  var n = marked.size;
+  Array.prototype.forEach.call(document.querySelectorAll('.rm-selected'), function(b){
+    b.textContent = 'Remove selected ('+n+')'; b.disabled = n===0;
+  });
+}
+function toggleMark(cb){ if(cb.checked) marked.add(cb.dataset.k); else marked.delete(cb.dataset.k); updateSelUI(); }
+function toggleAllShown(cb){
+  shownKeys().forEach(function(k){ if(cb.checked) marked.add(k); else marked.delete(k); });
+  render();
+}
+function removeSelected(){
+  var o = load(), keys = Array.from(marked).filter(function(k){ return Object.prototype.hasOwnProperty.call(o,k); });
+  if(!keys.length) return;
+  if(!confirm('Remove '+keys.length+' selected buyer'+(keys.length===1?'':'s')+' from the tag?')) return;
+  keys.forEach(function(k){ delete o[k]; });
+  save(o); marked.clear(); render();
 }
 
 function setSort(k){ if(sortKey===k){ sortDir=-sortDir; } else { sortKey=k; sortDir = (k==='name')?1:-1; } render(); }
