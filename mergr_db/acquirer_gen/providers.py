@@ -78,6 +78,24 @@ def _prompt_for(target, s):
     return SYSTEM, build_user(target, s.get("n_acq", 40), s.get("n_deals", 40))
 
 
+# JSON schema for Perplexity structured output — forces the list instead of a prose research report
+# (deep-research otherwise writes an essay and never emits the JSON before hitting max_tokens).
+_ACQ_ITEM = {"type": "object", "properties": {k: {"type": "string"} for k in
+             ("name", "website", "type", "geography", "rationale", "source_url")}, "required": ["name"]}
+_DEAL_ITEM = {"type": "object", "properties": {k: {"type": "string"} for k in
+              ("acquirer", "acquirer_website", "target", "target_website", "year", "value", "source_url")},
+              "required": ["target"]}
+
+
+def _schema_for(part):
+    props = {}
+    if part in ("acquirers", "both"):
+        props["acquirers"] = {"type": "array", "items": _ACQ_ITEM}
+    if part in ("deals", "both"):
+        props["deals"] = {"type": "array", "items": _DEAL_ITEM}
+    return {"type": "object", "properties": props, "required": list(props.keys())}
+
+
 def _salvage(text):
     """Recover as many complete objects as possible from truncated/dirty JSON — for each array
     ("acquirers"/"deals") scan balanced {…} objects and json.load each individually, so a cut-off
@@ -119,10 +137,11 @@ def _extract_json(text):
     return _salvage(text)                          # truncated output → keep the complete objects
 
 
-def _ok(provider, model, text, in_tok, out_tok, web, t0, citations=None):
+def _ok(provider, model, text, in_tok, out_tok, web, t0, citations=None, prompt=None):
     parsed = _extract_json(text) or {}
     return {
         "provider": provider, "model": model, "text": text,
+        "prompt": prompt or {},                       # exact {system, user} sent — for audit
         "acquirers": parsed.get("acquirers") or [],
         "deals": parsed.get("deals") or [],
         "citations": citations or [],
@@ -169,19 +188,26 @@ def call_anthropic(key, model, target, s):
     u = j.get("usage", {}) or {}
     stu = u.get("server_tool_use") or {}
     web = stu.get("web_search_requests", 0) if isinstance(stu, dict) else 0
-    return _ok("anthropic", model, text, u.get("input_tokens", 0), u.get("output_tokens", 0), web, t0)
+    return _ok("anthropic", model, text, u.get("input_tokens", 0), u.get("output_tokens", 0), web, t0, prompt={"system": system, "user": user})
 
 
 def call_openai(key, model, target, s):
     t0 = time.time()
+    # search-native chat models (…-search-preview / …-search-api) search on EVERY query — the fix for
+    # vanilla gpt-4o barely searching. Route via chat/completions + web_search_options.
+    if "search" in model:
+        return call_openai_compat("openai", "https://api.openai.com/v1/chat/completions",
+                                  key, model, target, s, web_native=True)
     system, user = _prompt_for(target, s)
     body = {
         "model": model, "instructions": system, "input": user,
         "max_output_tokens": s.get("max_tokens", 6000),
     }
     if s.get("web"):
-        body["tools"] = [{"type": "web_search"}]
-    if s.get("temperature") is not None:
+        body["tools"] = [{"type": "web_search", "search_context_size": s.get("search_context", "high")}]
+    if model.startswith(("gpt-5", "o1", "o3", "o4")):      # reasoning models: effort, no temperature
+        body["reasoning"] = {"effort": s.get("effort", "medium")}
+    elif s.get("temperature") is not None:
         body["temperature"] = s["temperature"]
     try:
         r = httpx.post("https://api.openai.com/v1/responses",
@@ -201,7 +227,7 @@ def call_openai(key, model, target, s):
                         text += c.get("text", "")
     u = j.get("usage", {}) or {}
     web = sum(1 for item in j.get("output", []) if item.get("type") == "web_search_call")
-    return _ok("openai", model, text, u.get("input_tokens", 0), u.get("output_tokens", 0), web, t0)
+    return _ok("openai", model, text, u.get("input_tokens", 0), u.get("output_tokens", 0), web, t0, prompt={"system": system, "user": user})
 
 
 def call_openai_compat(provider, base_url, key, model, target, s, web_native=False):
@@ -213,6 +239,9 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
     }
     if web_native:                                  # ask Perplexity to search deeper/broader
         body["web_search_options"] = {"search_context_size": s.get("search_context", "high")}
+    if "perplexity" in base_url:                    # force JSON output (deep-research writes prose essays otherwise)
+        body["response_format"] = {"type": "json_schema",
+                                   "json_schema": {"schema": _schema_for(s.get("part", "both"))}}
     if s.get("temperature") is not None:
         body["temperature"] = s["temperature"]
     try:
@@ -232,7 +261,7 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
     cites = [x.get("url") if isinstance(x, dict) else x for x in srcs]
     # honest search depth: num_search_queries when given, else sources consulted (citation count)
     web = (u.get("num_search_queries") or len(srcs)) if web_native else 0
-    return _ok(provider, model, text, u.get("prompt_tokens", 0), u.get("completion_tokens", 0), web, t0, cites)
+    return _ok(provider, model, text, u.get("prompt_tokens", 0), u.get("completion_tokens", 0), web, t0, cites, prompt={"system": system, "user": user})
 
 
 KEY_ENV = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",

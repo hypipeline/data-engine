@@ -12,6 +12,10 @@ PRICING = {
     # OpenAI
     "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.025},
     "gpt-4o":            {"in": 2.5,  "out": 10.0, "search": 0.025},
+    "gpt-4o-search-preview": {"in": 2.5, "out": 10.0, "search": 0.030},
+    "gpt-5-search-api":  {"in": 1.25, "out": 10.0, "search": 0.030},
+    "gpt-5.5":           {"in": 2.0,  "out": 12.0, "search": 0.030},
+    "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.030},
     "gpt-4.1":           {"in": 2.0,  "out": 8.0,  "search": 0.025},
     # Perplexity Sonar — sonar/sonar-pro bill a FLAT per-request search fee by context tier (NOT per query),
     # so 'search' here is charged once/request (see cost_usd). deep-research genuinely bills per search.

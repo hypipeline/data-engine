@@ -672,6 +672,81 @@ def acquirer_finder_data(target: str = None):
         return JSONResponse({"error": str(e), "runs": [], "total_spend": 0, "targets": []})
 
 
+class _AFRunReq(BaseModel):
+    target: str = ""
+    input_mode: str = "typed"
+    mandate_code: str = ""
+
+
+@app.post("/acquirer-finder/run")
+def af_run(req: _AFRunReq):
+    """Kick off a unified 3-model search in the background (it takes ~3 min). Returns a search_id to
+    poll; the worker fills acquirer_gen.searches when done. Every search is kept in history."""
+    target = (req.target or "").strip()
+    if not target:
+        return JSONResponse({"error": "empty target"}, status_code=400)
+    conn = POOL.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO acquirer_gen.searches (target,input_mode,mandate_code,total_cost,result) "
+                        "VALUES (%s,%s,%s,0,%s) RETURNING id",
+                        (target, req.input_mode, req.mandate_code or None, json.dumps({"status": "pending"})))
+            sid = cur.fetchone()[0]
+        conn.commit()
+    finally:
+        POOL.putconn(conn)
+
+    def worker():
+        from acquirer_gen import unified as ag_uni
+        c = POOL.getconn()
+        try:
+            res = ag_uni.run_unified(c, target)
+            res["search_id"] = sid
+            cc = res.get("counts", {})
+            with c.cursor() as cur:
+                cur.execute("UPDATE acquirer_gen.searches SET total_cost=%s,n_acquirers=%s,n_deals=%s,"
+                            "n_consensus=%s,result=%s WHERE id=%s",
+                            (res.get("total_cost", 0), cc.get("acquirers", 0), cc.get("deals", 0),
+                             cc.get("consensus_acquirers", 0), json.dumps(res), sid))
+            c.commit()
+        except Exception as e:                           # noqa: BLE001
+            c.rollback()
+            with c.cursor() as cur:
+                cur.execute("UPDATE acquirer_gen.searches SET result=%s WHERE id=%s",
+                            (json.dumps({"status": "error", "error": str(e)[:400]}), sid))
+            c.commit()
+        finally:
+            POOL.putconn(c)
+
+    _threading.Thread(target=worker, daemon=True).start()
+    return JSONResponse({"search_id": sid, "status": "pending"})
+
+
+@app.get("/acquirer-finder/search/{sid}")
+def af_search(sid: int):
+    row = query("SELECT id, target, total_cost, result, created_at FROM acquirer_gen.searches WHERE id=%s",
+                (sid,), one=True)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    res = row["result"] or {}
+    status = res.get("status") or "done"
+    return JSONResponse({"status": status, "search_id": row["id"],
+                         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                         "result": res})
+
+
+@app.get("/acquirer-finder/searches")
+def af_searches():
+    rows = query("SELECT id, target, input_mode, mandate_code, total_cost, n_acquirers, n_deals, "
+                 "n_consensus, created_at FROM acquirer_gen.searches "
+                 "WHERE COALESCE(result->>'status','') <> 'pending' ORDER BY id DESC LIMIT 100")
+    for r in rows:
+        r["created_at"] = r["created_at"].isoformat() if r["created_at"] else None
+        r["total_cost"] = float(r["total_cost"] or 0)
+    total = query("SELECT COALESCE(SUM(total_cost),0) t FROM acquirer_gen.searches", one=True)
+    return JSONResponse({"searches": rows, "total_spend": float(total["t"] or 0)})
+
+
 import queue as _queue                               # noqa: E402
 import threading as _threading                       # noqa: E402
 from fastapi.responses import StreamingResponse      # noqa: E402

@@ -36,13 +36,33 @@ def log_run(conn, target, res, settings):
              c.get("in_on", 0), c.get("in_mergr", 0), c.get("net_new", 0),
              res.get("parse_ok", False), res.get("error"),
              json.dumps({"acquirers": res.get("acquirers", []), "deals": res.get("deals", []),
-                         "citations": res.get("citations", [])})))
+                         "citations": res.get("citations", []), "calls": _trim_calls(res.get("calls", []))})))
     conn.commit()
+
+
+def _trim_calls(calls, cap=60000):
+    """Cap raw text so the audit log doesn't bloat jsonb, while keeping full prompts."""
+    out = []
+    for c in calls:
+        cc = dict(c)
+        raw = cc.get("raw") or ""
+        if len(raw) > cap:
+            cc["raw"] = raw[:cap] + f"\n…[truncated {len(raw)-cap} chars]"
+        out.append(cc)
+    return out
+
+
+def _call_record(part, r):
+    """Auditable record of one model call: exact prompt in + raw output."""
+    return {"part": part, "prompt": r.get("prompt", {}), "raw": r.get("text", ""),
+            "usage": r.get("usage", {}), "parse_ok": r.get("parse_ok"), "error": r.get("error"),
+            "n_acq": len(r.get("acquirers", [])), "n_deals": len(r.get("deals", []))}
 
 
 def generate(conn, target, provider, model, settings, index=None, do_log=True):
     res = providers.run_provider_retry(provider, model, target, settings)
     res["cost_usd"] = pricing.cost_usd(model, res["usage"])
+    res["calls"] = [_call_record(settings.get("part", "both"), res)]
     if index is None:
         index = verify.build_index(conn)
     res["acquirers"] = verify.match_acquirers(index, res.get("acquirers", []))
@@ -79,6 +99,7 @@ def generate_split(conn, target, provider, model, settings, index=None, do_log=T
            "error": ra.get("error") or rd.get("error")}
     res["parse_ok"] = bool(res["acquirers"]) or bool(res["deals"])
     res["cost_usd"] = pricing.cost_usd(model, usage)
+    res["calls"] = [_call_record("acquirers", ra), _call_record("deals", rd)]
     res["acquirers"] = verify.match_acquirers(index, res["acquirers"])
     res["counts"] = verify.counts(res["acquirers"])
     res["counts"]["deals"] = len(res["deals"])
