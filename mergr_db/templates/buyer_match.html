@@ -222,6 +222,9 @@
   .bmv-ts.aigold .cap { background:linear-gradient(90deg,#f0d271,#fde9a9); }
   .bmv-ts.aigold { box-shadow:0 0 0 1px #f0d271 inset; }
   .ai-src { font-size:11px; color:var(--faint); margin:2px 0 8px; }
+  .bmv-t tr.m.aigold-row td { background:linear-gradient(90deg,#fffdf3,transparent); }
+  .bmv-t td.whyc { max-width:320px; }
+  .bmv-t td.whyc .subdesc { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; }
   /* AI Generate — recent-searches history */
   .aih-list { margin-top:12px; display:flex; flex-direction:column; }
   .aih-row { display:flex; align-items:baseline; gap:12px; padding:7px 8px; border-radius:7px; cursor:pointer; border-bottom:1px solid var(--border); }
@@ -489,6 +492,7 @@ function updateCartBar(){
   var n=bmSelCount(); document.getElementById('bm-cart-count').textContent=n;
   document.getElementById('bm-cart').style.display = n>0 ? 'flex' : 'none';
   updateSelCount();   // keep the "N / M selected" view indicator live on every selection change
+  updateAiSelCount(); // same, for the AI Generate results
 }
 function bmSelClearAll(){ if(confirm('Clear the tag selection ('+bmSelCount()+' buyers)?')){ bmSelSave({}); updateCartBar(); repaintSelection(); } }
 function repaintSelection(){ if(currentView==='keywords') paintKeywordBuyers(); else if(allResults.length) paintResults(); }
@@ -1046,6 +1050,8 @@ function renderTxnResults(data){
 }
 // ── AI Generate mode (Acquirer Finder, integrated) — shares the buyer-match tag cart ──
 var aiPollTimer=null, aiStart=0, aiData=null, aiSort='score';
+var aiView='sheet';       // 'sheet' = rich tearsheet | 'table' = condensed multi-select
+var aiSelFilter='';       // '' all | 'sel' selected | 'un' not selected
 var BM_AI_ACTIVE='bm_ai_active';   // localStorage: id of an in-flight AI run, so we can reattach after a reload/close
 async function doAiSearch(){
   var q=document.getElementById('query').value.trim(); if(!q) return;
@@ -1212,14 +1218,76 @@ function renderAiBuyers(res){
   var meta=document.getElementById('search-meta'); meta.style.display='';
   meta.innerHTML=(errs.length?'<span style="color:#b91c1c;font-weight:800">⚠ '+errs.length+' model error'+(errs.length>1?'s':'')+' · </span>':'')+'<b>'+(c.buyers||0)+'</b> buyers · ★<b>'+(c.both||0)+'</b> recommended+proven · '+(c.consensus||0)+' multi-model · '+(c.in_on||0)+' ON · '+(c.deals||0)+' deals · <b>$'+Number(res.total_cost||0).toFixed(2)+'</b>';
   var tools='<div class="dh-toolbar"><span class="bmv-vlabel">Sort</span><select class="bmv-specsel" onchange="aiSort=this.value;paintAi()"><option value="score">Confidence</option><option value="consensus">Consensus</option><option value="on">ON first</option><option value="deals">Most deals</option></select>'
+    +'<span class="bmv-vlabel" style="margin-left:10px">Selection</span>'
+    +'<select class="bmv-specsel" onchange="setAiSelFilter(this.value)">'
+    +'<option value="">All</option><option value="sel"'+(aiSelFilter==='sel'?' selected':'')+'>Selected</option><option value="un"'+(aiSelFilter==='un'?' selected':'')+'>Not selected</option></select>'
+    +'<span class="bmv-selcount" id="ai-selcount"></span>'
     +'<span class="bmv-vlabel" style="margin-left:10px">Tag all</span>'
     +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.n_rec>=2&&b.website;}))">★consensus</button> '
     +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.verify.status===\'in_on\'&&b.website;}))">ON</button> '
-    +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.both&&b.website;}))">★rec+proven</button></div>';
+    +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.both&&b.website;}))">★rec+proven</button>'
+    +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
+    +'<button data-v="sheet" class="'+(aiView==='sheet'?'active':'')+'" onclick="setAiView(\'sheet\')" title="Full tearsheet per buyer">Tearsheet</button>'
+    +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select">Condensed</button></div></div>';
   document.getElementById('results').innerHTML=warn+tools+'<div id="ai-list"></div>';
   paintAi();
 }
-function paintAi(){ var el=document.getElementById('ai-list'); if(el){ el.innerHTML='<div class="bmv-sheets">'+aiSorted().map(aiBuyerCard).join('')+'</div>'; } updateCartBar(); }
+function setAiView(v){ aiView=v; var seg=document.getElementById('ai-viewseg'); if(seg)seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v===v); }); paintAi(); }
+function setAiSelFilter(v){ aiSelFilter=v; paintAi(); }
+function aiVisible(){
+  var b=aiSorted();
+  if(aiSelFilter==='sel') b=b.filter(function(x){return x._selid&&bmSelHas(x._selid);});
+  else if(aiSelFilter==='un') b=b.filter(function(x){return !(x._selid&&bmSelHas(x._selid));});
+  return b;
+}
+function updateAiSelCount(){
+  var el=document.getElementById('ai-selcount'); if(!el) return;
+  var base=(aiData&&aiData.buyers)||[]; if(!base.length){ el.textContent=''; return; }
+  var n=base.filter(function(b){return b._selid&&bmSelHas(b._selid);}).length;
+  el.textContent=n+' / '+base.length+' selected';
+}
+function paintAi(){
+  var el=document.getElementById('ai-list'); if(!el){ updateCartBar(); return; }
+  var rows=aiVisible();
+  if(!rows.length){ el.innerHTML='<div class="empty-box" style="margin-top:14px">No buyers match this filter.</div>'; updateCartBar(); return; }
+  el.innerHTML = aiView==='table' ? aiTable(rows) : '<div class="bmv-sheets">'+rows.map(aiBuyerCard).join('')+'</div>';
+  updateCartBar();
+}
+// Condensed, multi-select table view — mirrors the Thesis table (tick-box + select-all).
+function aiGroundCell(v){
+  if(v.status==='in_on') return '<span class="ai-b on">ON</span>';
+  if(v.status==='in_mergr') return '<span class="ai-b mergr">Mergr '+esc(v.kind||'')+'</span>';
+  return '<span class="faint">net-new</span>';
+}
+function aiTable(rows){
+  var head='<div class="bmv-twrap"><table class="bmv-t"><thead><tr>'
+    +'<th class="numh">#</th>'
+    +'<th class="selh"><input type="checkbox" onclick="bmSelToggleAllShown(this)" title="Select all shown"></th>'
+    +'<th>Buyer</th><th class="r">Signal</th><th class="r">Ground</th><th class="r">Size</th><th class="r">AUM</th><th class="r">Staff</th><th>Why</th>'
+    +'</tr></thead>';
+  var body=rows.map(function(b,i){
+    var v=b.verify||{}, f=b.facts||{};
+    var sel=b._selid
+      ? '<input type="checkbox" class="bmsel" data-selid="'+esc(b._selid)+'" onclick="bmSelToggle(\''+esc(b._selid)+'\')"'+(bmSelHas(b._selid)?' checked':'')+(b.website?'':' disabled title="no website — can’t export"')+'>'
+      : '';
+    var nm='<a href="'+esc(b.website?aiUrl(b.website):'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>';
+    var sig=(b.n_rec?'<span class="ai-b'+(b.n_rec>=2?' gold':'')+'">'+(b.n_rec>=2?'★':'')+b.n_rec+'/3</span>':'')
+          +(b.n_deals?' <span class="ai-b mergr">'+b.n_deals+' deal'+(b.n_deals===1?'':'s')+'</span>':'');
+    return '<tbody><tr class="m'+(b.both?' aigold-row':'')+'">'
+      +'<td class="rank">'+(i+1)+'</td>'
+      +'<td class="selc">'+sel+'</td>'
+      +'<td><div class="nm">'+nm+(f.specialist===true?'<span class="bmv-spec-badge">Specialist</span>':'')+'</div>'
+      +   '<div class="site">'+aiSiteLink(b)+(aiOnLink(v)?' <span class="on-sep">&middot;</span> '+aiOnLink(v):'')+'</div></td>'
+      +'<td class="num">'+(sig||'<span class="faint">—</span>')+'</td>'
+      +'<td class="num">'+aiGroundCell(v)+'</td>'
+      +'<td class="num gold">'+(f.size?esc(f.size):'<span class="faint">—</span>')+'</td>'
+      +'<td class="num">'+(f.aum?fmtAum(f.aum):'<span class="faint">—</span>')+'</td>'
+      +'<td class="num">'+(f.employees?Number(f.employees).toLocaleString():'<span class="faint">—</span>')+'</td>'
+      +'<td class="whyc">'+(b.rationale?'<span class="subdesc">'+esc(String(b.rationale).slice(0,110))+'</span>':'<span class="faint">—</span>')+'</td>'
+      +'</tr></tbody>';
+  }).join('');
+  return head+body+'</table></div>';
+}
 async function doTxnSearch(){
   var q = document.getElementById('query').value.trim();
   if(!q) return;
