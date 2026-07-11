@@ -78,63 +78,133 @@ def run_unified(conn, target, index=None, models=None):
         except Exception:                                # noqa: BLE001
             conn.rollback()
 
-    # ── merge acquirers, tracking which models suggested each (consensus) ──
-    macq = {}
+    rec_entries, deal_entries = [], []
     for r in per:
         model = _label(r.get("model", "?"))
         for a in r.get("acquirers", []):
-            k = _akey(a)
-            if not k:
-                continue
-            m = macq.setdefault(k, {"name": a.get("name"), "website": a.get("website"),
-                                    "type": a.get("type"), "rationale": a.get("rationale"),
-                                    "source_url": a.get("source_url"), "sources": set()})
-            m["sources"].add(model)
-            if a.get("website") and not m["website"]:
-                m["website"] = a.get("website")
-            if a.get("rationale") and (not m["rationale"] or len(a["rationale"]) < len(m["rationale"])):
-                m["rationale"] = a["rationale"]           # prefer the terser rationale
-    acq_list = [{"name": v["name"], "website": v["website"], "type": v["type"],
-                 "rationale": v["rationale"], "source_url": v["source_url"],
-                 "sources": sorted(v["sources"]), "n_sources": len(v["sources"])}
-                for v in macq.values()]
-    acq_list = verify.match_acquirers(index, acq_list)    # ground the merged list once
-    # consensus first, then grounded, then buyer-recall
-    rank = {"in_on": 2, "in_mergr": 1, "none": 0}
-    acq_list.sort(key=lambda a: (-a["n_sources"], -rank.get(a["verify"]["status"], 0), a["name"].lower()))
-
-    # ── merge deals ──
-    mdeal = {}
-    for r in per:
-        model = _label(r.get("model", "?"))
+            rec_entries.append(dict(a, models=[model]))
         for d in r.get("deals", []):
-            k = _dkey(d)
-            if not any(k):
-                continue
-            m = mdeal.setdefault(k, dict(d, sources=set()))
-            m["sources"].add(model)
-            for fld in ("acquirer_website", "target_website", "year", "value", "source_url"):
-                if d.get(fld) and not m.get(fld):
-                    m[fld] = d[fld]
-    deal_list = [{**{kk: vv for kk, vv in v.items() if kk != "sources"},
-                  "sources": sorted(v["sources"]), "n_sources": len(v["sources"])}
-                 for v in mdeal.values()]
-    deal_list.sort(key=lambda d: (-d["n_sources"], str(d.get("year") or ""), ))
+            deal_entries.append(dict(d, models=[model]))
+    blist, counts = _build_buyers(index, rec_entries, deal_entries)
 
     total_cost = round(sum(r.get("cost_usd", 0) for r in per), 4)
     return {
         "target": target,
-        "acquirers": acq_list,
-        "deals": deal_list,
+        "buyers": blist,
         "models": [{"model": r.get("model"), "cost_usd": round(r.get("cost_usd", 0), 4),
                     "n_acquirers": len(r.get("acquirers", [])), "n_deals": len(r.get("deals", [])),
                     "latency_ms": r.get("latency_ms", 0), "error": r.get("error")} for r in per],
-        # full audit — every model call's exact prompt IN and raw output OUT, for validation
         "audit": [dict(c, model=_label(r.get("model", "?"))) for r in per for c in r.get("calls", [])],
         "total_cost": total_cost,
-        "counts": {"acquirers": len(acq_list), "deals": len(deal_list),
-                   "consensus_acquirers": sum(1 for a in acq_list if a["n_sources"] >= 2),
-                   "in_on": sum(1 for a in acq_list if a["verify"]["status"] == "in_on"),
-                   "in_mergr": sum(1 for a in acq_list if a["verify"]["status"] == "in_mergr"),
-                   "net_new": sum(1 for a in acq_list if a["verify"]["status"] == "none")},
+        "counts": counts,
     }
+
+
+def _build_buyers(index, rec_entries, deal_entries):
+    """Merge recommendation entries + deal entries into ranked buyer groups. Each entry carries a
+    'models' list, so this works for both live per-model results and re-grouping cached merged data."""
+    buyers = {}
+
+    def get_buyer(name, website):
+        k = verify.domain_of(website) or verify.norm_name(name)
+        if not k:
+            return None
+        b = buyers.setdefault(k, {"name": name, "website": website, "type": None, "rationale": None,
+                                  "source_url": None, "rec_sources": set(), "deals": [], "deal_sources": set()})
+        if website and not b["website"]:
+            b["website"] = website
+        if name and not b["name"]:
+            b["name"] = name
+        return b
+
+    for a in rec_entries:                                # recommended acquirers → buyer groups
+        b = get_buyer(a.get("name"), a.get("website"))
+        if not b:
+            continue
+        b["rec_sources"].update(a.get("models", []) or a.get("sources", []))
+        if a.get("type") and not b["type"]:
+            b["type"] = a.get("type")
+        if a.get("source_url") and not b["source_url"]:
+            b["source_url"] = a.get("source_url")
+        if a.get("rationale") and (not b["rationale"] or len(a["rationale"]) < len(b["rationale"])):
+            b["rationale"] = a["rationale"]
+
+    for d in deal_entries:                               # precedent deals → nested under their acquirer
+        if not verify.norm_name(d.get("acquirer")):
+            continue
+        b = get_buyer(d.get("acquirer"), d.get("acquirer_website"))
+        if not b:
+            continue
+        mods = d.get("models", []) or d.get("sources", [])
+        b["deal_sources"].update(mods)
+        tk = verify.norm_name(d.get("target"))
+        ex = next((x for x in b["deals"] if verify.norm_name(x.get("target")) == tk), None)
+        if ex:
+            ex.setdefault("sources", set()).update(mods)
+        else:
+            b["deals"].append(dict({k: v for k, v in d.items() if k not in ("models", "sources")},
+                                   sources=set(mods)))
+
+    blist = [{"name": b["name"], "website": b["website"], "type": b["type"], "rationale": b["rationale"],
+              "source_url": b["source_url"], "rec_sources": sorted(b["rec_sources"]),
+              "n_rec": len(b["rec_sources"]), "n_deals": len(b["deals"]),
+              "deals": sorted([{**{k: v for k, v in dl.items() if k != "sources"},
+                                "sources": sorted(dl.get("sources", [])), "n_sources": len(dl.get("sources", []))}
+                               for dl in b["deals"]], key=lambda x: str(x.get("year") or ""), reverse=True)}
+             for b in buyers.values()]
+    blist = verify.match_acquirers(index, blist)         # ground each buyer
+
+    for b in blist:
+        v = b["verify"]
+        st = v["status"]
+        if not b["website"] and v.get("match_website"):
+            b["website"] = v["match_website"]
+        gb = 3 if st == "in_on" else (1 if st == "in_mergr" else 0)
+        b["recommended"] = b["n_rec"] > 0
+        b["proven"] = b["n_deals"] > 0
+        b["both"] = b["recommended"] and b["proven"]
+        b["score"] = b["n_rec"] * 3 + min(b["n_deals"], 8) + gb + (2 if b["both"] else 0)
+        if v.get("on_buyer_id"):
+            b["_selid"] = str(v["on_buyer_id"])
+        elif st == "in_mergr" and v.get("match_id"):
+            b["_selid"] = "m:" + (v.get("kind") or "firm") + ":" + str(v["match_id"])
+        elif b["website"]:
+            b["_selid"] = "w:" + verify.domain_of(b["website"])
+        else:
+            b["_selid"] = None
+        b["can_tag"] = bool(b["website"])
+
+    blist.sort(key=lambda b: (-b["score"], -b["n_rec"], b["name"].lower()))
+    counts = {"buyers": len(blist),
+              "both": sum(1 for b in blist if b["both"]),
+              "consensus": sum(1 for b in blist if b["n_rec"] >= 2),
+              "in_on": sum(1 for b in blist if b["verify"]["status"] == "in_on"),
+              "in_mergr": sum(1 for b in blist if b["verify"]["status"] == "in_mergr"),
+              "net_new": sum(1 for b in blist if b["verify"]["status"] == "none"),
+              "deals": sum(b["n_deals"] for b in blist),
+              "no_website": sum(1 for b in blist if not b["website"])}
+    return blist, counts
+
+
+def migrate_legacy(conn):
+    """Rebuild buyer-view for cached searches stored in the old acquirers/deals format — FREE, no LLM.
+    Reconstructs buyers from the stored merged acquirers (+ their model 'sources') and deals."""
+    index = verify.build_index(conn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, result FROM acquirer_gen.searches "
+                    "WHERE result ? 'acquirers' AND NOT (result ? 'buyers')")
+        rows = cur.fetchall()
+    n = 0
+    for sid, res in rows:
+        rec = [dict(a, models=a.get("sources", [])) for a in (res.get("acquirers") or [])]
+        deals = [dict(d, models=d.get("sources", [])) for d in (res.get("deals") or [])]
+        blist, counts = _build_buyers(index, rec, deals)
+        res.pop("acquirers", None)
+        res["buyers"] = blist
+        res["counts"] = counts
+        with conn.cursor() as cur:
+            cur.execute("UPDATE acquirer_gen.searches SET result=%s, n_acquirers=%s, n_consensus=%s WHERE id=%s",
+                        (json.dumps(res), counts["buyers"], counts["consensus"], sid))
+        conn.commit()
+        n += 1
+    return n

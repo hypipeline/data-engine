@@ -9,7 +9,7 @@
   .af-minput { width:100%; box-sizing:border-box; font-size:13px; padding:8px 10px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); color:var(--text); }
   .af-mdd { position:absolute; z-index:40; left:0; right:0; top:100%; background:var(--panel); border:1px solid var(--border); border-radius:0 0 8px 8px; box-shadow:var(--shadow); max-height:280px; overflow:auto; display:none; }
   .af-mdd .it { padding:8px 11px; font-size:12.5px; cursor:pointer; border-bottom:1px solid var(--border); }
-  .af-mdd .it:hover, .af-mdd .it.sel { background:var(--bg-2); }
+  .af-mdd .it:hover { background:var(--bg-2); }
   .af-runbtn { background:var(--accent); color:#fff; font-size:14px; font-weight:700; padding:11px 20px; border:none; border-radius:9px; cursor:pointer; margin-top:12px; }
   .af-runbtn:disabled { opacity:.5; cursor:default; }
   .af-note { font-size:12px; color:var(--muted); margin-top:8px; }
@@ -17,59 +17,67 @@
   .af-spin { display:inline-block; width:13px; height:13px; border:2px solid var(--border-2); border-top-color:var(--accent); border-radius:50%; animation:afspin .7s linear infinite; vertical-align:-2px; margin-right:6px; }
   @keyframes afspin { to { transform:rotate(360deg); } }
 
-  .af-sum { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:12px; }
+  .af-sum { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
   .af-chip { font-size:12.5px; font-weight:700; background:var(--bg-2); border:1px solid var(--border-2); border-radius:20px; padding:4px 11px; }
   .af-chip.cost { color:#92400e; background:#fef3c7; border-color:#fcd34d; }
-  .af-chip.cons { color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); border-color:color-mix(in srgb,var(--accent) 30%,var(--border-2)); }
+  .af-chip.gold { color:#8a6d00; background:#fff7dd; border-color:#f2d67a; }
 
-  .af-sech { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin:20px 0 8px; padding-bottom:6px; border-bottom:1px solid var(--border); }
-  .af-item { padding:8px 0; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:flex-start; }
-  .af-item.consensus { background:color-mix(in srgb,var(--accent) 5%,transparent); border-radius:8px; padding:8px 10px; }
-  .af-star { flex:0 0 auto; font-size:11px; font-weight:800; min-width:52px; }
-  .af-star .n { color:var(--accent); } .af-star.single { color:var(--faint); }
-  .af-nm { font-weight:700; font-size:13.5px; } .af-nm a { color:var(--link); }
+  .af-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:6px 0 14px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .af-tools select, .af-bulk { font-size:12px; padding:5px 9px; border:1px solid var(--border-2); border-radius:7px; background:var(--panel); color:var(--text); cursor:pointer; }
+  .af-bulk:hover { border-color:var(--accent); }
+  .af-vlabel { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); }
+
+  .af-bcard { display:flex; gap:12px; align-items:flex-start; padding:11px 0; border-bottom:1px solid var(--border); }
+  .af-bcard.gold { background:linear-gradient(90deg,#fffdf3,transparent); border-radius:8px; padding:11px 10px; }
+  .af-rank { flex:0 0 auto; font-family:var(--mono); font-size:12px; font-weight:800; color:var(--faint); min-width:26px; text-align:right; padding-top:2px; }
+  .af-bnm { font-weight:700; font-size:14px; } .af-bnm a { color:var(--link); }
   .af-badge { font-size:8.5px; font-weight:800; letter-spacing:.3px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; }
   .af-badge.on { background:#eaf7ee; color:#276749; border:1px solid #cdebd6; }
   .af-badge.mergr { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
   .af-badge.new { background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
-  .af-sub { font-size:11px; color:var(--muted); margin-top:2px; }
-  .af-sub a { color:var(--link); } .af-src { color:var(--faint); font-weight:600; }
+  .af-badge.gold { background:#fff2c2; color:#7a5c00; border:1px solid #f0d271; }
+  .af-why { font-size:12px; color:var(--text); margin-top:3px; } .af-why b { color:var(--accent); }
+  .af-src { color:var(--faint); font-weight:600; }
+  .af-sub { font-size:11px; color:var(--muted); margin-top:2px; } .af-sub a { color:var(--link); }
   .af-rat { font-size:11.5px; color:var(--text); opacity:.82; margin-top:2px; }
-  .af-deal { font-size:12.5px; padding:6px 0; border-bottom:1px solid var(--border); }
-  .af-deal .v { font-family:var(--mono); font-size:10.5px; color:#3f6b3a; }
+  .af-bdeals { margin-top:5px; border-left:2px solid var(--border); padding-left:10px; }
+  .af-bdeal { font-size:11.5px; color:var(--muted); padding:1px 0; } .af-bdeal a { color:var(--link); } .af-bdeal .v { font-family:var(--mono); font-size:10px; color:#3f6b3a; }
+  .af-tag { flex:0 0 auto; background:var(--bg-2); border:1px solid var(--border-2); color:var(--text); font-size:12px; font-weight:700; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .af-tag:hover { border-color:var(--accent); } .af-tag.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .af-noweb { flex:0 0 auto; font-size:11px; color:var(--faint); font-style:italic; white-space:nowrap; padding-top:6px; }
 
-  .af-models { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0; }
-  .af-mstat { font-size:11.5px; background:var(--bg-2); border:1px solid var(--border-2); border-radius:6px; padding:4px 9px; }
-  .af-mstat b { font-family:var(--mono); }
-  .af-audit { border:1px solid var(--border); border-radius:8px; margin-top:8px; background:var(--bg-2); }
+  .af-models { display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px; }
+  .af-mstat { font-size:11.5px; background:var(--bg-2); border:1px solid var(--border-2); border-radius:6px; padding:4px 9px; } .af-mstat b { font-family:var(--mono); }
+  .af-audit { border:1px solid var(--border); border-radius:8px; margin:4px 0 10px; background:var(--bg-2); }
   .af-ahd { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); padding:9px 12px; cursor:pointer; }
   .af-acall { border-top:1px solid var(--border); }
-  .af-acallhd { font-size:12px; font-weight:700; padding:8px 12px; cursor:pointer; }
-  .af-acallhd .m { color:var(--muted); font-weight:400; font-family:var(--mono); font-size:11px; }
+  .af-acallhd { font-size:12px; font-weight:700; padding:8px 12px; cursor:pointer; } .af-acallhd .m { color:var(--muted); font-weight:400; font-family:var(--mono); font-size:11px; }
   .af-plabel { font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin:8px 12px 2px; }
   .af-pre { font-family:var(--mono); font-size:11px; white-space:pre-wrap; background:var(--panel); border:1px solid var(--border); border-radius:6px; margin:2px 12px 10px; padding:9px 11px; max-height:260px; overflow:auto; color:var(--text); }
 
+  .af-cart { position:fixed; left:50%; transform:translateX(-50%); bottom:20px; z-index:60; display:none; align-items:center; gap:14px; background:var(--text); color:#fff; padding:11px 16px; border-radius:12px; box-shadow:0 12px 34px -8px rgba(0,0,0,.45); }
+  .af-cart b { font-weight:800; } .af-cart button { font-size:13px; font-weight:700; padding:7px 13px; border-radius:8px; border:none; cursor:pointer; }
+  .af-cart .exp { background:#fff; color:var(--text); } .af-cart .clr { background:transparent; border:1px solid rgba(255,255,255,.35); color:#fff; }
+
   .af-hist .row { display:flex; gap:12px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px; cursor:pointer; }
-  .af-hist .row:hover { background:var(--bg-2); }
-  .af-hist .t { flex:1; font-weight:600; color:var(--link); } .af-hist .meta { color:var(--muted); font-family:var(--mono); font-size:11px; white-space:nowrap; }
+  .af-hist .row:hover { background:var(--bg-2); } .af-hist .t { flex:1; font-weight:600; color:var(--link); }
+  .af-hist .meta { color:var(--muted); font-family:var(--mono); font-size:11px; white-space:nowrap; }
   .af-hidden { display:none; }
+  .af-sech { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); margin:16px 0 6px; }
 </style>
 {% endblock %}
 {% block body %}
 <h1 class="page">Acquirer Finder</h1>
-<p class="sub">AI acquirer &amp; precedent-deal search across <b>gpt-5.5 + Claude Sonnet + Perplexity deep-research</b>, merged into one list. Candidates suggested by more than one model are <b>consensus-flagged</b>, and every one is graded against your data (ON buyer / in Mergr / net-new). Full prompt-and-output audit + search history kept for every run.</p>
+<p class="sub">AI acquirer search across <b>gpt-5.5 + Claude Sonnet + Perplexity deep-research</b>, merged into one ranked <b>buyer</b> list. Each buyer shows why it's here — recommended by which models (consensus) <b>and/or</b> the precedent deals it has done — graded against your data, and ready to <b>tag &amp; export as website URLs</b> for ON.</p>
 
 <div class="af-wrap">
   <div class="af-panel">
     <div class="af-lbl">Load a mandate (optional)</div>
-    <div class="af-mrow">
-      <input class="af-minput" id="af-mandate-search" type="text" placeholder="Search mandates…" autocomplete="off">
-      <div class="af-mdd" id="af-mandate-dd"></div>
-    </div>
+    <div class="af-mrow"><input class="af-minput" id="af-mandate-search" type="text" placeholder="Search mandates…" autocomplete="off"><div class="af-mdd" id="af-mandate-dd"></div></div>
     <div class="af-lbl">Target profile</div>
-    <textarea class="af-target" id="af-target" placeholder="Describe the target — e.g. “a drainage services business providing reactive drain clearance, CCTV surveys, jetting and no-dig repairs”. Or load a mandate above."></textarea>
+    <textarea class="af-target" id="af-target" placeholder="Describe the target — e.g. “a drainage services business: reactive drain clearance, CCTV surveys, jetting, tankering, no-dig repairs”. Or load a mandate above."></textarea>
     <button class="af-runbtn" id="af-run" onclick="runSearch()">Run comprehensive search · ~$3–5</button>
-    <div class="af-note">gpt-5.5 + Claude Sonnet + Perplexity deep-research run in parallel (~3–4 min); cost varies ~$3–5 by output size. Each search is saved to history — re-open past searches for free.</div>
+    <div class="af-note">3 models in parallel (~3–4 min). Every search is saved to history — re-open past searches for free.</div>
   </div>
 
   <div class="af-status" id="af-status"></div>
@@ -80,13 +88,27 @@
     <div id="af-hist-list"><span class="empty-box">No searches yet.</span></div>
   </div>
 </div>
+<div class="af-cart" id="af-cart"><span><b id="af-cart-n">0</b> buyers tagged</span><button class="exp" onclick="afExport()">Copy URLs (JSON)</button><button class="clr" onclick="afClear()">Clear</button></div>
 
 <script>
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 var ON_BASE='https://originationnetwork.com';
-var mandates=[], selMandate=null, pollTimer=null, pollStart=0;
+var mandates=[], selMandate=null, pollTimer=null, pollStart=0, afData=null, afSort='score';
 
-// ---- mandate typeahead (reuse Buyer Match) ----
+// ---- tag cart (export = JSON website URLs, ON import format) ----
+var AF_KEY='af_tag_selection';
+function afLoad(){ try{ return JSON.parse(localStorage.getItem(AF_KEY)||'{}'); }catch(_){ return {}; } }
+function afSave(o){ localStorage.setItem(AF_KEY, JSON.stringify(o)); }
+function afHas(id){ return id && Object.prototype.hasOwnProperty.call(afLoad(), id); }
+function afToggle(id, name, web){ if(!id) return; var o=afLoad(); if(o[id]) delete o[id]; else o[id]={name:name, website:web}; afSave(o); paintCart(); refreshTags(); }
+function afTagMany(list){ var o=afLoad(); list.forEach(function(b){ if(b._selid && b.website && !o[b._selid]) o[b._selid]={name:b.name, website:b.website}; }); afSave(o); paintCart(); refreshTags(); }
+function afClear(){ if(confirm('Clear all tagged buyers?')){ afSave({}); paintCart(); refreshTags(); } }
+function afUrls(){ var o=afLoad(), seen={}, out=[]; Object.keys(o).forEach(function(k){ var w=(o[k].website||'').trim().replace(/^https?:\/\//,'').replace(/\/$/,''); if(w && !seen[w]){ seen[w]=1; out.push(w); } }); return out; }
+function afExport(){ var a=afUrls(), t=JSON.stringify(a); navigator.clipboard.writeText(t).then(function(){ alert('Copied '+a.length+' website URLs (JSON) — paste into ON import.'); }, function(){ prompt('Copy the URLs (JSON):', t); }); }
+function paintCart(){ var n=Object.keys(afLoad()).length; document.getElementById('af-cart-n').textContent=n; document.getElementById('af-cart').style.display=n>0?'flex':'none'; }
+function refreshTags(){ document.querySelectorAll('[data-af-id]').forEach(function(el){ var on=afHas(el.dataset.afId); el.classList.toggle('on', on); el.textContent=on?'✓ Tagged':'+ Tag'; }); }
+
+// ---- mandate typeahead ----
 fetch('/buyer-match/mandates').then(function(r){return r.json();}).then(function(d){ mandates=d||[]; }).catch(function(){});
 var mi=document.getElementById('af-mandate-search'), mdd=document.getElementById('af-mandate-dd');
 mi.addEventListener('input', function(){
@@ -96,130 +118,100 @@ mi.addEventListener('input', function(){
   mdd.innerHTML=hits.map(function(m){ return '<div class="it" data-code="'+esc(m.code||'')+'" data-label="'+esc(m.label||'')+'">'+esc(m.label||'')+'</div>'; }).join('');
   mdd.style.display=hits.length?'block':'none';
 });
-mdd.addEventListener('click', function(e){
-  var it=e.target.closest('.it'); if(!it) return;
-  mi.value=it.dataset.label; mdd.style.display='none';
-  loadMandate(it.dataset.code);
-});
+mdd.addEventListener('click', function(e){ var it=e.target.closest('.it'); if(!it) return; mi.value=it.dataset.label; mdd.style.display='none'; loadMandate(it.dataset.code); });
 document.addEventListener('click', function(e){ if(!e.target.closest('.af-mrow')) mdd.style.display='none'; });
-function loadMandate(code){
-  var t=document.getElementById('af-target'); t.value='Loading mandate…';
+function loadMandate(code){ var t=document.getElementById('af-target'); t.value='Loading mandate…';
   fetch('/buyer-match/load-mandate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:code})})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      var txt = d.fullText || d.text || d.full_text || d.summary || '';
-      if(!txt && d.mandate){ txt = d.mandate.fullText || d.mandate.summary || ''; }
-      t.value = txt || ('Mandate '+code); selMandate=code;
-    }).catch(function(){ t.value=''; });
-}
+    .then(function(r){return r.json();}).then(function(d){ var txt=d.fullText||d.text||d.full_text||d.summary||(d.mandate&&(d.mandate.fullText||d.mandate.summary))||''; t.value=txt||('Mandate '+code); selMandate=code; }).catch(function(){ t.value=''; }); }
 
-// ---- run ----
+// ---- run + poll ----
 function runSearch(){
-  var target=document.getElementById('af-target').value.trim();
-  if(!target){ document.getElementById('af-target').focus(); return; }
-  var btn=document.getElementById('af-run'); btn.disabled=true;
-  document.getElementById('af-results').innerHTML='';
+  var target=document.getElementById('af-target').value.trim(); if(!target){ document.getElementById('af-target').focus(); return; }
+  var btn=document.getElementById('af-run'); btn.disabled=true; document.getElementById('af-results').innerHTML='';
   document.getElementById('af-status').innerHTML='<span class="af-spin"></span> Starting…';
-  fetch('/acquirer-finder/run',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({target:target, input_mode:selMandate?'mandate':'typed', mandate_code:selMandate||''})})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.error){ done(); document.getElementById('af-status').innerHTML='<span class="error-box">'+esc(d.error)+'</span>'; return; }
-      pollStart=Date.now(); poll(d.search_id);
-    }).catch(function(e){ done(); document.getElementById('af-status').innerHTML='<span class="error-box">'+esc(e.message||e)+'</span>'; });
+  fetch('/acquirer-finder/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:target, input_mode:selMandate?'mandate':'typed', mandate_code:selMandate||''})})
+    .then(function(r){return r.json();}).then(function(d){ if(d.error){ done(); document.getElementById('af-status').innerHTML='<span class="error-box">'+esc(d.error)+'</span>'; return; } pollStart=Date.now(); poll(d.search_id); })
+    .catch(function(e){ done(); document.getElementById('af-status').innerHTML='<span class="error-box">'+esc(e.message||e)+'</span>'; });
 }
 function done(){ document.getElementById('af-run').disabled=false; if(pollTimer){ clearTimeout(pollTimer); pollTimer=null; } }
 function poll(sid){
   fetch('/acquirer-finder/search/'+sid).then(function(r){return r.json();}).then(function(d){
-    if(d.status==='pending'){
-      var sec=Math.round((Date.now()-pollStart)/1000);
-      document.getElementById('af-status').innerHTML='<span class="af-spin"></span> Running 3 models in parallel… '+sec+'s (usually ~3 min)';
-      pollTimer=setTimeout(function(){ poll(sid); }, 4000); return;
-    }
+    if(d.status==='pending'){ var s=Math.round((Date.now()-pollStart)/1000); document.getElementById('af-status').innerHTML='<span class="af-spin"></span> Running 3 models in parallel… '+s+'s (usually ~3–4 min)'; pollTimer=setTimeout(function(){ poll(sid); },4000); return; }
     done();
     if(d.status==='error'){ document.getElementById('af-status').innerHTML='<span class="error-box">'+esc((d.result||{}).error||'run failed')+'</span>'; return; }
-    document.getElementById('af-status').innerHTML='';
-    renderUnified(d.result); loadHistory();
-  }).catch(function(){ pollTimer=setTimeout(function(){ poll(sid); }, 5000); });
+    document.getElementById('af-status').innerHTML=''; renderUnified(d.result); loadHistory();
+  }).catch(function(){ pollTimer=setTimeout(function(){ poll(sid); },5000); });
 }
 
-// ---- render unified ----
-function gbadge(v){ var s=(v||{}).status;
-  if(s==='in_on') return '<span class="af-badge on">✓ ON buyer</span>';
-  if(s==='in_mergr') return '<span class="af-badge mergr">Mergr '+esc((v||{}).kind||'')+'</span>';
-  return '<span class="af-badge new">net-new</span>'; }
-function acqRow(a){
-  var v=a.verify||{}, n=a.n_sources||1;
-  var star = n>=2 ? '<div class="af-star"><span class="n">★ '+n+'/3</span></div>' : '<div class="af-star single">1/3</div>';
-  var nm = a.website ? '<a href="'+(String(a.website).indexOf('http')===0?esc(a.website):'http://'+esc(a.website))+'" target="_blank" rel="noopener">'+esc(a.name||'?')+'</a>' : esc(a.name||'?');
-  var links=[];
-  if(a.website) links.push('<span class="af-src">'+esc(a.website)+'</span>');
+// ---- render buyer list ----
+function tierBadge(b){ var v=b.verify||{}; if(v.status==='in_on') return '<span class="af-badge on">✓ ON buyer</span>'; if(v.status==='in_mergr') return '<span class="af-badge mergr">Mergr '+esc(v.kind||'')+'</span>'; return '<span class="af-badge new">net-new</span>'; }
+function whyLine(b){ var p=[]; if(b.n_rec) p.push((b.n_rec>=2?'★ ':'')+b.n_rec+'/3 model'+(b.n_rec===1?'':'s')); if(b.n_deals) p.push('<b>'+b.n_deals+'</b> precedent deal'+(b.n_deals===1?'':'s')); if((b.verify||{}).status==='in_on') p.push('ON buyer'); return p.join(' · '); }
+function buyerDeals(b){ if(!b.deals||!b.deals.length) return ''; return '<div class="af-bdeals">'+b.deals.slice(0,6).map(function(d){ var meta=[d.year,d.value].filter(Boolean).map(esc).join(' · '); var t=d.source_url?'<a href="'+esc(d.source_url)+'" target="_blank" rel="noopener">'+esc(d.target||'?')+'</a>':esc(d.target||'?'); return '<div class="af-bdeal">→ '+t+(meta?' <span class="v">'+meta+'</span>':'')+'</div>'; }).join('')+(b.deals.length>6?'<div class="af-bdeal af-src">+'+(b.deals.length-6)+' more</div>':'')+'</div>'; }
+function buyerCard(b, i){
+  var v=b.verify||{}, on=afHas(b._selid);
+  var nm=b.website?'<a href="'+(String(b.website).indexOf('http')===0?esc(b.website):'http://'+esc(b.website))+'" target="_blank" rel="noopener">'+esc(b.name)+'</a>':esc(b.name);
+  var links=[]; if(b.website) links.push('<span class="af-src">'+esc(String(b.website).replace(/^https?:\/\//,'').replace(/\/$/,''))+'</span>');
   if(v.on_buyer_id) links.push('<a href="'+ON_BASE+'/dashboard/buyers/'+v.on_buyer_id+'/edit" target="_blank" rel="noopener">ON record ↗</a>');
   else if(v.status==='in_mergr'&&v.match_id) links.push('<a href="/mergr/'+(v.kind==='company'?'company':'firm')+'/'+v.match_id+'" target="_blank" rel="noopener">Mergr ↗</a>');
-  if(a.source_url) links.push('<a href="'+esc(a.source_url)+'" target="_blank" rel="noopener">source ↗</a>');
-  links.push('<span class="af-src">by '+esc((a.sources||[]).join(', '))+'</span>');
-  return '<div class="af-item'+(n>=2?' consensus':'')+'">'+star
-    + '<div style="flex:1;min-width:0"><div class="af-nm">'+nm+gbadge(v)+(a.type?'<span class="af-badge new">'+esc(a.type)+'</span>':'')+'</div>'
-    + '<div class="af-sub">'+links.join(' · ')+'</div>'
-    + (a.rationale?'<div class="af-rat">'+esc(a.rationale)+'</div>':'')+'</div></div>';
+  var tag=b.website
+    ? '<button class="af-tag'+(on?' on':'')+'" data-af-id="'+esc(b._selid)+'" onclick="afToggle(this.dataset.afId,this.dataset.afName,this.dataset.afWeb)" data-af-name="'+esc(b.name)+'" data-af-web="'+esc(b.website)+'">'+(on?'✓ Tagged':'+ Tag')+'</button>'
+    : '<span class="af-noweb" title="No website — can’t export">⚑ no site</span>';
+  return '<div class="af-bcard'+(b.both?' gold':'')+'"><div class="af-rank">'+(i+1)+'</div><div style="flex:1;min-width:0">'
+    + '<div class="af-bnm">'+nm+tierBadge(b)+(b.type?'<span class="af-badge new">'+esc(b.type)+'</span>':'')+(b.both?'<span class="af-badge gold">★ recommended + proven</span>':'')+'</div>'
+    + '<div class="af-why">'+whyLine(b)+(b.rec_sources&&b.rec_sources.length?' <span class="af-src">— '+esc(b.rec_sources.join(', '))+'</span>':'')+'</div>'
+    + (links.length?'<div class="af-sub">'+links.join(' · ')+'</div>':'')
+    + (b.rationale?'<div class="af-rat">'+esc(b.rationale)+'</div>':'')
+    + buyerDeals(b) + '</div>' + tag + '</div>';
 }
-function dealRow(d){
-  var meta=[d.year,d.value].filter(Boolean).map(esc).join(' · ');
-  var t=d.source_url?'<a href="'+esc(d.source_url)+'" target="_blank" rel="noopener">'+esc(d.acquirer||'?')+' → '+esc(d.target||'?')+'</a>':esc(d.acquirer||'?')+' → '+esc(d.target||'?');
-  var cons=(d.n_sources||1)>=2?'<span class="af-badge on">★ '+d.n_sources+'</span>':'';
-  return '<div class="af-deal">'+t+cons+(meta?' <span class="v">'+meta+'</span>':'')+' <span class="af-src">by '+esc((d.sources||[]).join(', '))+'</span></div>';
+function sortedBuyers(){
+  var b=(afData.buyers||[]).slice(), r={in_on:2,in_mergr:1,none:0};
+  if(afSort==='consensus') b.sort(function(x,y){ return (y.n_rec-x.n_rec)||(y.score-x.score); });
+  else if(afSort==='on') b.sort(function(x,y){ return (r[y.verify.status]-r[x.verify.status])||(y.score-x.score); });
+  else if(afSort==='deals') b.sort(function(x,y){ return (y.n_deals-x.n_deals)||(y.score-x.score); });
+  else b.sort(function(x,y){ return (y.score-x.score)||(y.n_rec-x.n_rec); });
+  return b;
 }
-function auditBlock(audit, models){
-  var ms=(models||[]).map(function(m){ return '<span class="af-mstat">'+esc(m.model)+' <b>'+(m.n_acquirers||0)+'</b> acq · <b>'+(m.n_deals||0)+'</b> deals · <b>$'+Number(m.cost_usd||0).toFixed(4)+'</b>'+(m.error?' <span style="color:#b91c1c">err</span>':'')+'</span>'; }).join('');
-  var calls=(audit||[]).map(function(c,i){
-    var p=c.prompt||{};
-    return '<div class="af-acall"><div class="af-acallhd" onclick="var b=this.nextElementSibling;b.classList.toggle(\'af-hidden\')">'
-      + esc(c.model)+' · '+esc(c.part)+' <span class="m">'+(c.parse_ok?'ok':'FAIL')+' · in '+((c.usage||{}).input_tokens||0)+' / out '+((c.usage||{}).output_tokens||0)+' tok'+(c.error?' · '+esc(c.error):'')+'</span></div>'
-      + '<div class="af-hidden"><div class="af-plabel">System prompt</div><div class="af-pre">'+esc(p.system||'—')+'</div>'
-      + '<div class="af-plabel">User prompt</div><div class="af-pre">'+esc(p.user||'—')+'</div>'
-      + '<div class="af-plabel">Raw model output</div><div class="af-pre">'+esc(c.raw||'—')+'</div></div></div>';
-  }).join('');
-  return '<div class="af-models">'+ms+'</div>'
-    + '<div class="af-audit"><div class="af-ahd" onclick="var b=this.nextElementSibling;b.classList.toggle(\'af-hidden\')">Prompt &amp; output audit — every model call, in and out (click)</div>'
-    + '<div class="af-hidden">'+calls+'</div></div>';
+function auditBlock(res){
+  var ms=(res.models||[]).map(function(m){ return '<span class="af-mstat">'+esc(m.model)+' <b>'+(m.n_acquirers||0)+'</b> acq · <b>'+(m.n_deals||0)+'</b> deals · <b>$'+Number(m.cost_usd||0).toFixed(4)+'</b>'+(m.error?' <span style="color:#b91c1c">err</span>':'')+'</span>'; }).join('');
+  var calls=(res.audit||[]).map(function(c){ var p=c.prompt||{}; return '<div class="af-acall"><div class="af-acallhd" onclick="this.nextElementSibling.classList.toggle(\'af-hidden\')">'+esc(c.model)+' · '+esc(c.part)+' <span class="m">'+(c.parse_ok?'ok':'FAIL')+' · in '+((c.usage||{}).input_tokens||0)+' / out '+((c.usage||{}).output_tokens||0)+' tok'+(c.error?' · '+esc(c.error):'')+'</span></div><div class="af-hidden"><div class="af-plabel">System prompt</div><div class="af-pre">'+esc(p.system||'—')+'</div><div class="af-plabel">User prompt</div><div class="af-pre">'+esc(p.user||'—')+'</div><div class="af-plabel">Raw model output</div><div class="af-pre">'+esc(c.raw||'—')+'</div></div></div>'; }).join('');
+  return '<div class="af-models">'+ms+'</div><div class="af-audit"><div class="af-ahd" onclick="this.nextElementSibling.classList.toggle(\'af-hidden\')">Prompt &amp; output audit — every model call, in and out (click)</div><div class="af-hidden">'+calls+'</div></div>';
 }
 function renderUnified(res){
-  if(!res){ return; }
-  var c=res.counts||{}, acqs=res.acquirers||[], deals=res.deals||[];
+  afData=res; if(!res){ return; }
+  if(!res.buyers){ document.getElementById('af-results').innerHTML='<div class="af-panel empty-box">This older search predates the buyer view — re-run to see the grouped list.</div>'; return; }
+  var c=res.counts||{};
   var html='<div class="af-panel">';
   html+='<div class="af-sum">'
-    + '<span class="af-chip"><b>'+(c.acquirers||0)+'</b> acquirers</span>'
-    + '<span class="af-chip cons">★ <b>'+(c.consensus_acquirers||0)+'</b> multi-model</span>'
+    + '<span class="af-chip"><b>'+(c.buyers||0)+'</b> buyers</span>'
+    + '<span class="af-chip gold">★ <b>'+(c.both||0)+'</b> recommended + proven</span>'
+    + '<span class="af-chip"><b>'+(c.consensus||0)+'</b> multi-model</span>'
     + '<span class="af-chip">✓ '+(c.in_on||0)+' ON · '+(c.in_mergr||0)+' Mergr · '+(c.net_new||0)+' net-new</span>'
     + '<span class="af-chip"><b>'+(c.deals||0)+'</b> deals</span>'
-    + '<span class="af-chip cost">$'+Number(res.total_cost||0).toFixed(2)+'</span>'
+    + '<span class="af-chip cost">$'+Number(res.total_cost||0).toFixed(2)+'</span></div>';
+  html+=auditBlock(res);
+  html+='<div class="af-tools"><span class="af-vlabel">Sort</span>'
+    + '<select onchange="afSort=this.value; paintBuyers()"><option value="score">Confidence (default)</option><option value="consensus">Consensus (most models)</option><option value="on">ON buyers first</option><option value="deals">Most precedent deals</option></select>'
+    + '<span class="af-vlabel" style="margin-left:8px">Tag</span>'
+    + '<button class="af-bulk" onclick="afTagMany(afData.buyers.filter(function(b){return b.n_rec>=2&&b.website;}))">All ★consensus</button>'
+    + '<button class="af-bulk" onclick="afTagMany(afData.buyers.filter(function(b){return b.verify.status===\'in_on\'&&b.website;}))">All ON</button>'
+    + '<button class="af-bulk" onclick="afTagMany(afData.buyers.filter(function(b){return b.both&&b.website;}))">All ★recommended+proven</button>'
     + '</div>';
-  html+=auditBlock(res.audit, res.models);
-  html+='<div class="af-sech">Acquirers — consensus first</div>'+(acqs.length?acqs.map(acqRow).join(''):'<div class="empty-box">—</div>');
-  html+='<div class="af-sech">Precedent deals</div>'+(deals.length?deals.map(dealRow).join(''):'<div class="empty-box">—</div>');
-  html+='</div>';
+  html+='<div id="af-buyers"></div></div>';
   document.getElementById('af-results').innerHTML=html;
+  paintBuyers();
 }
+function paintBuyers(){ document.getElementById('af-buyers').innerHTML = sortedBuyers().map(buyerCard).join(''); paintCart(); }
 
 // ---- history ----
 function loadHistory(){
   fetch('/acquirer-finder/searches').then(function(r){return r.json();}).then(function(d){
-    document.getElementById('af-spend').textContent = '· total spend all searches: $'+Number(d.total_spend||0).toFixed(2);
+    document.getElementById('af-spend').textContent='· total spend all searches: $'+Number(d.total_spend||0).toFixed(2);
     var rows=d.searches||[];
-    document.getElementById('af-hist-list').innerHTML = rows.length ? rows.map(function(s){
-      return '<div class="row" onclick="openSearch('+s.id+')"><span class="t">'+esc((s.target||'').slice(0,90))+'</span>'
-        + '<span class="meta">'+(s.n_acquirers||0)+' acq · ★'+(s.n_consensus||0)+' · $'+Number(s.total_cost||0).toFixed(2)+' · '+esc((s.created_at||'').slice(0,16).replace('T',' '))+'</span></div>';
-    }).join('') : '<span class="empty-box">No searches yet.</span>';
+    document.getElementById('af-hist-list').innerHTML = rows.length ? rows.map(function(s){ return '<div class="row" onclick="openSearch('+s.id+')"><span class="t">'+esc((s.target||'').slice(0,90))+'</span><span class="meta">'+(s.n_acquirers||0)+' buyers · ★'+(s.n_consensus||0)+' · $'+Number(s.total_cost||0).toFixed(2)+' · '+esc((s.created_at||'').slice(0,16).replace('T',' '))+'</span></div>'; }).join('') : '<span class="empty-box">No searches yet.</span>';
   }).catch(function(){});
 }
-function openSearch(id){
-  document.getElementById('af-status').innerHTML='<span class="af-spin"></span> loading…';
-  fetch('/acquirer-finder/search/'+id).then(function(r){return r.json();}).then(function(d){
-    document.getElementById('af-status').innerHTML='';
-    if(d.status==='done'){ renderUnified(d.result); window.scrollTo(0,0); }
-    else document.getElementById('af-status').innerHTML='<span class="error-box">that search is '+esc(d.status)+'</span>';
-  });
-}
-loadHistory();
+function openSearch(id){ document.getElementById('af-status').innerHTML='<span class="af-spin"></span> loading…';
+  fetch('/acquirer-finder/search/'+id).then(function(r){return r.json();}).then(function(d){ document.getElementById('af-status').innerHTML=''; if(d.status==='done'){ renderUnified(d.result); window.scrollTo(0,0); } else document.getElementById('af-status').innerHTML='<span class="error-box">that search is '+esc(d.status)+'</span>'; }); }
+loadHistory(); paintCart();
 </script>
 {% endblock %}
