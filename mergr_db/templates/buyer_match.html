@@ -1231,7 +1231,6 @@ function aiSorted(){ var b=(aiData.buyers||[]).slice(), r={in_on:2,in_mergr:1,no
   else if(aiSort==='on')b.sort(function(x,y){return (r[y.verify.status]-r[x.verify.status])||(y.score-x.score);});
   else if(aiSort==='deals')b.sort(function(x,y){return (y.n_deals-x.n_deals)||(y.score-x.score);});
   else b.sort(function(x,y){return (y.score-x.score)||(y.n_rec-x.n_rec);}); return b; }
-function aiTagMany(list){ var o=bmSelLoad(); list.forEach(function(b){ if(b._selid&&b.website&&bmRowById[b._selid]&&!o[b._selid]) o[b._selid]=bmCompact(bmRowById[b._selid]); }); bmSelSave(o); updateCartBar(); paintAi(); }
 function renderAiBuyers(res){
   aiData=res; var bs=res.buyers||[]; bs.forEach(registerAiBuyer);
   var c=res.counts||{};
@@ -1244,10 +1243,6 @@ function renderAiBuyers(res){
     +'<select class="bmv-specsel" onchange="setAiSelFilter(this.value)">'
     +'<option value="">All</option><option value="sel"'+(aiSelFilter==='sel'?' selected':'')+'>Selected</option><option value="un"'+(aiSelFilter==='un'?' selected':'')+'>Not selected</option></select>'
     +'<span class="bmv-selcount" id="ai-selcount"></span>'
-    +'<span class="bmv-vlabel" style="margin-left:10px">Tag all</span>'
-    +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.n_rec>=2&&b.website;}))">★consensus</button> '
-    +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.verify.status===\'in_on\'&&b.website;}))">ON</button> '
-    +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.both&&b.website;}))">★rec+proven</button>'
     +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
     +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Condensed</button>'
     +'<button data-v="sheet" class="'+(aiView==='sheet'?'active':'')+'" onclick="setAiView(\'sheet\')" title="Full tearsheet per buyer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg>Tearsheet</button></div></div>';
