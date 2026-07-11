@@ -180,7 +180,9 @@ function renderUnified(res){
   afData=res; if(!res){ return; }
   if(!res.buyers){ document.getElementById('af-results').innerHTML='<div class="af-panel empty-box">This older search predates the buyer view — re-run to see the grouped list.</div>'; return; }
   var c=res.counts||{};
+  var errs=(res.models||[]).filter(function(m){return m.error;});
   var html='<div class="af-panel">';
+  if(errs.length){ html+='<div class="error-box" style="margin-bottom:12px">⚠ '+errs.length+' AI model'+(errs.length>1?'s':'')+' returned an error — this list is PARTIAL:<br>'+errs.map(function(m){return '<b>'+esc(m.model)+'</b> — '+esc(m.error);}).join('<br>')+'</div>'; }
   html+='<div class="af-sum">'
     + '<span class="af-chip"><b>'+(c.buyers||0)+'</b> buyers</span>'
     + '<span class="af-chip gold">★ <b>'+(c.both||0)+'</b> recommended + proven</span>'

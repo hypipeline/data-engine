@@ -151,15 +151,18 @@ def _ok(provider, model, text, in_tok, out_tok, web, t0, citations=None, prompt=
     }
 
 
-def _err(provider, model, detail, t0):
+def _err(provider, model, detail, t0, status=None):
     if isinstance(detail, dict):
-        msg = (detail.get("error") or {}).get("message") if isinstance(detail.get("error"), dict) else str(detail.get("error") or detail)
+        err = detail.get("error")
+        msg = err.get("message") if isinstance(err, dict) else str(err or detail)
     else:
         msg = str(detail)
+    if status:
+        msg = "HTTP {}: {}".format(status, msg)
     return {
-        "provider": provider, "model": model, "text": "", "acquirers": [], "deals": [], "citations": [],
-        "usage": {"input_tokens": 0, "output_tokens": 0, "web_searches": 0},
-        "latency_ms": int((time.time() - t0) * 1000), "parse_ok": False, "error": str(msg)[:400],
+        "provider": provider, "model": model, "text": "", "prompt": {}, "acquirers": [], "deals": [],
+        "citations": [], "usage": {"input_tokens": 0, "output_tokens": 0, "web_searches": 0},
+        "latency_ms": int((time.time() - t0) * 1000), "parse_ok": False, "error": str(msg)[:500],
     }
 
 
@@ -183,7 +186,7 @@ def call_anthropic(key, model, target, s):
     except Exception as e:                          # noqa: BLE001
         return _err("anthropic", model, e, t0)
     if r.status_code != 200:
-        return _err("anthropic", model, j, t0)
+        return _err("anthropic", model, j, t0, status=r.status_code)
     text = "".join(b.get("text", "") for b in j.get("content", []) if b.get("type") == "text")
     u = j.get("usage", {}) or {}
     stu = u.get("server_tool_use") or {}
@@ -217,7 +220,7 @@ def call_openai(key, model, target, s):
     except Exception as e:                          # noqa: BLE001
         return _err("openai", model, e, t0)
     if r.status_code != 200:
-        return _err("openai", model, j, t0)
+        return _err("openai", model, j, t0, status=r.status_code)
     text = j.get("output_text") or ""
     if not text:
         for item in j.get("output", []):
@@ -251,7 +254,7 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
     except Exception as e:                          # noqa: BLE001
         return _err(provider, model, e, t0)
     if r.status_code != 200:
-        return _err(provider, model, j, t0)
+        return _err(provider, model, j, t0, status=r.status_code)
     try:
         text = j["choices"][0]["message"]["content"]
     except Exception:                               # noqa: BLE001
