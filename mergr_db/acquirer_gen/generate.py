@@ -59,8 +59,14 @@ def _call_record(part, r):
             "n_acq": len(r.get("acquirers", [])), "n_deals": len(r.get("deals", []))}
 
 
-def generate(conn, target, provider, model, settings, index=None, do_log=True):
+def generate(conn, target, provider, model, settings, index=None, do_log=True, on_progress=None):
+    part = settings.get("part", "both")
+    if on_progress:
+        on_progress(part, "running", 0)
     res = providers.run_provider_retry(provider, model, target, settings)
+    if on_progress:
+        n = len(res.get("acquirers") or []) + len(res.get("deals") or [])
+        on_progress(part, "error" if (res.get("error") and not n) else "done", n)
     res["cost_usd"] = pricing.cost_usd(model, res["usage"])
     res["calls"] = [_call_record(settings.get("part", "both"), res)]
     if index is None:
@@ -76,7 +82,7 @@ def generate(conn, target, provider, model, settings, index=None, do_log=True):
     return res
 
 
-def generate_split(conn, target, provider, model, settings, index=None, do_log=True):
+def generate_split(conn, target, provider, model, settings, index=None, do_log=True, on_progress=None):
     """Two focused calls — ACQUIRERS-only and DEALS-only — run concurrently, then merged. Each fits a
     smaller token budget (no truncation, esp. DeepSeek's 8k ceiling) and gets the model's full attention.
     Logged as 'model (split)' so it compares against the combined run on the page."""
@@ -84,7 +90,13 @@ def generate_split(conn, target, provider, model, settings, index=None, do_log=T
         index = verify.build_index(conn)
 
     def one(part):
-        return providers.run_provider_retry(provider, model, target, dict(settings, part=part))
+        if on_progress:
+            on_progress(part, "running", 0)
+        r = providers.run_provider_retry(provider, model, target, dict(settings, part=part))
+        if on_progress:
+            n = len(r.get("acquirers") or []) if part == "acquirers" else len(r.get("deals") or [])
+            on_progress(part, "error" if (r.get("error") and not n) else "done", n)
+        return r
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         fa, fd = ex.submit(one, "acquirers"), ex.submit(one, "deals")

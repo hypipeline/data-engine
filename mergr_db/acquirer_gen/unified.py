@@ -50,15 +50,19 @@ def _dkey(d):
     return (verify.norm_name(d.get("acquirer")), verify.norm_name(d.get("target")))
 
 
-def run_unified(conn, target, index=None, models=None):
+def run_unified(conn, target, index=None, models=None, progress_cb=None):
     if index is None:
         index = verify.build_index(conn)
     models = models or DEFAULT_MODELS
 
     def run_one(provider, model, mode):
+        cb = None
+        if progress_cb:
+            def cb(part, status, n):                 # model is stable (a run_one param, not a loop var)
+                progress_cb(model, part, status, n)
         fn = generate.generate_split if mode == "split" else generate.generate
         # do_log=False here (shared conn isn't thread-safe); we log sequentially after.
-        return fn(None, target, provider, model, dict(SETTINGS), index=index, do_log=False)
+        return fn(None, target, provider, model, dict(SETTINGS), index=index, do_log=False, on_progress=cb)
 
     per = []
     with ThreadPoolExecutor(max_workers=len(models)) as ex:
@@ -86,6 +90,10 @@ def run_unified(conn, target, index=None, models=None):
         for d in r.get("deals", []):
             deal_entries.append(dict(d, models=[model]))
     blist, counts = _build_buyers(index, rec_entries, deal_entries)
+    try:
+        verify.enrich_buyers(conn, blist)                # employees + Mergr/ON facts (free, small query)
+    except Exception:                                    # noqa: BLE001  (enrichment is best-effort)
+        conn.rollback()
 
     total_cost = round(sum(r.get("cost_usd", 0) for r in per), 4)
     return {
@@ -199,6 +207,10 @@ def migrate_legacy(conn):
         rec = [dict(a, models=a.get("sources", [])) for a in (res.get("acquirers") or [])]
         deals = [dict(d, models=d.get("sources", [])) for d in (res.get("deals") or [])]
         blist, counts = _build_buyers(index, rec, deals)
+        try:
+            verify.enrich_buyers(conn, blist)
+        except Exception:                                # noqa: BLE001
+            conn.rollback()
         res.pop("acquirers", None)
         res["buyers"] = blist
         res["counts"] = counts

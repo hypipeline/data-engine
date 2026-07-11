@@ -104,3 +104,74 @@ def counts(acquirers):
     st = [a.get("verify", {}).get("status") for a in acquirers]
     return {"total": len(acquirers), "in_on": st.count("in_on"),
             "in_mergr": st.count("in_mergr"), "net_new": st.count("none")}
+
+
+def _as_list(v, cap=10, maxlen=42):
+    """Coerce a text/array field to a short, de-duped list of clean tokens for chip display."""
+    if not v:
+        return []
+    items = v if isinstance(v, list) else re.split(r"[|,;/\n]+", str(v))
+    out = []
+    for it in items:
+        s = re.sub(r"\s+", " ", str(it)).strip().strip("-•· ")
+        if s and len(s) <= maxlen and s.lower() not in {o.lower() for o in out}:
+            out.append(s)
+        if len(out) >= cap:
+            break
+    return out
+
+
+def enrich_buyers(conn, buyers):
+    """Attach `facts` (employees + Mergr/ON firm facts) to each grounded buyer — one small query per
+    source, keyed on the ids we actually matched. Never overwrites the AI-generated core fields."""
+    on_ids, firm_ids, co_ids = set(), set(), set()
+    for b in buyers:
+        v = b.get("verify") or {}
+        if v.get("on_buyer_id"):
+            on_ids.add(v["on_buyer_id"])
+        if v.get("kind") == "firm" and v.get("match_id"):
+            firm_ids.add(v["match_id"])
+        if v.get("kind") == "company" and v.get("match_id"):
+            co_ids.add(v["match_id"])
+
+    on_f, firm_f, co_f = {}, {}, {}
+    cur = conn.cursor()
+    if on_ids:
+        cur.execute("SELECT id, no_of_employees, is_specialist, sector_keywords, tags "
+                    "FROM buyer_match.buyers WHERE id = ANY(%s)", (list(on_ids),))
+        for id_, emp, spec, kws, tags in cur.fetchall():
+            on_f[id_] = {"employees": emp, "specialist": spec,
+                         "sectors": _as_list(kws) or _as_list(tags)}
+    if firm_ids:
+        cur.execute("SELECT firm_id, pe_assets, size_category, total_buys, largest_buy, "
+                    "geographic_preferences, sectors_of_interest, specialist_generalist, investor_type "
+                    "FROM firms WHERE firm_id = ANY(%s)", (list(firm_ids),))
+        for fid, aum, size, buys, largest, geos, secs, spec, itype in cur.fetchall():
+            sp = None
+            if spec:
+                sp = "special" in str(spec).lower()
+            firm_f[fid] = {"aum": aum, "size": size, "acquisitions": buys, "largest_buy": largest,
+                           "geos": _as_list(geos), "sectors": _as_list(secs),
+                           "specialist": sp, "investor_type": itype}
+    if co_ids:
+        cur.execute("SELECT company_id, sector, description, investor_count "
+                    "FROM companies WHERE company_id = ANY(%s)", (list(co_ids),))
+        for cid, sec, desc, inv in cur.fetchall():
+            co_f[cid] = {"sectors": _as_list(sec), "mergr_desc": desc, "investor_count": inv}
+
+    def _merge(dst, src):
+        for k, val in (src or {}).items():
+            if val in (None, [], "") or dst.get(k) not in (None, [], ""):
+                continue
+            dst[k] = val
+
+    for b in buyers:
+        v = b.get("verify") or {}
+        f = {}
+        if v.get("kind") == "firm":
+            _merge(f, firm_f.get(v.get("match_id")))
+        if v.get("kind") == "company":
+            _merge(f, co_f.get(v.get("match_id")))
+        _merge(f, on_f.get(v.get("on_buyer_id")))   # ON employees/specialist fill gaps
+        b["facts"] = f
+    return buyers

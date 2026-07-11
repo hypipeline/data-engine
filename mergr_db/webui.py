@@ -698,9 +698,12 @@ def af_run(req: _AFRunReq):
 
     def worker():
         from acquirer_gen import unified as ag_uni
+        _af_progress_init(sid, ag_uni.DEFAULT_MODELS)
         c = POOL.getconn()
         try:
-            res = ag_uni.run_unified(c, target)
+            res = ag_uni.run_unified(
+                c, target,
+                progress_cb=lambda m, p, s, n: _af_progress_update(sid, m, p, s, n))
             res["search_id"] = sid
             cc = res.get("counts", {})
             with c.cursor() as cur:
@@ -716,6 +719,7 @@ def af_run(req: _AFRunReq):
                             (json.dumps({"status": "error", "error": str(e)[:400]}), sid))
             c.commit()
         finally:
+            _af_progress_clear(sid)
             POOL.putconn(c)
 
     _threading.Thread(target=worker, daemon=True).start()
@@ -730,9 +734,14 @@ def af_search(sid: int):
         return JSONResponse({"error": "not found"}, status_code=404)
     res = row["result"] or {}
     status = res.get("status") or "done"
-    return JSONResponse({"status": status, "search_id": row["id"],
-                         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                         "result": res})
+    out = {"status": status, "search_id": row["id"],
+           "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+           "result": res}
+    if status == "pending":                              # live per-call progress (in-memory, thread-safe)
+        pr = _af_progress_get(sid)
+        if pr:
+            out["progress"] = pr
+    return JSONResponse(out)
 
 
 @app.get("/acquirer-finder/searches")
@@ -751,6 +760,41 @@ import queue as _queue                               # noqa: E402
 import threading as _threading                       # noqa: E402
 from fastapi.responses import StreamingResponse      # noqa: E402
 from buyer_match import sync as bm_sync              # noqa: E402
+
+# ── Acquirer-Finder live progress ────────────────────────────────────────────
+# The unified run fires 3 models × 2 focused calls = 6 leaf calls. We track each in-memory
+# (keyed by search_id) so a poll can report which have landed. The run itself is always
+# persisted to acquirer_gen.searches, so this is purely for the progress UI — losing it on a
+# process restart is fine (the worker thread dies with the process anyway).
+_AF_PROGRESS = {}
+_AF_PROGRESS_LOCK = _threading.Lock()
+
+
+def _af_progress_init(sid, models):
+    parts = []
+    for (_p, m, mode) in models:
+        for part in (("acquirers", "deals") if mode == "split" else ("both",)):
+            parts.append({"model": m, "part": part, "status": "queued", "n": 0})
+    with _AF_PROGRESS_LOCK:
+        _AF_PROGRESS[sid] = parts
+
+
+def _af_progress_update(sid, model, part, status, n):
+    with _AF_PROGRESS_LOCK:
+        for e in _AF_PROGRESS.get(sid, []):
+            if e["model"] == model and e["part"] == part:
+                e["status"], e["n"] = status, n
+                break
+
+
+def _af_progress_get(sid):
+    with _AF_PROGRESS_LOCK:
+        return [dict(e) for e in _AF_PROGRESS.get(sid, [])] or None
+
+
+def _af_progress_clear(sid):
+    with _AF_PROGRESS_LOCK:
+        _AF_PROGRESS.pop(sid, None)
 
 
 @app.get("/buyer-match/sync-status")

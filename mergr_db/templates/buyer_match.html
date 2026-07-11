@@ -207,6 +207,28 @@
   .ai-deals { margin-top:5px; border-left:2px solid var(--border); padding-left:10px; }
   .ai-deal { font-size:11.5px; color:var(--muted); padding:1px 0; } .ai-deal a { color:var(--link); }
   .ai-deal .v { font-family:var(--mono); font-size:10px; color:#3f6b3a; } .ai-deal.faint { color:var(--faint); font-style:italic; }
+  /* AI Generate — live progress panel */
+  .aip { background:var(--bg-2); border:1px solid var(--border); border-radius:10px; padding:13px 15px; margin-bottom:14px; }
+  .aip-top { font-size:12.5px; font-weight:700; color:var(--text); }
+  .aip-hint { font-weight:400; color:var(--faint); font-size:11px; margin-left:6px; }
+  .aip-bar { height:6px; border-radius:4px; background:var(--bg-3); overflow:hidden; margin:9px 0 12px; }
+  .aip-fill { height:100%; background:var(--accent); border-radius:4px; transition:width .5s ease; }
+  .aip-row { display:flex; align-items:center; gap:8px; padding:3px 0; flex-wrap:wrap; }
+  .aip-model { font-size:11.5px; font-weight:700; color:var(--muted); min-width:132px; }
+  .aip-cell { font-size:10.5px; font-weight:600; border-radius:6px; padding:2px 8px; background:var(--bg-3); color:var(--faint); border:1px solid var(--border-2); }
+  .aip-cell.running { background:#eef4ff; color:#274b9a; border-color:#cdddf7; }
+  .aip-cell.done { background:#eaf7ee; color:#276749; border-color:#cdebd6; }
+  .aip-cell.error { background:#fde8e8; color:#b91c1c; border-color:#f5c2c2; }
+  .bmv-ts.aigold .cap { background:linear-gradient(90deg,#f0d271,#fde9a9); }
+  .bmv-ts.aigold { box-shadow:0 0 0 1px #f0d271 inset; }
+  .ai-src { font-size:11px; color:var(--faint); margin:2px 0 8px; }
+  /* AI Generate — recent-searches history */
+  .aih-list { margin-top:12px; display:flex; flex-direction:column; }
+  .aih-row { display:flex; align-items:baseline; gap:12px; padding:7px 8px; border-radius:7px; cursor:pointer; border-bottom:1px solid var(--border); }
+  .aih-row:hover { background:var(--bg-2); }
+  .aih-when { font-size:11px; color:var(--faint); font-family:var(--mono); min-width:82px; }
+  .aih-t { flex:1; min-width:0; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .aih-c { font-size:11px; color:var(--muted); white-space:nowrap; }
   .dh-nm .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
   .dh-nm .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
   .dh-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:2px 0 14px; padding-bottom:11px; border-bottom:1px solid var(--border); }
@@ -332,6 +354,12 @@
   <textarea class="bm-textarea" id="query" placeholder="e.g. UK-based lightning protection systems business. Revenue £3-5m, strong recurring maintenance contracts, serving construction and infrastructure sectors…"></textarea>
   <div style="margin-top:12px"><button class="search-btn" id="search-btn" onclick="doSearch()">Search Buyers</button></div>
 </div>
+
+<!-- AI Generate: recent past runs (shared history), only shown in AI mode -->
+<div class="bm-panel" id="ai-history" style="display:none"></div>
+
+<!-- AI Generate: live per-call progress while a run is in flight -->
+<div id="ai-progress" style="display:none"></div>
 
 <div class="meta-line" id="search-meta"></div>
 
@@ -791,6 +819,9 @@ function setMatchMode(m){
     m==='deal' ? 'Finds comparable historical deals, then the buyers who did them — plus discovery acquirers you don’t hold yet.'
   : m==='ai' ? 'Generates acquirers with gpt-5.5 + Claude Sonnet + deep-research, merges + grounds them, consensus-ranked. Paid (~$4), ~3 min; every run saved to history.'
   : 'Ranks buyers by similarity of their stated thesis to your target.';
+  // AI mode owns the history + progress panels; hide them in the other modes.
+  var histEl=document.getElementById('ai-history');
+  if(m==='ai'){ histEl.style.display=''; loadAiHistory(); } else { histEl.style.display='none'; document.getElementById('ai-progress').style.display='none'; }
 }
 function dhScore(s){ return (s==null?0:s).toFixed(3); }
 function dhVal(d){                 // deal_value is stored in MILLIONS of its currency
@@ -1015,6 +1046,7 @@ function renderTxnResults(data){
 }
 // ── AI Generate mode (Acquirer Finder, integrated) — shares the buyer-match tag cart ──
 var aiPollTimer=null, aiStart=0, aiData=null, aiSort='score';
+var BM_AI_ACTIVE='bm_ai_active';   // localStorage: id of an in-flight AI run, so we can reattach after a reload/close
 async function doAiSearch(){
   var q=document.getElementById('query').value.trim(); if(!q) return;
   currentView='search'; activeKeywords=[];
@@ -1029,17 +1061,80 @@ async function doAiSearch(){
     var resp=await fetch('/acquirer-finder/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target:q,input_mode:'typed'})});
     var d=await resp.json();
     if(d.error){ aiDone(); document.getElementById('search-meta').innerHTML='<span class="error-box">'+esc(d.error)+'</span>'; return; }
+    localStorage.setItem(BM_AI_ACTIVE, d.search_id);      // so a reload/close can reattach
     aiStart=Date.now(); pollAi(d.search_id);
   }catch(e){ aiDone(); document.getElementById('search-meta').innerHTML='<span class="error-box">'+esc(e&&e.message?e.message:e)+'</span>'; }
 }
-function aiDone(){ document.getElementById('search-btn').disabled=false; if(aiPollTimer){ clearTimeout(aiPollTimer); aiPollTimer=null; } }
+function aiDone(){ document.getElementById('search-btn').disabled=false; if(aiPollTimer){ clearTimeout(aiPollTimer); aiPollTimer=null; } document.getElementById('ai-progress').style.display='none'; }
+// Icon + label for one of the six leaf calls (model × {acquirers,deals})
+function aiCellIcon(s){ return s==='running'?'<span class="spin"></span>':s==='done'?'✓':s==='error'?'✗':'·'; }
+function aiModelShort(m){ return String(m).replace('claude-','').replace('-4-6',''); }
+function renderAiProgress(progress, secs){
+  var pr=progress||[];
+  var doneN=pr.filter(function(p){return p.status==='done'||p.status==='error';}).length;
+  var total=pr.length||6, pct=Math.round(doneN/total*100);
+  var groups={}, order=[];
+  pr.forEach(function(p){ if(!groups[p.model]){ groups[p.model]=[]; order.push(p.model); } groups[p.model].push(p); });
+  var rows=order.map(function(m){
+    var cells=groups[m].map(function(p){
+      var lbl=p.part==='acquirers'?'acquirers':(p.part==='deals'?'deals':'both');
+      var cnt=(p.status==='done'&&p.n)?' '+p.n:'';
+      return '<span class="aip-cell '+p.status+'">'+aiCellIcon(p.status)+' '+lbl+cnt+'</span>';
+    }).join('');
+    return '<div class="aip-row"><span class="aip-model">'+esc(aiModelShort(m))+'</span>'+cells+'</div>';
+  }).join('');
+  if(!rows){ rows='<div class="aip-row"><span class="aip-model">starting…</span></div>'; }
+  return '<div class="aip"><div class="aip-top"><span class="spin"></span> AI generating · '+doneN+'/'+total+' calls complete · '+secs+'s'
+    +'<span class="aip-hint">usually ~3 min · you can close this tab — the run finishes on the server and is saved to history</span></div>'
+    +'<div class="aip-bar"><div class="aip-fill" style="width:'+pct+'%"></div></div>'+rows+'</div>';
+}
 function pollAi(sid){
   fetch('/acquirer-finder/search/'+sid).then(function(r){return r.json();}).then(function(d){
-    if(d.status==='pending'){ var s=Math.round((Date.now()-aiStart)/1000); document.getElementById('search-meta').innerHTML='<span class="spin"></span> AI running 3 models in parallel… '+s+'s (usually ~3 min)'; aiPollTimer=setTimeout(function(){ pollAi(sid); },4000); return; }
-    aiDone();
-    if(d.status==='error'){ document.getElementById('search-meta').innerHTML='<span class="error-box">'+esc((d.result||{}).error||'run failed')+'</span>'; return; }
-    renderAiBuyers(d.result);
+    if(d.status==='pending'){
+      var s=Math.round((Date.now()-aiStart)/1000);
+      var ap=document.getElementById('ai-progress'); ap.style.display=''; ap.innerHTML=renderAiProgress(d.progress, s);
+      document.getElementById('search-meta').style.display='none';
+      aiPollTimer=setTimeout(function(){ pollAi(sid); },3000); return;
+    }
+    aiDone(); localStorage.removeItem(BM_AI_ACTIVE);
+    document.getElementById('search-meta').style.display='';
+    if(d.status==='error'){ document.getElementById('search-meta').innerHTML='<span class="error-box">'+esc((d.result||{}).error||'run failed')+'</span>'; loadAiHistory(); return; }
+    renderAiBuyers(d.result); loadAiHistory();
   }).catch(function(){ aiPollTimer=setTimeout(function(){ pollAi(sid); },5000); });
+}
+// ── AI history: browse + reopen past runs (shared with the Acquirer-Finder page) ──
+function loadAiHistory(){
+  var box=document.getElementById('ai-history'); if(!box) return;
+  fetch('/acquirer-finder/searches').then(function(r){return r.json();}).then(function(d){
+    var rows=d.searches||[];
+    if(!rows.length){ box.innerHTML='<div class="bm-h">Recent AI searches</div><span class="empty-box">No AI searches yet — run one above.</span>'; return; }
+    box.innerHTML='<details class="bm-details"><summary>Recent AI searches ('+rows.length+') · total spend $'+Number(d.total_spend||0).toFixed(2)+'</summary>'
+      +'<div class="aih-list">'+rows.map(aiHistRow).join('')+'</div></details>';
+  }).catch(function(){});
+}
+function aiHistRow(s){
+  var dt=s.created_at?new Date(s.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';
+  return '<div class="aih-row" onclick="loadAiSearch('+s.id+')" title="Reopen this run and tag from it">'
+    +'<span class="aih-when">'+esc(dt)+'</span>'
+    +'<span class="aih-t">'+esc((s.target||'').replace(/\s+/g,' ').slice(0,120))+'</span>'
+    +'<span class="aih-c">'+(s.n_acquirers||0)+' buyers · '+(s.n_deals||0)+' deals · $'+Number(s.total_cost||0).toFixed(2)+'</span></div>';
+}
+function loadAiSearch(id){
+  var meta=document.getElementById('search-meta'); meta.style.display=''; meta.innerHTML='<span class="spin"></span> loading run #'+id+'…';
+  document.getElementById('results').innerHTML='';
+  fetch('/acquirer-finder/search/'+id).then(function(r){return r.json();}).then(function(d){
+    if(d.status==='done'){ renderAiBuyers(d.result); }
+    else if(d.status==='pending'){ aiStart=d.created_at?Date.parse(d.created_at):Date.now(); localStorage.setItem(BM_AI_ACTIVE,id); pollAi(id); }
+    else { meta.innerHTML='<span class="error-box">'+esc((d.result||{}).error||'run failed')+'</span>'; }
+  }).catch(function(e){ meta.innerHTML='<span class="error-box">'+esc(e&&e.message?e.message:e)+'</span>'; });
+}
+// Reattach to an AI run still in flight after a reload / reopened tab.
+function resumeAiIfActive(){
+  var id=localStorage.getItem(BM_AI_ACTIVE); if(!id) return;
+  fetch('/acquirer-finder/search/'+id).then(function(r){return r.json();}).then(function(d){
+    if(d.status==='pending'){ setMatchMode('ai'); aiStart=d.created_at?Date.parse(d.created_at):Date.now(); document.getElementById('search-btn').disabled=true; pollAi(id); }
+    else { localStorage.removeItem(BM_AI_ACTIVE); }
+  }).catch(function(){});
 }
 function registerAiBuyer(b){ if(!b._selid) return; var v=b.verify||{};
   if(v.on_buyer_id) bmRowById[b._selid]={id:v.on_buyer_id, name:b.name, website:b.website};
@@ -1047,20 +1142,61 @@ function registerAiBuyer(b){ if(!b._selid) return; var v=b.verify||{};
 }
 function aiBadge(v){ if(v.status==='in_on') return '<span class="ai-b on">✓ ON buyer</span>'; if(v.status==='in_mergr') return '<span class="ai-b mergr">Mergr '+esc(v.kind||'')+'</span>'; return '<span class="ai-b new">net-new</span>'; }
 function aiWhy(b){ var p=[]; if(b.n_rec)p.push((b.n_rec>=2?'★ ':'')+b.n_rec+'/3 model'+(b.n_rec===1?'':'s')); if(b.n_deals)p.push('<b>'+b.n_deals+'</b> precedent deal'+(b.n_deals===1?'':'s')); if((b.verify||{}).status==='in_on')p.push('ON buyer'); return p.join(' · '); }
+// URL + always-a-link helpers for AI buyers
+function aiUrl(u){ return String(u).indexOf('http')===0?u:'http://'+u; }
+function aiSiteLink(b){
+  if(!b.website) return '<span class="dh-notin">no website</span>';
+  var d=String(b.website).replace(/^https?:\/\//,'').replace(/\/$/,'');
+  return '<a class="site-link" href="'+esc(aiUrl(b.website))+'" target="_blank" rel="noopener">'+esc(d)+' &#8599;</a>';
+}
+function aiOnLink(v){
+  if(v.on_buyer_id) return '<a class="on-link" href="'+ON_BASE+'/dashboard/buyers/'+v.on_buyer_id+'/edit" target="_blank" rel="noopener">ON record &#8599;</a>';
+  if(v.status==='in_mergr'&&v.match_id) return '<a class="bmv-mlink" href="/mergr/'+(v.kind==='company'?'company':'firm')+'/'+v.match_id+'" target="_blank" rel="noopener">Mergr &#8599;</a>';
+  return '';
+}
+function aiFactCells(b){
+  var f=b.facts||{}, out=[];
+  function cell(v,l,cls){ return '<div class="f"><div class="v'+(cls?' '+cls:'')+'">'+v+'</div><div class="l">'+l+'</div></div>'; }
+  if(f.size) out.push(cell(esc(f.size),'Size tier','gold'));
+  if(f.aum) out.push(cell(fmtAum(f.aum),'AUM'));
+  if(f.acquisitions) out.push(cell(Number(f.acquisitions).toLocaleString(),'Acquisitions'));
+  if(f.largest_buy) out.push(cell(esc(f.largest_buy),'Largest deal'));
+  out.push(cell(f.employees?Number(f.employees).toLocaleString():'<span class="faint">—</span>','Employees'));
+  out.push(cell((b.n_rec>=2?'★ ':'')+(b.n_rec||0)+'/3','AI models'));
+  if(b.n_deals) out.push(cell(b.n_deals,'Precedent deals'));
+  return out.join('');
+}
+function aiDealLine(d){
+  var m=[d.year,d.value].filter(Boolean).map(esc).join(' · ');
+  var t=d.source_url?'<a href="'+esc(d.source_url)+'" target="_blank" rel="noopener">'+esc(d.target||'?')+'</a>':esc(d.target||'?');
+  return '<div class="ai-deal">→ '+t+(m?' <span class="v">'+m+'</span>':'')+'</div>';
+}
 function aiBuyerCard(b,i){
-  var v=b.verify||{}, on=bmSelHas(b._selid);
-  var nm=b.website?'<a href="'+(String(b.website).indexOf('http')===0?esc(b.website):'http://'+esc(b.website))+'" target="_blank" rel="noopener">'+esc(b.name)+'</a>':esc(b.name);
-  var links=[]; if(b.website)links.push('<span class="site">'+esc(String(b.website).replace(/^https?:\/\//,'').replace(/\/$/,''))+'</span>');
-  if(v.on_buyer_id)links.push('<a class="on-link" href="'+ON_BASE+'/dashboard/buyers/'+v.on_buyer_id+'/edit" target="_blank" rel="noopener">ON record ↗</a>');
-  else if(v.status==='in_mergr'&&v.match_id)links.push('<a class="on-link" href="/mergr/'+(v.kind==='company'?'company':'firm')+'/'+v.match_id+'" target="_blank" rel="noopener">Mergr ↗</a>');
-  var deals=(b.deals&&b.deals.length)?'<div class="ai-deals">'+b.deals.slice(0,5).map(function(d){ var m=[d.year,d.value].filter(Boolean).map(esc).join(' · '); return '<div class="ai-deal">→ '+(d.source_url?'<a href="'+esc(d.source_url)+'" target="_blank" rel="noopener">'+esc(d.target||'?')+'</a>':esc(d.target||'?'))+(m?' <span class="v">'+m+'</span>':'')+'</div>'; }).join('')+(b.deals.length>5?'<div class="ai-deal faint">+'+(b.deals.length-5)+' more</div>':'')+'</div>':'';
+  var v=b.verify||{}, on=bmSelHas(b._selid), f=b.facts||{};
+  var mega = f.size && /mega/i.test(f.size);
+  var cls = mega ? '' : (v.status==='in_mergr'&&v.kind==='company' ? 'co' : (v.status==='none' ? 'bare' : ''));
+  var nm='<a href="'+esc(b.website?aiUrl(b.website):'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>';
+  var badges=aiBadge(v)+(b.both?'<span class="ai-b gold">★ rec+proven</span>':'')
+    +(f.specialist===true?'<span class="bmv-spec-badge">Specialist</span>':'')
+    +(b.type?'<span class="ai-b new">'+esc(b.type)+'</span>':'');
   var tag=b.website?'<button class="bmv-tagbtn'+(on?' on':'')+'" data-selid="'+esc(b._selid)+'" onclick="bmSelToggle(\''+esc(b._selid)+'\')">'+(on?'✓ In tag':'+ Tag')+'</button>':'<span class="dh-noweb">⚑ no site</span>';
-  return '<div class="ai-card'+(b.both?' gold':'')+'"><span class="dh-rank">#'+(i+1)+'</span><div style="flex:1;min-width:0">'
-    +'<div class="dh-nm">'+nm+aiBadge(v)+(b.type?'<span class="ai-b new">'+esc(b.type)+'</span>':'')+(b.both?'<span class="ai-b gold">★ recommended + proven</span>':'')+'</div>'
-    +'<div class="ai-why">'+aiWhy(b)+(b.rec_sources&&b.rec_sources.length?' <span class="site">— '+esc(b.rec_sources.join(', '))+'</span>':'')+'</div>'
-    +(links.length?'<div class="dh-site">'+links.join(' · ')+'</div>':'')
-    +(b.rationale?'<div class="subdesc">'+esc(b.rationale)+'</div>':'')
-    +deals+'</div>'+tag+'</div>';
+  var rationale=b.rationale?'<div class="blk"><div class="l">Why — AI</div><p>'+esc(b.rationale)+'</p></div>':'';
+  var src=(b.rec_sources&&b.rec_sources.length)?'<div class="ai-src">Recommended by '+esc(b.rec_sources.join(', '))+'</div>':'';
+  var deals=(b.deals&&b.deals.length)?'<div class="blk"><div class="l">Precedent deals ('+b.deals.length+')</div>'
+    +b.deals.slice(0,6).map(aiDealLine).join('')+(b.deals.length>6?'<div class="ai-deal faint">+'+(b.deals.length-6)+' more</div>':'')+'</div>':'';
+  var sectors=(f.sectors&&f.sectors.length)?'<div class="blk"><div class="l">Sectors</div><div class="kw-wrap">'+f.sectors.slice(0,8).map(pillHtml).join('')+'</div></div>':'';
+  var geos=(f.geos&&f.geos.length)?'<div class="blk"><div class="l">Geography</div><div>'+geoChips(f.geos,'',12)+'</div></div>':'';
+  var mdesc=f.mergr_desc?'<div class="blk"><div class="l">Mergr profile</div><p>'+esc(String(f.mergr_desc).slice(0,260))+'</p></div>':'';
+  var side=sectors+geos+mdesc;
+  return '<div class="bmv-ts '+cls+(b.both?' aigold':'')+'"><div class="cap"></div><div class="in">'
+    + '<div class="hd"><div>'
+    +   '<div class="nm bmv-serif"><span class="bmv-rank">#'+(i+1)+'</span> '+nm+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+badges+'</div>'
+    +   '<div class="dom">'+aiSiteLink(b)+(aiOnLink(v)?' <span class="on-sep">&middot;</span> '+aiOnLink(v):'')+'</div>'
+    + '</div><div style="text-align:right;white-space:nowrap">'+tag+'</div></div>'
+    + '<div class="facts">'+aiFactCells(b)+'</div>'
+    + '<div class="cols"><div class="main">'+rationale+src+deals+'</div>'
+    + '<div class="side">'+(side||'<span class="empty-box">No extra profile data</span>')+'</div></div>'
+    + '</div></div>';
 }
 function aiSorted(){ var b=(aiData.buyers||[]).slice(), r={in_on:2,in_mergr:1,none:0};
   if(aiSort==='consensus')b.sort(function(x,y){return (y.n_rec-x.n_rec)||(y.score-x.score);});
@@ -1083,7 +1219,7 @@ function renderAiBuyers(res){
   document.getElementById('results').innerHTML=warn+tools+'<div id="ai-list"></div>';
   paintAi();
 }
-function paintAi(){ var el=document.getElementById('ai-list'); if(el){ el.innerHTML=aiSorted().map(aiBuyerCard).join(''); } updateCartBar(); }
+function paintAi(){ var el=document.getElementById('ai-list'); if(el){ el.innerHTML='<div class="bmv-sheets">'+aiSorted().map(aiBuyerCard).join('')+'</div>'; } updateCartBar(); }
 async function doTxnSearch(){
   var q = document.getElementById('query').value.trim();
   if(!q) return;
@@ -1468,5 +1604,6 @@ function bmSync(){
 }
 bmSyncStatus();
 updateCartBar();   // show the tag cart if a selection persisted from a previous screen
+resumeAiIfActive();   // if an AI run was still in flight when the tab closed/reloaded, pick it back up
 </script>
 {% endblock %}
