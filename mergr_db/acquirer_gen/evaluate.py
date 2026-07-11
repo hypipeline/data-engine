@@ -17,6 +17,8 @@ from acquirer_gen import verify
 
 # (provider, model, {web}) — Claude dropped (too expensive at web-search input-token inflation).
 MATRIX = [
+    ("anthropic",  "claude-sonnet-4-6",   {"web": True}),
+    ("anthropic",  "claude-opus-4-8",     {"web": True}),
     ("openai",     "gpt-4o",              {"web": True}),
     ("perplexity", "sonar",               {"web": True}),
     ("perplexity", "sonar-pro",           {"web": True}),

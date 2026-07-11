@@ -13,11 +13,12 @@ PRICING = {
     "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.025},
     "gpt-4o":            {"in": 2.5,  "out": 10.0, "search": 0.025},
     "gpt-4.1":           {"in": 2.0,  "out": 8.0,  "search": 0.025},
-    # Perplexity Sonar (per-request search fee)
-    "sonar":             {"in": 1.0,  "out": 1.0,  "search": 0.005},
-    "sonar-pro":         {"in": 3.0,  "out": 15.0, "search": 0.008},
-    "sonar-reasoning-pro": {"in": 2.0, "out": 8.0, "search": 0.008},
-    "sonar-deep-research": {"in": 2.0, "out": 8.0, "search": 0.005},  # + reasoning tokens; cost approx/under-counted
+    # Perplexity Sonar — sonar/sonar-pro bill a FLAT per-request search fee by context tier (NOT per query),
+    # so 'search' here is charged once/request (see cost_usd). deep-research genuinely bills per search.
+    "sonar":             {"in": 1.0,  "out": 1.0,  "search": 0.012},
+    "sonar-pro":         {"in": 3.0,  "out": 15.0, "search": 0.014},
+    "sonar-reasoning-pro": {"in": 2.0, "out": 8.0, "search": 0.014},
+    "sonar-deep-research": {"in": 2.0, "out": 8.0, "search": 0.005},  # per-search (search-heavy) + reasoning tokens
     # DeepSeek (knowledge-only)
     "deepseek-chat":     {"in": 0.27, "out": 1.10, "search": 0.0},
     "deepseek-reasoner": {"in": 0.55, "out": 2.19, "search": 0.0},
@@ -30,11 +31,20 @@ def rate(model):
     return PRICING.get(model, DEFAULT)
 
 
+# Models that bill a FLAT per-request search fee (not per query) — we report many "searches" for depth,
+# but they're one billable request. deep-research is the exception (genuinely per-search).
+_FLAT_SEARCH = {"sonar", "sonar-pro", "sonar-reasoning-pro"}
+
+
 def cost_usd(model, usage):
-    p = rate(model)
+    base = model.replace(" (split)", "")
+    p = rate(base)
+    searches = usage.get("web_searches", 0)
+    if base in _FLAT_SEARCH:
+        searches = 1 if searches else 0          # per-request, not per-query
     return round(
         (usage.get("input_tokens", 0) / 1e6) * p["in"]
         + (usage.get("output_tokens", 0) / 1e6) * p["out"]
-        + usage.get("web_searches", 0) * p["search"],
+        + searches * p["search"],
         6,
     )
