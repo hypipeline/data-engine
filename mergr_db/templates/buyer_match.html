@@ -493,6 +493,7 @@ function updateCartBar(){
   document.getElementById('bm-cart').style.display = n>0 ? 'flex' : 'none';
   updateSelCount();   // keep the "N / M selected" view indicator live on every selection change
   updateAiSelCount(); // same, for the AI Generate results
+  updateDhSelCount(); // same, for the Deal-history results
 }
 function bmSelClearAll(){ if(confirm('Clear the tag selection ('+bmSelCount()+' buyers)?')){ bmSelSave({}); updateCartBar(); repaintSelection(); } }
 function repaintSelection(){ if(currentView==='keywords') paintKeywordBuyers(); else if(allResults.length) paintResults(); }
@@ -886,11 +887,24 @@ var dhView = 'cards';       // 'cards' | 'compact'
 var dhAutoOwners = true;    // ON by default: tagging an acquirer also tags its PE owner(s)
 var dhTierFilter = '';      // '' both | 'on' in-ON-only | 'disc' discovery-only
 var dhKindFilter = '';      // '' both | 'firm' platforms | 'company' add-ons
+var dhSelFilter = '';       // '' all | 'sel' selected (in tag) | 'un' not selected
 function dhRepaint(){ if(dhData) renderTxnResults(dhData); }
 function dhSetView(v){ dhView=v; dhRepaint(); }
 function dhSetAutoOwners(v){ dhAutoOwners=v; }
 function dhSetTier(v){ dhTierFilter=v; dhRepaint(); }
 function dhSetKind(v){ dhKindFilter=v; dhRepaint(); }
+function dhSetSel(v){ dhSelFilter=v; dhRepaint(); }
+// selection membership for a deal-history entity (discovery keyed by _selid, ON buyer by id)
+function dhSelId(e){ return e.discovery ? e._selid : String(e.id); }
+function dhSelMatch(e){ return dhSelFilter==='' ? true : (dhSelFilter==='sel' ? bmSelHas(dhSelId(e)) : !bmSelHas(dhSelId(e))); }
+// "N / M selected" indicator over the tier/kind-filtered set (denominator stable across the selection filter)
+function updateDhSelCount(){
+  var el=document.getElementById('dh-selcount'); if(!el||!dhData) return;
+  var base=(dhData.on||[]).concat(dhData.discovery||[]).filter(dhKindMatch);
+  if(!base.length){ el.textContent=''; return; }
+  var n=base.filter(function(e){ return bmSelHas(dhSelId(e)); }).length;
+  el.textContent = n + ' / ' + base.length + ' selected';
+}
 // Tag an acquirer; when "Contact PE owners" is on, also tag/untag its PE owner(s) to match.
 function dhTagWithOwners(selid){
   bmSelToggle(selid);
@@ -979,6 +993,13 @@ function dhToolbar(){
     +   '<option value="firm"'+(dhKindFilter==='firm'?' selected':'')+'>PE firms (platforms)</option>'
     +   '<option value="company"'+(dhKindFilter==='company'?' selected':'')+'>Companies (add-ons)</option>'
     + '</select>'
+    + '<span class="bmv-vlabel">Selection</span>'
+    + '<select class="bmv-specsel" onchange="dhSetSel(this.value)">'
+    +   '<option value=""'+(dhSelFilter===''?' selected':'')+'>All</option>'
+    +   '<option value="sel"'+(dhSelFilter==='sel'?' selected':'')+'>Selected</option>'
+    +   '<option value="un"'+(dhSelFilter==='un'?' selected':'')+'>Not selected</option>'
+    + '</select>'
+    + '<span class="bmv-selcount" id="dh-selcount" title="Acquirers selected (in tag) out of those shown in this view"></span>'
     + '<label class="dh-opt" title="When on, tagging an acquirer also tags its PE owner(s)"><input type="checkbox"'+(dhAutoOwners?' checked':'')+' onchange="dhSetAutoOwners(this.checked)"> Contact PE owners</label>'
     + '</div>';
 }
@@ -1041,11 +1062,12 @@ function renderTxnResults(data){
   meta.style.display='';
   meta.innerHTML = '<b>'+on.length+'</b> of your buyers &middot; <b>'+disc.length+'</b> discovery acquirer'+(disc.length===1?'':'s')
     + ' across <b>'+(data.txn_count||0)+'</b> comparable deals';
-  var onF = on.filter(dhKindMatch), discF = disc.filter(dhKindMatch);
+  var onF = on.filter(dhKindMatch).filter(dhSelMatch), discF = disc.filter(dhKindMatch).filter(dhSelMatch);
   var html = dhToolbar();
   if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', onF, false, 'None of your ON buyers match.');
   if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', discF, true, 'No discovery acquirers match.');
   document.getElementById('results').innerHTML = html;
+  updateDhSelCount();
   updateCartBar();
 }
 // ── AI Generate mode (Acquirer Finder, integrated) — shares the buyer-match tag cart ──
@@ -1227,8 +1249,8 @@ function renderAiBuyers(res){
     +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.verify.status===\'in_on\'&&b.website;}))">ON</button> '
     +'<button class="btn" onclick="aiTagMany(aiData.buyers.filter(function(b){return b.both&&b.website;}))">★rec+proven</button>'
     +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
-    +'<button data-v="sheet" class="'+(aiView==='sheet'?'active':'')+'" onclick="setAiView(\'sheet\')" title="Full tearsheet per buyer">Tearsheet</button>'
-    +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select">Condensed</button></div></div>';
+    +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Condensed</button>'
+    +'<button data-v="sheet" class="'+(aiView==='sheet'?'active':'')+'" onclick="setAiView(\'sheet\')" title="Full tearsheet per buyer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg>Tearsheet</button></div></div>';
   document.getElementById('results').innerHTML=warn+tools+'<div id="ai-list"></div>';
   paintAi();
 }
