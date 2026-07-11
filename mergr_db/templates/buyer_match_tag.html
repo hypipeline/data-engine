@@ -46,6 +46,7 @@
   .tgeo-none { margin:8px 0 4px; font-size:11.5px; color:var(--faint); font-style:italic; }
   .tag-t th.selc, .tag-t td.selc { width:34px; text-align:center; padding-left:10px; }
   .tag-t td.selc input, .tag-t th.selc input { cursor:pointer; width:15px; height:15px; }
+  mark.fmark { background:#a7f3d0; color:var(--text); padding:0 1px; border-radius:2px; }   /* Filter-keyword matches */
   .tag-t td.num { font-family:var(--mono); text-align:right; white-space:nowrap; }
   .tag-t td.num.gold { color:#92400e; font-weight:700; }
   .tag-t .nm { font-weight:700; } .tag-t .nm a { color:var(--link); }
@@ -164,6 +165,36 @@ var marked = new Set();   // transient bulk-select (checkboxes) — the storage 
 function rowKey(r){ return String(r._k!=null ? r._k : r.id); }
 
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Highlight the active Filter keyword(s) wherever they appear in a freshly rendered container.
+function markFilter(container, query){
+  if(!container) return;
+  query = (query||'').trim();
+  if(!query) return;
+  var words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    .map(function(w){ return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); });
+  if(!words.length) return;
+  var re = new RegExp('('+words.join('|')+')','gi');
+  var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, { acceptNode:function(n){
+    if(!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+    for(var p=n.parentNode; p && p!==container; p=p.parentNode){
+      var t=p.nodeName; if(t==='MARK'||t==='SCRIPT'||t==='STYLE') return NodeFilter.FILTER_REJECT;
+    }
+    re.lastIndex=0; return re.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+  }});
+  var nodes=[], n; while((n=walker.nextNode())) nodes.push(n);
+  nodes.forEach(function(node){
+    re.lastIndex=0;
+    var text=node.nodeValue, frag=document.createDocumentFragment(), last=0, m;
+    while((m=re.exec(text))){
+      if(m.index>last) frag.appendChild(document.createTextNode(text.slice(last,m.index)));
+      var mk=document.createElement('mark'); mk.className='fmark'; mk.textContent=m[0];
+      frag.appendChild(mk); last=m.index+m[0].length;
+      if(re.lastIndex===m.index) re.lastIndex++;
+    }
+    if(last<text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(_){ return {}; } }
 function save(o){ localStorage.setItem(KEY, JSON.stringify(o)); }
 function shortUrl(u){ return String(u||'').replace(/^https?:\/\//,'').replace(/\/$/,''); }
@@ -376,6 +407,7 @@ function render(){
     return '<tbody>'+main+desc+'</tbody>';
   }).join('');
   body.innerHTML = '<div class="tag-twrap"><table class="tag-t"><thead><tr>'+head+'</tr></thead>'+trs+'</table></div>';
+  markFilter(body, (document.getElementById('f-txt')||{}).value);
   var noWeb = rows.filter(function(r){ return !(r.website||'').trim(); }).length;
   document.getElementById('tag-note').textContent = 'Export = JSON array of the ON website URLs for the '
     + rows.length + ' buyer' + (rows.length===1?'':'s') + ' shown (after filters)'

@@ -101,6 +101,7 @@
   .detail-grid dt { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin-bottom:2px; }
   .detail-grid dd { margin:0 0 10px; color:var(--text); line-height:1.55; font-size:13px; }
   mark { background:#fff3b0; color:var(--text); padding:0 1px; border-radius:2px; }
+  mark.fmark { background:#a7f3d0; }   /* Filter-keyword matches — green, distinct from query yellow */
 
   .kw-list { max-height:220px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; background:var(--bg-2); }
   .bm-details summary { cursor:pointer; font-weight:700; font-size:13px; color:var(--text); }
@@ -541,6 +542,38 @@ function highlight(escaped, words){
   });
   return escaped;
 }
+// Post-render pass: highlight the active Filter keyword(s) wherever they appear in a freshly
+// rendered container. Substring match (mirrors the filter), skips text already inside a <mark>
+// (search-query highlight) / script / style so nothing is double-wrapped or broken.
+function markFilter(container, query){
+  if(!container) return;
+  query = (query||'').trim();
+  if(!query) return;
+  var words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    .map(function(w){ return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); });
+  if(!words.length) return;
+  var re = new RegExp('('+words.join('|')+')','gi');
+  var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, { acceptNode:function(n){
+    if(!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+    for(var p=n.parentNode; p && p!==container; p=p.parentNode){
+      var t=p.nodeName; if(t==='MARK'||t==='SCRIPT'||t==='STYLE') return NodeFilter.FILTER_REJECT;
+    }
+    re.lastIndex=0; return re.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+  }});
+  var nodes=[], n; while((n=walker.nextNode())) nodes.push(n);
+  nodes.forEach(function(node){
+    re.lastIndex=0;
+    var text=node.nodeValue, frag=document.createDocumentFragment(), last=0, m;
+    while((m=re.exec(text))){
+      if(m.index>last) frag.appendChild(document.createTextNode(text.slice(last,m.index)));
+      var mk=document.createElement('mark'); mk.className='fmark'; mk.textContent=m[0];
+      frag.appendChild(mk); last=m.index+m[0].length;
+      if(re.lastIndex===m.index) re.lastIndex++;
+    }
+    if(last<text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
 
 function pillHtml(k){
   var c = keywordCounts[k]||0;
@@ -797,6 +830,7 @@ function paintResults(){
     more = '<div class="bmv-more"><div class="bmv-count">Showing all '+list.length+filterNote()+' result'+(list.length===1?'':'s')+'</div></div>';
   }
   document.getElementById('results').innerHTML = renderBuyers(slice, true, true) + more;
+  markFilter(document.getElementById('results'), txtFilter);
   updateCartBar();
 }
 function loadMore(){ displayed = Math.min(displayed+PAGE_SIZE, curResults().length); paintResults(); }
@@ -804,7 +838,8 @@ function paintKeywordBuyers(){
   var list = baseKw();
   if(selFilter) list = list.filter(selMatch);
   if(txtFilter) list = list.filter(function(r){ return bmTextMatch(r, txtFilter); });
-  document.getElementById('results').innerHTML = renderBuyers(list, false, true); updateCartBar();
+  document.getElementById('results').innerHTML = renderBuyers(list, false, true);
+  markFilter(document.getElementById('results'), txtFilter); updateCartBar();
 }
 
 function buildCluster(){
@@ -1109,6 +1144,7 @@ function dhPaintSections(){
   if(dhTierFilter!=='disc') html += dhSection('Your buyers — ranked by comparable deals', onF, false, 'None of your ON buyers match.');
   if(dhTierFilter!=='on')   html += dhSection('Discovery — strong acquirers you don’t hold yet', discF, true, 'No discovery acquirers match.');
   el.innerHTML = html;
+  markFilter(el, dhTxtFilter);
   updateDhSelCount();
   updateCartBar();
 }
@@ -1315,6 +1351,7 @@ function paintAi(){
   var rows=aiVisible();
   if(!rows.length){ el.innerHTML='<div class="empty-box" style="margin-top:14px">No buyers match this filter.</div>'; updateCartBar(); return; }
   el.innerHTML = aiView==='table' ? aiTable(rows) : '<div class="bmv-sheets">'+rows.map(aiBuyerCard).join('')+'</div>';
+  markFilter(el, aiTxtFilter);
   updateCartBar();
 }
 // Condensed, multi-select table view — mirrors the Thesis table (tick-box + select-all).
