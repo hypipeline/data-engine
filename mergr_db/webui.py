@@ -734,6 +734,17 @@ def af_search(sid: int):
         return JSONResponse({"error": "not found"}, status_code=404)
     res = row["result"] or {}
     status = res.get("status") or "done"
+    # Re-enrich cached buyers on load so replayed / historical searches always show current ON
+    # profile data (facts + on_record) — runs stored before these fields existed had neither.
+    if status != "pending" and res.get("buyers"):
+        conn = POOL.getconn()
+        try:
+            from acquirer_gen import verify
+            verify.enrich_buyers(conn, res["buyers"])
+        except Exception:                                # noqa: BLE001 — enrichment is best-effort
+            conn.rollback()
+        finally:
+            POOL.putconn(conn)
     out = {"status": status, "search_id": row["id"],
            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
            "result": res}
