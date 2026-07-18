@@ -1261,13 +1261,21 @@ function aiOnLink(v){
   return '';
 }
 function aiFactCells(b){
-  var f=b.facts||{}, out=[];
+  var f=b.facts||{}, orr=b.on_record, out=[];
   function cell(v,l,cls){ return '<div class="f"><div class="v'+(cls?' '+cls:'')+'">'+v+'</div><div class="l">'+l+'</div></div>'; }
-  if(f.size) out.push(cell(esc(f.size),'Size tier','gold'));
-  if(f.aum) out.push(cell(fmtAum(f.aum),'AUM'));
-  if(f.acquisitions) out.push(cell(Number(f.acquisitions).toLocaleString(),'Acquisitions'));
-  if(f.largest_buy) out.push(cell(esc(f.largest_buy),'Largest deal'));
-  out.push(cell(f.employees?Number(f.employees).toLocaleString():'<span class="faint">—</span>','Employees'));
+  if(orr){                                   // existing ON buyer — mirror the Thesis tearsheet facts
+    if(orr.firm_size) out.push(cell(esc(orr.firm_size),'Size tier','gold'));
+    if(orr.firm_aum) out.push(cell(fmtAum(orr.firm_aum),'AUM'));
+    if(orr.firm_acquisitions) out.push(cell(Number(orr.firm_acquisitions).toLocaleString(),'Acquisitions'));
+    if(orr.firm_largest) out.push(cell(esc(orr.firm_largest),'Largest deal'));
+    out.push(cell(orr.no_of_employees?Number(orr.no_of_employees).toLocaleString():'<span class="faint">—</span>','Employees'));
+  } else {
+    if(f.size) out.push(cell(esc(f.size),'Size tier','gold'));
+    if(f.aum) out.push(cell(fmtAum(f.aum),'AUM'));
+    if(f.acquisitions) out.push(cell(Number(f.acquisitions).toLocaleString(),'Acquisitions'));
+    if(f.largest_buy) out.push(cell(esc(f.largest_buy),'Largest deal'));
+    out.push(cell(f.employees?Number(f.employees).toLocaleString():'<span class="faint">—</span>','Employees'));
+  }
   out.push(cell((b.n_rec>=2?'★ ':'')+(b.n_rec||0)+'/3','AI models'));
   if(b.n_deals) out.push(cell(b.n_deals,'Precedent deals'));
   return out.join('');
@@ -1278,29 +1286,42 @@ function aiDealLine(d){
   return '<div class="ai-deal">→ '+t+(m?' <span class="v">'+m+'</span>':'')+'</div>';
 }
 function aiBuyerCard(b,i){
-  var v=b.verify||{}, on=bmSelHas(b._selid), f=b.facts||{};
-  var mega = f.size && /mega/i.test(f.size);
+  var v=b.verify||{}, on=bmSelHas(b._selid), f=b.facts||{}, orr=b.on_record;
+  var sizeStr = orr ? orr.firm_size : f.size;
+  var mega = sizeStr && /mega/i.test(sizeStr);
   var cls = mega ? '' : (v.status==='in_mergr'&&v.kind==='company' ? 'co' : (v.status==='none' ? 'bare' : ''));
   var nm='<a href="'+esc(b.website?aiUrl(b.website):'#')+'" target="_blank" rel="noopener">'+esc(b.name||'(unnamed)')+'</a>';
-  var badges=aiBadge(v)+(b.both?'<span class="ai-b gold">★ rec+proven</span>':'')
-    +(f.specialist===true?'<span class="bmv-spec-badge">Specialist</span>':'')
+  var specB = orr ? specBadge(orr) : (f.specialist===true?'<span class="bmv-spec-badge">Specialist</span>':'');
+  var badges=aiBadge(v)+(b.both?'<span class="ai-b gold">★ rec+proven</span>':'')+specB
     +(b.type?'<span class="ai-b new">'+esc(b.type)+'</span>':'');
   var tag=b.website?'<button class="bmv-tagbtn'+(on?' on':'')+'" data-selid="'+esc(b._selid)+'" onclick="bmSelToggle(\''+esc(b._selid)+'\')">'+(on?'✓ In tag':'+ Tag')+'</button>':'<span class="dh-noweb">⚑ no site</span>';
+  var cons = orr ? '<div class="cons">'+contactsInline(orr)+'</div>' : '';
   var rationale=b.rationale?'<div class="blk"><div class="l">Why — AI</div><p>'+esc(b.rationale)+'</p></div>':'';
   var src=(b.rec_sources&&b.rec_sources.length)?'<div class="ai-src">Recommended by '+esc(b.rec_sources.join(', '))+'</div>':'';
   var deals=(b.deals&&b.deals.length)?'<div class="blk"><div class="l">Precedent deals ('+b.deals.length+')</div>'
     +b.deals.slice(0,6).map(aiDealLine).join('')+(b.deals.length>6?'<div class="ai-deal faint">+'+(b.deals.length-6)+' more</div>':'')+'</div>':'';
-  var sectors=(f.sectors&&f.sectors.length)?'<div class="blk"><div class="l">Sectors</div><div class="kw-wrap">'+f.sectors.slice(0,8).map(pillHtml).join('')+'</div></div>':'';
-  var geos=(f.geos&&f.geos.length)?'<div class="blk"><div class="l">Geography</div><div>'+geoChips(f.geos,'',12)+'</div></div>':'';
-  var mdesc=f.mergr_desc?'<div class="blk"><div class="l">Mergr profile</div><p>'+esc(String(f.mergr_desc).slice(0,260))+'</p></div>':'';
-  var side=sectors+geos+mdesc;
+  // Existing ON buyer → mirror the Thesis tearsheet (description, thesis, sectors, tags, regions, acquired-in).
+  var onDesc = (orr&&orr.description)?'<div class="blk"><div class="l">Description</div><p>'+esc(orr.description)+'</p></div>':'';
+  var onThesis = (orr&&orr.investment_thesis)?'<div class="blk"><div class="l">Investment thesis</div><p>'+esc(orr.investment_thesis)+'</p></div>':'';
+  var side;
+  if(orr){
+    side = '<div class="blk"><div class="l">Sectors</div>'+(keywordPillsHtml(orr)||'<span class="empty-box">—</span>')+'</div>'
+      + (orr.tags?'<div class="blk"><div class="l">Tags</div><div>'+tagsInline(orr)+'</div></div>':'')
+      + (orr.geographies&&orr.geographies.length?'<div class="blk"><div class="l">Target regions</div><div>'+geoChips(orr.geographies,'',20)+'</div></div>':'')
+      + (orr.acquired_countries&&orr.acquired_countries.length?'<div class="blk"><div class="l">Acquired in</div><div>'+geoChips(orr.acquired_countries,'acq',20)+'</div></div>':'');
+  } else {
+    var sectors=(f.sectors&&f.sectors.length)?'<div class="blk"><div class="l">Sectors</div><div class="kw-wrap">'+f.sectors.slice(0,8).map(pillHtml).join('')+'</div></div>':'';
+    var geos=(f.geos&&f.geos.length)?'<div class="blk"><div class="l">Geography</div><div>'+geoChips(f.geos,'',12)+'</div></div>':'';
+    var mdesc=f.mergr_desc?'<div class="blk"><div class="l">Mergr profile</div><p>'+esc(String(f.mergr_desc).slice(0,260))+'</p></div>':'';
+    side=sectors+geos+mdesc;
+  }
   return '<div class="bmv-ts '+cls+(b.both?' aigold':'')+'"><div class="cap"></div><div class="in">'
     + '<div class="hd"><div>'
     +   '<div class="nm bmv-serif"><span class="bmv-rank">#'+(i+1)+'</span> '+nm+(mega?'<span class="bmv-tier-badge">Mega</span>':'')+badges+'</div>'
     +   '<div class="dom">'+aiSiteLink(b)+(aiOnLink(v)?' <span class="on-sep">&middot;</span> '+aiOnLink(v):'')+'</div>'
-    + '</div><div style="text-align:right;white-space:nowrap">'+tag+'</div></div>'
+    + '</div><div style="text-align:right;white-space:nowrap">'+tag+cons+'</div></div>'
     + '<div class="facts">'+aiFactCells(b)+'</div>'
-    + '<div class="cols"><div class="main">'+rationale+src+deals+'</div>'
+    + '<div class="cols"><div class="main">'+onDesc+onThesis+rationale+src+deals+'</div>'
     + '<div class="side">'+(side||'<span class="empty-box">No extra profile data</span>')+'</div></div>'
     + '</div></div>';
 }

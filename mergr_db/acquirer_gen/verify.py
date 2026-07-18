@@ -159,6 +159,18 @@ def enrich_buyers(conn, buyers):
         for cid, sec, desc, inv in cur.fetchall():
             co_f[cid] = {"sectors": _as_list(sec), "mergr_desc": desc, "investor_count": inv}
 
+    # Existing ON buyers: attach the FULL buyer record (same fields as the Thesis tearsheet —
+    # description, investment_thesis, sector_keywords, tags, firm size/AUM/acquisitions/largest,
+    # geographies, acquired_countries, employees) so the AI tearsheet can render them like Thesis.
+    on_records = {}
+    if on_ids:
+        try:
+            from buyer_match import service as bm_service
+            for rec in bm_service.buyers_by_ids(conn, list(on_ids)):
+                on_records[rec.get("id")] = rec
+        except Exception:                                # noqa: BLE001 — enrichment is best-effort
+            conn.rollback()
+
     def _merge(dst, src):
         for k, val in (src or {}).items():
             if val in (None, [], "") or dst.get(k) not in (None, [], ""):
@@ -174,4 +186,7 @@ def enrich_buyers(conn, buyers):
             _merge(f, co_f.get(v.get("match_id")))
         _merge(f, on_f.get(v.get("on_buyer_id")))   # ON employees/specialist fill gaps
         b["facts"] = f
+        rec = on_records.get(v.get("on_buyer_id"))
+        if rec:
+            b["on_record"] = rec                     # full Thesis-style profile for existing buyers
     return buyers
