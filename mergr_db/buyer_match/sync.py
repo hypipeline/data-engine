@@ -155,12 +155,26 @@ def run_sync(progress=None, pg_dsn=None):
     pg = psycopg2.connect(pg_dsn or PG_DSN)
     try:
         edoms.ensure_schema(pg)      # keep the free-email denylist table/function current
-        log("Loading buyers from source…")
-        buyers = load_active_buyers(my)
-        nb, nemb, ndel, cost = _sync_buyers(pg, buyers, log)
-        nk = _sync_keywords(pg, buyers, log)
+        # Mandate metadata FIRST — it needs no OpenAI, so it must never be blocked by (or rolled
+        # back with) the buyer/keyword re-embed. Historically it ran last, so a transient OpenAI
+        # 5xx during buyer embedding aborted the whole sync before mandates ever refreshed.
         log("Syncing mandate metadata…")
         nm = backfill_mandates(pg, my)
+        log(f"mandates: {nm:,} synced")
+        log("Loading buyers from source…")
+        buyers = load_active_buyers(my)
+        # Isolate the embed-dependent stages: if OpenAI fails even after retries, the mandate sync
+        # above is already committed, so the button still delivers fresh mandates. Re-raise after
+        # recording partial state so the failure is still surfaced to the user.
+        embed_error = None
+        try:
+            nb, nemb, ndel, cost = _sync_buyers(pg, buyers, log)
+            nk = _sync_keywords(pg, buyers, log)
+        except Exception as e:                                   # noqa: BLE001
+            pg.rollback()
+            embed_error = e
+            nb, nemb, ndel, cost, nk = 0, 0, 0, 0.0, 0
+            log(f"buyer/keyword embedding failed after retries: {e} — mandates already synced")
         with pg.cursor() as cur:
             cur.execute("""INSERT INTO buyer_match.sync_state
                 (id,last_sync_at,last_buyers_upserted,last_buyers_embedded,last_keywords_embedded,last_mandates_synced,last_cost_usd)
@@ -173,6 +187,9 @@ def run_sync(progress=None, pg_dsn=None):
                  last_cost_usd=EXCLUDED.last_cost_usd""",
                 (nb, nemb, nk, nm, round(cost, 4)))
         pg.commit()
+        if embed_error is not None:
+            # Mandates are committed and recorded; still surface the embed failure to the caller.
+            raise embed_error
         stats = {"buyers_upserted": nb, "buyers_embedded": nemb, "buyers_removed": ndel,
                  "keywords_embedded": nk, "mandates_synced": nm, "cost_usd": round(cost, 4)}
         log(f"Done. {nemb:,} buyers re-embedded, {nk:,} new keywords, {nm:,} mandates · ${cost:.4f}")

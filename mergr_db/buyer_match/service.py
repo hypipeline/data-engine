@@ -7,12 +7,46 @@ identical math to the tool's `matrix @ q / (norms·|q|)`.
 """
 import hashlib
 import os
+import time
 
 import httpx
 import psycopg2
 import psycopg2.extras
 
 EMBED_MODEL = "text-embedding-3-small"
+# OpenAI's embeddings endpoint throws intermittent 5xx / times out. Every embed call (search AND
+# the sync's buyer/keyword re-embed) retries transient failures with backoff so a single blip does
+# not surface as a 500 to the user — or, in the sync, abort the whole run before mandates refresh.
+EMBED_MAX_RETRIES = 6
+
+
+def _retryable(exc: Exception) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500 or exc.response.status_code == 429
+    return False
+
+
+def _embed_request(payload):
+    """POST to OpenAI embeddings with retry/backoff on transient (5xx/429/network) failures."""
+    last = None
+    for attempt in range(1, EMBED_MAX_RETRIES + 1):
+        try:
+            r = httpx.post(
+                "https://api.openai.com/v1/embeddings",
+                headers={"Authorization": f"Bearer {_openai_key()}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=120,
+            )
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if attempt == EMBED_MAX_RETRIES or not _retryable(e):
+                raise
+            time.sleep(min(2 ** attempt, 30))
+    raise last  # unreachable; keeps linters happy
 # no_of_employees falls back to the enriched LinkedIn cache when the buyer has none of its own
 # (buyer_match.effective_employees). Transparent to callers — the column is still no_of_employees.
 BUYER_COLS = ("id, name, description, investment_thesis, sector_keywords, "
@@ -34,28 +68,16 @@ def _openai_key():
 
 
 def embed(text: str):
-    """OpenAI embedding for a query (deterministic — same math as the tool)."""
-    r = httpx.post(
-        "https://api.openai.com/v1/embeddings",
-        headers={"Authorization": f"Bearer {_openai_key()}", "Content-Type": "application/json"},
-        json={"model": EMBED_MODEL, "input": text},
-        timeout=30,
-    )
-    r.raise_for_status()
-    d = r.json()
+    """OpenAI embedding for a query (deterministic — same math as the tool). Retries transient
+    failures so a momentary OpenAI 5xx doesn't 500 the search."""
+    d = _embed_request({"model": EMBED_MODEL, "input": text})
     return d["data"][0]["embedding"], d.get("usage", {})
 
 
 def embed_batch(texts):
-    """Batch embeddings (sync re-embed). Returns (list-of-vectors in input order, usage)."""
-    r = httpx.post(
-        "https://api.openai.com/v1/embeddings",
-        headers={"Authorization": f"Bearer {_openai_key()}", "Content-Type": "application/json"},
-        json={"model": EMBED_MODEL, "input": texts},
-        timeout=120,
-    )
-    r.raise_for_status()
-    d = r.json()
+    """Batch embeddings (sync re-embed). Returns (list-of-vectors in input order, usage).
+    Retries transient failures so one blip doesn't abort the whole sync."""
+    d = _embed_request({"model": EMBED_MODEL, "input": texts})
     vecs = [it["embedding"] for it in sorted(d["data"], key=lambda x: x["index"])]
     return vecs, d.get("usage", {})
 
