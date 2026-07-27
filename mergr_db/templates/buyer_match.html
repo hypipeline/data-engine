@@ -235,6 +235,11 @@
   .aih-when { font-size:11px; color:var(--faint); font-family:var(--mono); min-width:82px; }
   .aih-t { flex:1; min-width:0; font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .aih-c { font-size:11px; color:var(--muted); white-space:nowrap; }
+  .aih-pager { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; }
+  .aih-pg { font-size:11px; font-family:var(--mono); color:var(--muted); background:var(--bg-2); border:1px solid var(--border); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .aih-pg:hover:not([disabled]) { background:var(--bg-3); color:var(--text); }
+  .aih-pg[disabled] { opacity:.4; cursor:default; }
+  .aih-pgn { font-size:11px; font-family:var(--mono); color:var(--faint); }
   .dh-nm .tier { display:inline-block; font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:1.5px; background:var(--bg-3); color:var(--muted); border:1px solid var(--border-2); }
   .dh-nm .tier.mega { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
   .dh-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:2px 0 14px; padding-bottom:11px; border-bottom:1px solid var(--border); }
@@ -1209,15 +1214,39 @@ function pollAi(sid){
   }).catch(function(){ aiPollTimer=setTimeout(function(){ pollAi(sid); },5000); });
 }
 // ── AI history: browse + reopen past runs (shared with the Acquirer-Finder page) ──
+var AIH_PER_PAGE=10;
+var aihRows=[], aihSpend=0, aihPage=0;
 function loadAiHistory(){
   var box=document.getElementById('ai-history'); if(!box) return;
   fetch('/acquirer-finder/searches').then(function(r){return r.json();}).then(function(d){
-    var rows=d.searches||[];
-    if(!rows.length){ box.innerHTML='<div class="bm-h">Recent AI searches</div><span class="empty-box">No AI searches yet — run one above.</span>'; return; }
-    box.innerHTML='<details class="bm-details"><summary>Recent AI searches ('+rows.length+') · total spend $'+Number(d.total_spend||0).toFixed(2)+'</summary>'
-      +'<div class="aih-list">'+rows.map(aiHistRow).join('')+'</div></details>';
+    aihRows=d.searches||[]; aihSpend=Number(d.total_spend||0); aihPage=0;
+    renderAiHistory();
   }).catch(function(){});
 }
+function renderAiHistory(){
+  var box=document.getElementById('ai-history'); if(!box) return;
+  if(!aihRows.length){ box.innerHTML='<div class="bm-h">Recent AI searches</div><span class="empty-box">No AI searches yet — run one above.</span>'; return; }
+  // Render the <details> shell once; paging only swaps #aih-body so the open/closed state survives.
+  box.innerHTML='<details class="bm-details"><summary>Recent AI searches ('+aihRows.length+') · total spend $'+aihSpend.toFixed(2)+'</summary>'
+    +'<div id="aih-body"></div></details>';
+  renderAiHistBody();
+}
+function renderAiHistBody(){
+  var body=document.getElementById('aih-body'); if(!body) return;
+  var pages=Math.ceil(aihRows.length/AIH_PER_PAGE);
+  aihPage=Math.max(0, Math.min(aihPage, pages-1));
+  var start=aihPage*AIH_PER_PAGE, pageRows=aihRows.slice(start, start+AIH_PER_PAGE);
+  var pager='';
+  if(pages>1){
+    pager='<div class="aih-pager">'
+      +'<button class="aih-pg" '+(aihPage===0?'disabled':'')+' onclick="aiHistGo('+(aihPage-1)+')">&larr; Prev</button>'
+      +'<span class="aih-pgn">'+(start+1)+'–'+(start+pageRows.length)+' of '+aihRows.length+'</span>'
+      +'<button class="aih-pg" '+(aihPage>=pages-1?'disabled':'')+' onclick="aiHistGo('+(aihPage+1)+')">Next &rarr;</button>'
+      +'</div>';
+  }
+  body.innerHTML='<div class="aih-list">'+pageRows.map(aiHistRow).join('')+'</div>'+pager;
+}
+function aiHistGo(p){ aihPage=p; renderAiHistBody(); }
 function aiHistRow(s){
   var dt=s.created_at?new Date(s.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';
   return '<div class="aih-row" onclick="loadAiSearch('+s.id+')" title="Reopen this run and tag from it">'
