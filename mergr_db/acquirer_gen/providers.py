@@ -15,7 +15,7 @@ import time
 
 import httpx
 
-TIMEOUT = 300          # deep-research models run for minutes
+TIMEOUT = 600          # deep-research models run for minutes (gpt-5.5 can push past 5 min)
 
 SYSTEM = (
     "You are an M&A research assistant. Given a target company profile, identify likely ACQUIRERS "
