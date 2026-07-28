@@ -68,7 +68,7 @@ class BizapediaMixin:
 
         return data
 
-    def search_bizapedia(self, entity_name: str, state: str = "") -> list:
+    def search_bizapedia(self, entity_name: str, state: str = "", quiet: bool = False) -> list:
         """
         Search Bizapedia for a US entity name. Returns list of company records.
         Each record has: EntityName, FileNumber, FilingJurisdictionName,
@@ -76,11 +76,13 @@ class BizapediaMixin:
         principals/officers, etc.
 
         `state` (optional postal abbreviation) narrows via Bizapedia's `pa` param — used
-        by the branch-triangulation sweep to recover a parent in its home jurisdiction.
+        by the branch-triangulation sweep. `quiet` suppresses the per-call progress line
+        (the wide state sweep fires ~50 of these and would otherwise flood the log).
         """
         self.api_calls['bizapedia'] += 1
-        self._progress('registry', f'Searching Bizapedia for "{entity_name}"...'
-                       + (f' (state={state})' if state else ''))
+        if not quiet:
+            self._progress('registry', f'Searching Bizapedia for "{entity_name}"...'
+                           + (f' (state={state})' if state else ''))
 
         params = {
             'ep': 'LCSBN',
@@ -313,32 +315,67 @@ class BizapediaMixin:
         et = (r.get('EntityType') or r.get('type') or '').upper()
         return 'FOREIGN' in et or 'OUT OF STATE' in et or 'NON-LOUISIANA' in et
 
-    def build_bizapedia_families(self, name):
-        """Search Bizapedia, then actively detect BRANCH (foreign) registrations, sweep the
-        home jurisdictions they point to (to recover the parent + siblings the 50-cap hid),
-        and fuse each parent+branches into a triangulation block.
+    _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID",
+                  "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO",
+                  "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA",
+                  "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
 
-        Returns (family_block_or_None, all_deduped_records). Extra state sweeps run ONLY when
-        branches are actually detected, so non-branch entities cost exactly one search."""
+    # Canonicalise legal-suffix synonyms so 'Inc'≡'Incorporated', 'Corp'≡'Corporation', etc.
+    # cluster together — but DIFFERENT types (Inc vs LLC) map to different tokens and stay
+    # distinct. Multi-word forms must precede the bare 'LIMITED' so they win first.
+    _SUFFIX_SYN = [("LIMITED LIABILITY COMPANY", "LLC"), ("LIMITED LIABILITY PARTNERSHIP", "LLP"),
+                   ("LIMITED PARTNERSHIP", "LP"), ("INCORPORATED", "INC"), ("CORPORATION", "CORP"),
+                   ("COMPANY", "CO"), ("LIMITED", "LTD")]
+
+    @classmethod
+    def _biz_norm_name(cls, s):
+        """Normalised entity name for clustering: strip punctuation, collapse spaces, and
+        canonicalise legal-suffix synonyms (Inc/Incorporated, Corp/Corporation, ...)."""
+        import re
+        s = re.sub(r"[^A-Z0-9 ]", "", (s or "").upper())
+        s = re.sub(r"\s+", " ", s).strip()
+        for lng, sht in cls._SUFFIX_SYN:
+            s = re.sub(r"\b" + lng + r"\b", sht, s)
+        return s.strip()
+
+    @staticmethod
+    def _biz_home_of(r):
+        """The home jurisdiction of a record: the domestic_jurisdiction a branch points to, or
+        (for a domestic filing) its own filing state — a domestic record IS its own home."""
+        if BizapediaMixin._biz_is_foreign(r):
+            return (r.get('DomesticJurisdictionPostalAbbreviation') or '').strip().upper()
+        return (r.get('FilingJurisdictionPostalAbbreviation') or '').strip().upper()
+
+    def build_bizapedia_families(self, name):
+        """Search Bizapedia and, when the entity shows branch structure, INGEST WIDELY — sweep
+        every US state in parallel (Bizapedia calls are cheap/uncapped in cost) to collect the
+        full set of a company's branch registrations — then fuse into a COMPACT block for the LLM.
+
+        Families are keyed on (normalised name, HOME jurisdiction), so two different companies
+        that merely share a name (e.g. an Arizona 'Alianza, LLC' vs the Delaware one) never merge,
+        and the recommended parent is the domestic filing whose OWN state is the home.
+
+        Returns (family_block_or_None, all_deduped_records). The wide sweep runs ONLY when the base
+        search already shows a foreign/branch filing, so non-branch entities cost one search."""
         import collections
+        import concurrent.futures
         import re
 
         base = self.search_bizapedia(name)
         if not base:
             return None, []
+        if not any(self._biz_is_foreign(r) for r in base):
+            return None, base                          # no branch structure — cheap path
 
         all_recs = list(base)
-        homes = []
-        for r in base:
-            if self._biz_is_foreign(r):
-                h = (r.get('DomesticJurisdictionPostalAbbreviation') or '').strip().upper()
-                if h and h not in homes:
-                    homes.append(h)
-        for hs in homes[:3]:                       # cap sweeps to bound cost
-            try:
-                all_recs += self.search_bizapedia(name, state=hs)
-            except Exception:                       # noqa: BLE001
-                pass
+        self._progress('registry', f'Branch structure detected — sweeping US states for "{name}"...')
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+            futs = [ex.submit(self.search_bizapedia, name, st, True) for st in self._US_STATES]
+            for f in concurrent.futures.as_completed(futs):
+                try:
+                    all_recs += f.result() or []
+                except Exception:                       # noqa: BLE001
+                    pass
 
         seen = {}
         for r in all_recs:
@@ -346,29 +383,28 @@ class BizapediaMixin:
             seen.setdefault(key, r)
         recs = list(seen.values())
 
-        def norm(s):
-            return re.sub(r'[^A-Z0-9 ]', '', (s or '').upper()).strip()
-
         fams = collections.defaultdict(list)
         for r in recs:
-            fams[norm(r.get('EntityName'))].append(r)
+            home = self._biz_home_of(r)
+            if home:
+                fams[(self._biz_norm_name(r.get('EntityName')), home)].append(r)
 
         scored = []
-        for fam_recs in fams.values():
-            branches = [r for r in fam_recs
-                        if self._biz_is_foreign(r)
-                        and (r.get('DomesticJurisdictionPostalAbbreviation') or '').strip()]
+        for (fam_name, home), fam_recs in fams.items():
+            branches = [r for r in fam_recs if self._biz_is_foreign(r)]
             if not branches:
                 continue
-            scored.append((len(branches), self._format_bizapedia_family(fam_recs, branches)))
+            scored.append((len(branches), self._format_bizapedia_family(fam_recs, branches, home)))
         if not scored:
             return None, recs
         scored.sort(key=lambda x: -x[0])
         block = "\n\n".join(b for _, b in scored[:2])   # top 2 families by branch count
         return block, recs
 
-    def _format_bizapedia_family(self, fam_recs, branches):
-        """Fuse a parent+branches cluster into a compact, prompt-ready triangulation block."""
+    def _format_bizapedia_family(self, fam_recs, branches, home):
+        """Compact, prompt-frugal triangulation block — summarise (branch count + states, the
+        home/parent filing, officer overlap, HQ) rather than listing every filing. The LLM word
+        budget matters even though Bizapedia ingest does not."""
         import collections
 
         def addr(r):
@@ -378,49 +414,36 @@ class BizapediaMixin:
             return ', '.join(x for x in a if x)
 
         name = (fam_recs[0].get('EntityName') or '').strip()
-        home = collections.Counter(
-            (b.get('DomesticJurisdictionPostalAbbreviation') or '').upper() for b in branches
-        ).most_common(1)[0][0]
         branch_states = sorted({(b.get('FilingJurisdictionPostalAbbreviation') or '').upper() for b in branches})
-        states = {(r.get('FilingJurisdictionPostalAbbreviation') or '') for r in fam_recs}
         hq = collections.Counter(addr(r) for r in branches if addr(r))
-        home_recs = [r for r in fam_recs if not self._biz_is_foreign(r)]
+        # parent = the domestic filing whose OWN jurisdiction is the home state (not just any domestic)
+        parents = [r for r in fam_recs
+                   if not self._biz_is_foreign(r)
+                   and (r.get('FilingJurisdictionPostalAbbreviation') or '').upper() == home]
+        parent = parents[0] if parents else None
 
         off_files = collections.defaultdict(set)
-        off_titles = collections.defaultdict(set)
         for r in fam_recs:
             st = (r.get('FilingJurisdictionPostalAbbreviation') or '').upper()
             for p in (r.get('Principals') or []):
-                nm = p.get('PrincipalName')
-                if not nm:
-                    continue
-                off_files[nm].add(st)
-                if p.get('Titles'):
-                    off_titles[nm].add(p['Titles'])
+                nm = (p.get('PrincipalName') or '').strip()
+                if nm:
+                    off_files[nm.upper()].add(st)
+        corr = sorted({k.title() for k, sts in off_files.items() if len(sts) > 1})
 
-        lines = [f'ENTITY FAMILY "{name}" — {len(fam_recs)} filings across {len(states)} states',
-                 f'  Branches: {len(branch_states)} ({", ".join(branch_states)}) all point HOME -> {home}']
-        if home_recs:
-            lines.append(f'  Home/domestic filing present in {home} (file# {home_recs[0].get("FileNumber")}) '
-                         f'— recommend this HOME entity as the contracting party')
+        lines = [f'ENTITY FAMILY "{name}" (home {home}) — {len(branch_states)} branch registrations']
+        if parent:
+            fd = ((parent.get('FilingDate') or {}).get('Date') or '')[:10]
+            lines.append(f'  RECOMMEND (home entity): {parent.get("EntityName")} — {home} '
+                         f'#{parent.get("FileNumber")} ({parent.get("FilingStatus")}'
+                         f'{", " + fd if fd else ""})')
         else:
-            lines.append(f'  Home/domestic filing: {home} (not returned by search — the parent is in {home})')
+            lines.append(f'  Home/domestic parent is in {home} (not captured — infer the {home} filing)')
+        lines.append(f'  Branches -> {home} ({len(branch_states)}): {", ".join(branch_states)}')
         if hq:
-            lines.append(f'  Operating HQ (from branch filings): {hq.most_common(1)[0][0]}')
-        corr = [(nm, f) for nm, f in off_files.items() if len(f) > 1]
+            lines.append(f'  Operating HQ (from branches): {hq.most_common(1)[0][0]}')
         if corr:
-            lines.append('  Officers on >1 filing (corroborated core team — identity lock vs same-name entities):')
-            for nm, f in sorted(corr, key=lambda x: -len(x[1])):
-                lines.append(f'    * {nm} [{",".join(sorted(f))}] {"; ".join(sorted(off_titles[nm]))[:50]}')
-        lines.append('  Filings:')
-        for r in sorted(fam_recs, key=lambda r: (self._biz_is_foreign(r), r.get('FilingJurisdictionPostalAbbreviation') or '')):
-            role = 'branch' if self._biz_is_foreign(r) else 'HOME'
-            fd = ((r.get('FilingDate') or {}).get('Date') or '')[:10]
-            extra = (f' -> home {(r.get("DomesticJurisdictionPostalAbbreviation") or "")}'
-                     if self._biz_is_foreign(r) else '')
-            lines.append(f'    [{role}] {r.get("FilingJurisdictionPostalAbbreviation")} '
-                         f'#{r.get("FileNumber")} {(r.get("EntityType") or "")[:34]} '
-                         f'({r.get("FilingStatus")}, {fd}){extra}')
+            lines.append(f'  Officers on >1 filing (identity lock): {", ".join(corr[:8])}')
         return "\n".join(lines)
 
 

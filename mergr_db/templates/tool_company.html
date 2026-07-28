@@ -121,7 +121,15 @@ function renderRow(r, i){
 // home jurisdiction. Two+ branches (same name) pointing to one home ≈ the real parent lives
 // there; officers shared across filings lock identity. We can't sweep hidden states here (that's
 // the 50-result cap), so this hints on what came back — search the home state to see the parent.
-function normName(s){ return (s==null?'':String(s)).toUpperCase().replace(/[^A-Z0-9 ]/g,'').trim(); }
+function normName(s){
+  s=(s==null?'':String(s)).toUpperCase().replace(/[^A-Z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+  // canonicalise legal-suffix synonyms (Inc/Incorporated, Corp/Corporation, ...) — mirrors the pipeline
+  [['LIMITED LIABILITY COMPANY','LLC'],['LIMITED LIABILITY PARTNERSHIP','LLP'],['LIMITED PARTNERSHIP','LP'],
+   ['INCORPORATED','INC'],['CORPORATION','CORP'],['COMPANY','CO'],['LIMITED','LTD']].forEach(function(p){
+    s=s.replace(new RegExp('\\b'+p[0]+'\\b','g'), p[1]);
+  });
+  return s.trim();
+}
 function isForeign(r){ var t=(r.EntityType||'').toUpperCase(); return t.indexOf('FOREIGN')!==-1 || t.indexOf('OUT OF STATE')!==-1 || t.indexOf('NON-LOUISIANA')!==-1; }
 function branchHint(results){
   var fams = {};   // key: normalisedName|homeState  -> distinct real company

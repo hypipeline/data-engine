@@ -85,6 +85,7 @@
       <button class="search-btn" type="submit">Look Up</button>
     </form>
     <div class="meta-line" id="meta"></div>
+    <div id="runtabs" style="max-width:960px;margin:6px 0 2px"></div>
     <div id="report"></div>
     <div class="progress-log" id="logwrap" style="display:none">
       <div class="progress-log-header">Progress Log</div>
@@ -110,6 +111,7 @@
 </div>
 <script>
 var INITIAL_URL = {{ initial_url|tojson }};
+var INITIAL_RESULT = {{ initial_result|default(none)|tojson }};   // set for /entity/<domain>/<id> permalinks
 var EBASE = '/entity-app';               // same-origin path -> entity container (via Caddy)
 var DOMAIN_URL = {};                      // domain -> exact looked-up url (from history)
 
@@ -313,7 +315,7 @@ function runLookup(u, push){
   var es=new EventSource(EBASE+'/lookup/stream?url='+encodeURIComponent(u)+rf);
   es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('elog'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
   es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, r.meta||{}, u);
-    var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); });
+    var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); loadRunTabs(domainOf(u), null); });
   es.addEventListener('error', function(ev){ try{ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Error: '+esc(JSON.parse(ev.data))+'</span>'; }catch(_){ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Stream error</span>'; } es.close(); });
   es.addEventListener('done', function(){ es.close(); });
 }
@@ -330,8 +332,41 @@ window.addEventListener('popstate', function(){
 
 var CONF2={high:['#d4edda','#155724'],medium:['#fff3cd','#856404'],low:['#ffeeba','#856404'],insufficient:['#f8d7da','#721c24']};
 function fmtWhen(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+// Historical-run tabs for the current domain (only shown when >1 run exists).
+function loadRunTabs(dom, currentId){
+  var el=document.getElementById('runtabs'); if(!el) return; el.innerHTML='';
+  if(!dom) return;
+  fetch('/entity/api/runs?domain='+encodeURIComponent(dom)).then(function(r){return r.json();}).then(function(d){
+    var runs=(d&&d.runs)||[]; if(runs.length<2){ el.innerHTML=''; return; }
+    var cur=(currentId!=null)?currentId:(runs[0]&&runs[0].id);
+    var tabs=runs.map(function(x){
+      var active=(x.id===cur);
+      return '<a href="/entity/'+encodeURIComponent(dom)+'/'+x.id+'" '
+        +'style="display:inline-block;padding:4px 10px;margin:0 6px 6px 0;border-radius:6px;font-size:12px;text-decoration:none;border:1px solid '
+        +(active?'#4a90d9;background:#eaf2fd;color:#1a3a5f;font-weight:600':'#e0e0e0;background:#fff;color:#666')+'">'
+        +esc(fmtWhen(x.created_at))+(x.confidence?' · '+esc(x.confidence):'')+'</a>';
+    }).join('');
+    el.innerHTML='<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">This search — '+runs.length+' runs</div>'+tabs;
+  }).catch(function(){});
+}
+
+// Render a stored historical run (permalink) without re-running the pipeline.
+function renderStored(res, url){
+  if(!res){ return; }
+  document.getElementById('url').value=url||'';
+  document.getElementById('logwrap').style.display='block';
+  var d=document.getElementById('elog'); d.innerHTML='';
+  (res.progress_log||[]).forEach(function(e){ try{ d.insertAdjacentHTML('beforeend', renderEntry(e)); }catch(_){} });
+  d.scrollTop=d.scrollHeight;
+  document.getElementById('report').innerHTML=renderReport(res.report||{}, res.meta||{}, url);
+  var m=res.meta||{};
+  document.getElementById('meta').innerHTML='Historical run · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.model||'')
+    +(res.cached_at?' · '+esc(fmtWhen(res.cached_at)):'');
+  loadRunTabs(domainOf(url), res.id||null);
+}
+
 function loadHistory(){
-  fetch(EBASE+'/history').then(function(r){return r.json();}).then(function(d){
+  fetch('/entity/api/history').then(function(r){return r.json();}).then(function(d){
     var rows=(d&&d.lookups)||[]; var h=document.getElementById('history');
     rows.forEach(function(x){ if(x.url) DOMAIN_URL[x.domain||domainOf(x.url)]=x.url; });
     var tot=0; rows.forEach(function(x){ tot+=Number(x.cost_usd||0); });
@@ -345,7 +380,7 @@ function loadHistory(){
       var badge=x.confidence?'<span style="display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:'+cb[0]+';color:'+cb[1]+'">'+esc(x.confidence)+'</span>':'';
       var arg=JSON.stringify(x.url).replace(/"/g,'&quot;');
       out+='<tr style="border-top:1px solid #f0f0f0;cursor:pointer" onmouseover="this.style.background=\'#f6f9ff\'" onmouseout="this.style.background=\'\'" onclick="openLookup('+arg+')">'
-        +'<td style="padding:8px 14px;color:#4a90d9">'+esc(x.domain||x.url)+'</td>'
+        +'<td style="padding:8px 14px;color:#4a90d9">'+esc(x.domain||x.url)+(x.run_count>1?' <span style="color:#999;font-size:11px;font-weight:600">&times;'+x.run_count+'</span>':'')+'</td>'
         +'<td style="padding:8px 14px">'+esc(x.entity_name||'—')+(x.jurisdiction?' <span style="color:#aaa">· '+esc(x.jurisdiction)+'</span>':'')+'</td>'
         +'<td style="padding:8px 14px">'+badge+'</td>'
         +'<td style="padding:8px 14px;text-align:right;color:#888">'+(x.cost_usd!=null?'$'+x.cost_usd:'')+'</td>'
@@ -356,6 +391,7 @@ function loadHistory(){
   }).catch(function(){});
 }
 loadHistory();
-if(INITIAL_URL){ runLookup(INITIAL_URL, false); }   // deep-link: URL already correct, don't push
+if(INITIAL_RESULT){ renderStored(INITIAL_RESULT, INITIAL_URL); }   // /entity/<domain>/<id> permalink
+else if(INITIAL_URL){ runLookup(INITIAL_URL, false); }             // deep-link: replay latest, don't push
 </script>
 {% endblock %}

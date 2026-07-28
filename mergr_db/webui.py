@@ -492,22 +492,80 @@ def tool_validate(request: Request):
     return render(request, "tool_validate.html", "entity")
 
 
-@app.get("/entity/{domain:path}", response_class=HTMLResponse)
-def entity_lookup(request: Request, domain: str):
-    """Deep-link to a past lookup: resolve <domain> -> the exact URL that was looked
-    up (from the shared entity.lookups cache), so it replays instantly on load."""
+_LKP_GROUP = "COALESCE(NULLIF(domain,''), url)"       # canonical dedup key (blank domain -> url)
+
+
+@app.get("/entity/api/history")
+def entity_api_history(limit: int = 100):
+    """Recent lookups COMBINED to one row per domain (latest run) with a run_count."""
+    try:
+        rows = query(
+            "SELECT id, url, domain, entity_name, jurisdiction, confidence, cost_usd, created_at, run_count "
+            "FROM (SELECT DISTINCT ON (" + _LKP_GROUP + ") "
+            "        id, url, domain, entity_name, jurisdiction, confidence, cost_usd, created_at, "
+            "        count(*) OVER (PARTITION BY " + _LKP_GROUP + ") AS run_count "
+            "      FROM entity.lookups ORDER BY " + _LKP_GROUP + ", created_at DESC) t "
+            "ORDER BY created_at DESC LIMIT %(lim)s", {"lim": limit}) or []
+    except Exception:                                     # cache table absent
+        rows = []
+    out = [{"id": r.get("id"), "url": r.get("url"), "domain": r.get("domain"),
+            "entity_name": r.get("entity_name"), "jurisdiction": r.get("jurisdiction"),
+            "confidence": r.get("confidence"),
+            "cost_usd": float(r["cost_usd"]) if r.get("cost_usd") is not None else None,
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            "run_count": r.get("run_count")} for r in rows]
+    return JSONResponse({"lookups": out})
+
+
+@app.get("/entity/api/runs")
+def entity_api_runs(domain: str = ""):
+    """All historical runs for a domain (newest first) — powers the run tabs."""
     from domain_utils import website_to_domain
     dom = website_to_domain(domain) or (domain or "").strip().lower().strip("/")
-    initial = ("https://" + dom) if dom else ""      # cold deep-link: run it fresh
-    if dom:
-        try:
-            r = query("SELECT url FROM entity.lookups WHERE domain=%(d)s "
+    if not dom:
+        return JSONResponse({"domain": "", "runs": []})
+    try:
+        rows = query(
+            "SELECT id, url, entity_name, confidence, cost_usd, created_at "
+            "FROM entity.lookups WHERE " + _LKP_GROUP + "=%(d)s "
+            "ORDER BY created_at DESC LIMIT 50", {"d": dom}) or []
+    except Exception:
+        rows = []
+    out = [{"id": r.get("id"), "entity_name": r.get("entity_name"), "confidence": r.get("confidence"),
+            "cost_usd": float(r["cost_usd"]) if r.get("cost_usd") is not None else None,
+            "created_at": r["created_at"].isoformat() if r.get("created_at") else None} for r in rows]
+    return JSONResponse({"domain": dom, "runs": out})
+
+
+@app.get("/entity/{domain:path}", response_class=HTMLResponse)
+def entity_lookup(request: Request, domain: str):
+    """Deep-link to a past lookup. /entity/<domain> replays the latest run for that domain;
+    /entity/<domain>/<id> loads that exact historical run from the shared entity.lookups cache."""
+    from domain_utils import website_to_domain
+    raw = (domain or "").strip().strip("/")
+    run_id = None
+    parts = raw.rsplit("/", 1)                            # /entity/<domain>/<id>
+    if len(parts) == 2 and parts[1].isdigit():
+        raw, run_id = parts[0], int(parts[1])
+    dom = website_to_domain(raw) or raw.lower()
+    initial = ("https://" + dom) if dom else ""          # cold deep-link: run it fresh
+    initial_result = None
+    try:
+        if run_id is not None:                           # specific historical run by id
+            r = query("SELECT url, report, meta, progress_log FROM entity.lookups WHERE id=%(i)s",
+                      {"i": run_id}, one=True)
+            if r:
+                initial = r.get("url") or initial
+                initial_result = {"id": run_id, "report": r.get("report"), "meta": r.get("meta") or {},
+                                  "progress_log": r.get("progress_log") or [], "from_cache": True}
+        elif dom:                                         # latest run for the domain -> replay
+            r = query("SELECT url FROM entity.lookups WHERE " + _LKP_GROUP + "=%(d)s "
                       "ORDER BY created_at DESC LIMIT 1", {"d": dom}, one=True)
             if r and r.get("url"):
-                initial = r["url"]                    # exact URL -> cache hit / replay
-        except Exception:
-            pass                                      # cache table absent -> fall back
-    return render(request, "entity.html", "entity", initial_url=initial)
+                initial = r["url"]
+    except Exception:
+        pass                                             # cache table absent -> fall back
+    return render(request, "entity.html", "entity", initial_url=initial, initial_result=initial_result)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

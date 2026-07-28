@@ -261,15 +261,16 @@ class RegistrySearchMixin:
                 fam_block, biz_results = self.tools.build_bizapedia_families(name)
                 if biz_results:
                     if fam_block:
-                        # branch structure detected → lead with the fused triangulation block
-                        # (prioritised), then the full deduped records; budget = downstream 10k cap
+                        # branch structure detected → lead with the compact fused block, then a
+                        # capped tail of deduped records for context. The wide state sweep ingests
+                        # a lot, but we keep what the LLM sees frugal (block first, tail bounded).
                         compact = self.tools.deduplicate_bizapedia_results(biz_results)
                         registries[f"bizapedia:{name}"] = (
                             "BRANCH TRIANGULATION — parent + branch registrations fused "
                             "(multiple branches -> same home confirms the real parent; "
                             "officers on >1 filing lock identity):\n\n" + fam_block
-                            + "\n\nALL BIZAPEDIA RECORDS (deduped):\n" + compact
-                        )[:9500]
+                            + "\n\nOTHER BIZAPEDIA RECORDS (deduped, truncated):\n" + compact[:2500]
+                        )[:5000]
                     else:
                         self.tools.sort_bizapedia_results(biz_results)
                         biz_json = json.dumps(biz_results, indent=4, ensure_ascii=False)
