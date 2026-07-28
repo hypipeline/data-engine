@@ -116,6 +116,62 @@ function renderRow(r, i){
   return main + detail;
 }
 
+// ── Branch triangulation hint (computed client-side from the returned records) ──
+// A "Foreign"/"Out of State" filing is the same entity registered elsewhere and names its
+// home jurisdiction. Two+ branches (same name) pointing to one home ≈ the real parent lives
+// there; officers shared across filings lock identity. We can't sweep hidden states here (that's
+// the 50-result cap), so this hints on what came back — search the home state to see the parent.
+function normName(s){ return (s==null?'':String(s)).toUpperCase().replace(/[^A-Z0-9 ]/g,'').trim(); }
+function isForeign(r){ var t=(r.EntityType||'').toUpperCase(); return t.indexOf('FOREIGN')!==-1 || t.indexOf('OUT OF STATE')!==-1 || t.indexOf('NON-LOUISIANA')!==-1; }
+function branchHint(results){
+  var fams = {};   // key: normalisedName|homeState  -> distinct real company
+  results.forEach(function(r){
+    if(!isForeign(r)) return;
+    var home = (r.DomesticJurisdictionPostalAbbreviation||'').toUpperCase(); if(!home) return;
+    var key = normName(r.EntityName)+'|'+home;
+    (fams[key] = fams[key] || {name:r.EntityName, norm:normName(r.EntityName), home:home, branches:[]}).branches.push(r);
+  });
+  var blocks = [];
+  Object.keys(fams).forEach(function(k){
+    var f = fams[k];
+    if(f.branches.length < 2) return;                       // need >=2 branches for a real signal
+    var homeRec = results.filter(function(r){ return !isForeign(r) && normName(r.EntityName)===f.norm
+        && (r.FilingJurisdictionPostalAbbreviation||'').toUpperCase()===f.home; })[0];
+    var states = {}; f.branches.forEach(function(b){ states[(b.FilingJurisdictionPostalAbbreviation||'').toUpperCase()]=1; });
+    var off = {};    // officer (case-normalised) -> {disp, states}, over this family's filings only
+    f.branches.concat(homeRec?[homeRec]:[]).forEach(function(r){
+      var st=(r.FilingJurisdictionPostalAbbreviation||'').toUpperCase();
+      (r.Principals||[]).forEach(function(p){
+        var raw=(p.PrincipalName||'').trim(); if(!raw) return;
+        var k=raw.toUpperCase().replace(/\s+/g,' ');
+        var e=off[k]=off[k]||{disp:raw.toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();}), st:{}};
+        e.st[st]=1;
+      });
+    });
+    var corrob = Object.keys(off).filter(function(k){ return Object.keys(off[k].st).length>1; })
+                       .map(function(k){ return off[k].disp; });
+    blocks.push({name:f.name, home:f.home, states:Object.keys(states).sort(), n:f.branches.length,
+                 homeRec:homeRec, officers:corrob});
+  });
+  if(!blocks.length) return '';
+  blocks.sort(function(a,b){ return b.n-a.n; });
+  var inner = blocks.slice(0,3).map(function(f){
+    var parent = f.homeRec
+      ? 'Likely real parent: <b>'+esc(f.homeRec.EntityName)+'</b> — the domestic '+esc(f.home)+' filing (file# '+esc(f.homeRec.FileNumber||'?')+'). '
+        + '<a href="/entity/tools/validate?entity_name='+encodeURIComponent(f.homeRec.EntityName||'')+'&registry_id='+encodeURIComponent(f.homeRec.FileNumber||'')+'&country=US&state='+encodeURIComponent(f.home)+'">Validate →</a>'
+      : 'Home/domestic parent is in <b>'+esc(f.home)+'</b> (not in these results) — <a href="#" onclick="runSearch(document.getElementById(\'q\').value,\''+esc(f.home)+'\',true);return false;">search '+esc(f.home)+' to surface it</a>.';
+    return '<div style="margin:6px 0">'
+      + '<div style="font-weight:700">🔎 '+esc(f.name)+'</div>'
+      + '<div><b>'+f.n+'</b> branch (foreign) registration'+(f.n===1?'':'s')+' — '+f.states.join(', ')+' — all point HOME → <b>'+esc(f.home)+'</b></div>'
+      + '<div>'+parent+'</div>'
+      + (f.officers.length ? '<div>Officers on multiple filings (identity lock): <b>'+f.officers.slice(0,6).map(esc).join(', ')+'</b></div>' : '')
+      + '</div>';
+  }).join('');
+  return '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px;margin:0 0 16px;font-size:13px;line-height:1.5;color:#1e3a5f">'
+    + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#2563eb;margin-bottom:4px">Branch triangulation</div>'
+    + inner + '</div>';
+}
+
 function render(data){
   var meta = document.getElementById('meta');
   var out = document.getElementById('results');
@@ -126,7 +182,8 @@ function render(data){
   var stateNote = data.state ? ' in '+esc(String(data.state).toUpperCase()) : '';
   meta.innerHTML = '<b>'+results.length+'</b> result'+(results.length===1?'':'s')+' for "'+esc(data.query||'')+'"'+stateNote;
   var rows = results.map(function(r,i){ return renderRow(r,i); }).join('');
-  out.innerHTML = '<div class="tbl-wrap"><table class="tbl">'
+  out.innerHTML = branchHint(results)
+    + '<div class="tbl-wrap"><table class="tbl">'
     + '<thead><tr><th>Company</th><th>Status</th><th>Type</th><th>Jurisdiction</th><th>File #</th><th>Filed</th><th></th></tr></thead>'
     + '<tbody>'+rows+'</tbody></table></div>';
 }
