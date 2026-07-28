@@ -258,12 +258,25 @@ class RegistrySearchMixin:
 
             # Bizapedia (US)
             if is_us or is_unknown:
-                biz_results = self.tools.search_bizapedia(name)
+                fam_block, biz_results = self.tools.build_bizapedia_families(name)
                 if biz_results:
-                    self.tools.sort_bizapedia_results(biz_results)
-                    biz_json = json.dumps(biz_results, indent=4, ensure_ascii=False)
-                    registries[f"bizapedia:{name}"] = biz_json[:5000]
-                self.log_registry_result('bizapedia', 'Bizapedia', name, str(len(biz_results)) + ' results', name)
+                    if fam_block:
+                        # branch structure detected → lead with the fused triangulation block
+                        # (prioritised), then the full deduped records; budget = downstream 10k cap
+                        compact = self.tools.deduplicate_bizapedia_results(biz_results)
+                        registries[f"bizapedia:{name}"] = (
+                            "BRANCH TRIANGULATION — parent + branch registrations fused "
+                            "(multiple branches -> same home confirms the real parent; "
+                            "officers on >1 filing lock identity):\n\n" + fam_block
+                            + "\n\nALL BIZAPEDIA RECORDS (deduped):\n" + compact
+                        )[:9500]
+                    else:
+                        self.tools.sort_bizapedia_results(biz_results)
+                        biz_json = json.dumps(biz_results, indent=4, ensure_ascii=False)
+                        registries[f"bizapedia:{name}"] = biz_json[:5000]
+                self.log_registry_result('bizapedia', 'Bizapedia', name,
+                                         str(len(biz_results)) + ' results'
+                                         + (' (+branch family)' if fam_block else ''), name)
 
                 # Delaware Division of Corporations
                 delaware_result = self.tools.search_delaware(name)
