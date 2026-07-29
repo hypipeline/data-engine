@@ -263,8 +263,23 @@ class RegistrySearchMixin:
                     # Owner-linkage hint FIRST — a DBA/fictitious-name record naming an owner is the
                     # answer for trade-name sites (e.g. Herculite Products -> ABERDEEN ROAD COMPANY).
                     # Prepended so it always survives truncation; the raw record rank last and get cut.
-                    owner_hints = self.tools.bizapedia_owner_hints(biz_results)
+                    owner_hints, owner_names = self.tools.bizapedia_owner_hints(biz_results)
                     prefix = (owner_hints + "\n\n") if owner_hints else ""
+                    # Search each named owner so ITS filing (with the registry_id) reaches the
+                    # analysis — otherwise the owner resolves with no id and low confidence.
+                    for onm in owner_names[:2]:
+                        okey = f"bizapedia:{onm}"
+                        if okey in registries or onm.strip().lower() == name.strip().lower():
+                            continue
+                        try:
+                            ob, orecs = self.tools.build_bizapedia_families(onm)
+                        except Exception:                # noqa: BLE001
+                            continue
+                        if orecs:
+                            oc = self.tools.deduplicate_bizapedia_results(orecs)
+                            registries[okey] = ((ob + "\n\n" if ob else "") + oc)[:5000]
+                            self.log('reanalysis', f'Trade-name owner "{onm}" searched -> {len(orecs)} '
+                                     f'Bizapedia records (recovering its registry filing)')
                     if fam_block:
                         # branch structure detected → owner hints, then the fused block, then a
                         # capped tail of deduped records. Keep what the LLM sees frugal.

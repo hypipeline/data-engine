@@ -316,14 +316,15 @@ class BizapediaMixin:
 
     @staticmethod
     def bizapedia_owner_hints(records):
-        """Detect trade-name / DBA / fictitious-name records that name an OWNER, and emit an
-        explicit 'recommend the owner' hint. This linkage is the answer for cases like
-        herculite.com: the site's 'Herculite Products, Inc.' is a DBA of ABERDEEN ROAD COMPANY.
+        """Detect trade-name / DBA / fictitious-name records that name an OWNER. Returns
+        (hint_text, owner_names). The linkage is the answer for cases like herculite.com: the
+        site's 'Herculite Products, Inc.' is a DBA of ABERDEEN ROAD COMPANY.
 
-        Emitted as a short prepended block so it survives evidence truncation — the raw records
-        that carry it rank last and otherwise get cut before the LLM sees them."""
+        hint_text is prepended to the evidence so it survives truncation (the raw records that
+        carry it rank last and get cut). owner_names lets the caller SEARCH the owner so its own
+        filing — with the registry_id — reaches the analysis (else the owner resolves with no id)."""
         import re
-        hints, seen = [], set()
+        hints, owners, seen = [], [], set()
         for r in records or []:
             name = (r.get('EntityName') or r.get('name') or '').strip()
             etype = (r.get('EntityType') or r.get('type') or '')
@@ -342,12 +343,14 @@ class BizapediaMixin:
                         break
             if owner and owner.upper() not in seen and owner.upper() != (trade or '').upper():
                 seen.add(owner.upper())
+                owners.append(owner)
                 hints.append(f'  - "{trade}" is a trade/DBA name; its owning legal entity is '
                              f'{owner} (recommend {owner}, not the trade name)')
         if not hints:
-            return ''
-        return ("TRADE NAME / OWNER LINKAGES (recommend the OWNER legal entity, not the trade name):\n"
+            return '', []
+        text = ("TRADE NAME / OWNER LINKAGES (recommend the OWNER legal entity, not the trade name):\n"
                 + "\n".join(hints))
+        return text, owners
 
     # ── Branch triangulation ──────────────────────────────────────────────
     # A foreign/branch registration names both the entity AND its home jurisdiction.
