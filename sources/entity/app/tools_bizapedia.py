@@ -90,6 +90,17 @@ class BizapediaMixin:
         if mkey in memo:
             return memo[mkey]
 
+        # Fix D backstop: no single lookup should ever fire a runaway number of Bizapedia calls
+        # (the sweep bug reached 109-160). Normal lookups use ~12; this cap is pure insurance and
+        # logs loudly if hit so the cause gets investigated rather than silently starving searches.
+        budget = self.__dict__.get('_biz_budget', 60)
+        if self.api_calls.get('bizapedia', 0) >= budget:
+            self._progress('registry', f'⚠ Bizapedia call budget ({budget}) reached — skipping '
+                           f'"{entity_name}"' + (f' ({state})' if state else '')
+                           + ' (backstop hit; investigate call volume)')
+            memo[mkey] = []
+            return []
+
         if not quiet:
             self._progress('registry', f'Searching Bizapedia for "{entity_name}"...'
                            + (f' (state={state})' if state else ''))

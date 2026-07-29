@@ -1495,8 +1495,12 @@ async function doSearch(){
       document.getElementById('results').innerHTML='<div class="empty-box">No buyers matched.</div>';
       return;
     }
-    var cachedTag = (data.usage && data.usage.cached) ? ' <span style="color:var(--muted)">· cached (no embed cost)</span>' : '';
-    document.getElementById('search-meta').innerHTML = '<b>'+count+'</b> ranked buyer'+(count===1?'':'s')+cachedTag;
+    // per-request API call count: one OpenAI embedding per fresh query, none when the query embedding was cached
+    var ac = data.api_calls || {};
+    var apiTag = (ac.openai > 0)
+      ? ' <span style="color:var(--muted)">· API calls: '+ac.openai+' openai (embedding)</span>'
+      : ' <span style="color:var(--muted)">· cached query · no API calls</span>';
+    document.getElementById('search-meta').innerHTML = '<b>'+count+'</b> ranked buyer'+(count===1?'':'s')+apiTag;
     displayed = Math.min(PAGE_SIZE, allResults.length);
     document.getElementById('bmv-toolbar').style.display='flex';
     paintResults();

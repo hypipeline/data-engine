@@ -32,20 +32,34 @@ REGISTRY STATUS RULES:
 - Many US entities appear in multiple states as "Foreign" registrations (e.g. "Foreign LLC", "Foreign Corporation", "Out of State"). A branch is the SAME legal entity registered to operate in a non-home state, NOT a separate entity — so the recommended_entity is still the HOME/DOMESTIC filing (the "Domestic" type in the domestic_jurisdiction state). But do NOT discard branches: they are strong corroborating evidence. When a "BRANCH TRIANGULATION" / "ENTITY FAMILY" block is provided, use it: (a) multiple branches pointing to the SAME home jurisdiction is high-confidence proof that the home entity is the real operating parent (confidence rises with the number of distinct branch states); (b) officers appearing on more than one filing (marked "*") confirm identity — this is your primary defence against same-name collisions on common names; treat matching officers across independent state filings as far stronger than a name match alone; (c) fill gaps — the home filing is often sparse, so take the operating HQ, officers, and multi-state footprint from the branch filings to enrich the entity; (d) anomaly guard — if a branch's officers or HQ contradict the rest of the family, treat it as a possible different same-name entity and do not merge it. The home entity may be absent from search results but named by the branches' domestic_jurisdiction — in that case infer/report the parent in that home state.
 - A "Domestic Fictitious Names" or similar fictitious name / trade name / DBA registration is NOT a legal entity. It is a trade name registered by an actual legal entity. You cannot contract with a fictitious name. If the only Bizapedia result is a fictitious name registration, look at the Principals/Owner field to find the actual owning entity and recommend that entity instead. The fictitious name can be noted in the report but must never be the recommended_entity.
 
-CONTRACTABLE AFFILIATES:
-- Populate contractable_affiliates with any entities that a third party could
-  contract with that are related to the recommended_entity. These must be:
-  (a) Active legal entities with a registry filing (not fictitious names or DBAs)
-  (b) Related to the recommended_entity — subsidiaries, affiliates, fund vehicles
-      managed by the entity, or entities under common control/management
-  (c) Not dissolved, inactive, or branch/foreign registrations
-- Include operating subsidiaries, fund vehicles, management companies, and
-  regulated entities
-- If corporate appointments data is provided, include the active, non-dissolved
-  companies from that data as contractable affiliates — these are companies where
-  the recommended entity serves as a corporate director, indicating a portfolio
-  or group relationship
-- For each, describe their role/relationship to the recommended entity
+CONTRACTABLE AFFILIATES (cast a WIDE net — this does NOT change recommended_entity):
+- This list should be COMPREHENSIVE. Client terms bind the client on behalf of its affiliated
+  entities, so a plausibly-related entity OMITTED is worse than a borderline one INCLUDED. Bias
+  toward inclusion (high recall).
+- CRITICAL: widening this list changes nothing about recommended_entity. That remains strict and
+  evidence-grounded — you must still return null / low confidence there when unsure. Precision on
+  the main entity and honesty about uncertainty are unchanged; the wide net applies ONLY here.
+- Include any entity that is PLAUSIBLY part of the same group, each GRADED so it can be triaged:
+  * subsidiaries (direct and indirect), parent / holding companies, and sister companies under
+    common ownership or control
+  * fund vehicles, GPs, management companies, SPVs, and portfolio-holding entities
+  * regional / per-country operating entities, and the HOME entity of any branch/foreign filing
+  * entities that share officers, a PRIVATE registered agent, or a principal address with the
+    recommended entity (use the branch-triangulation officer overlap when present)
+  * companies from corporate-appointments data where the entity serves as a director
+  * trade-name / DBA owners — list the OWNING legal entity, noting the trade name
+  * recently dissolved / inactive related entities — INCLUDE them, but flag status accordingly
+- For each affiliate provide: relationship_type, a short evidence note + source_url, a confidence
+  (high/medium/low), and status. GRADE HONESTLY — a wide net is acceptable precisely because each
+  entry is labelled and the downstream legal review filters by confidence.
+- Grounding guardrails (a wide net is NOT an invented net):
+  * Every affiliate must appear in the evidence (registry, corporate appointments, website,
+    filings). Never fabricate an entity or a relationship.
+  * A shared COMMERCIAL registered agent (e.g. CT Corporation, Cogency Global, Corporation Service
+    Company, National Registered Agents) is used by thousands of unrelated companies and is NOT,
+    on its own, evidence of affiliation — require a second corroborating signal.
+  * A coincidental same-name match with no corroborating signal → confidence "low" or omit.
+  * Never list the recommended_entity itself; dedupe name variants into a single entry.
 
 JURISDICTION AND REGISTRY ID RULES:
 - For every entity (recommended_entity, website_entity, other_entities), you MUST provide structured jurisdiction fields:

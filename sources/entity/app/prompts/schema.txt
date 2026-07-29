@@ -37,7 +37,7 @@ Schema:
   } | null,
   "key_people": [{"name":"string","role":"string","source_url":"string|null"}],
   "contractable_affiliates": [
-    {"legal_entity_name":"string","jurisdiction_country":"string|null","jurisdiction_state":"string|null","registry_id":"string|null","role":"string (e.g. 'US operating subsidiary', 'Fund IV vehicle', 'UK regulated entity')","verify_url":"string|null"}
+    {"legal_entity_name":"string","jurisdiction_country":"string|null","jurisdiction_state":"string|null","registry_id":"string|null","role":"string (e.g. 'US operating subsidiary', 'Fund IV vehicle', 'UK regulated entity')","relationship_type":"subsidiary|parent|sister|fund_vehicle|management_company|regional_entity|trade_name_owner|shared_officers|director_appointment|other","confidence":"high|medium|low","status":"active|dissolved|inactive|unknown","evidence":"string (why this entity is believed affiliated)","source_url":"string|null","verify_url":"string|null"}
   ],
   "other_entities": [
     {"legal_entity_name":"string","jurisdiction_country":"string|null","jurisdiction_state":"string|null","registry_id":"string|null","why_not_recommended":"string","verify_url":"string|null"}

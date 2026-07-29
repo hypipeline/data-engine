@@ -633,7 +633,9 @@ def bm_search(req: _SearchReq):
     if not q:
         return JSONResponse({"results": [], "count": 0})
     rows, usage = _bm(bm_svc.search, q, 500)
-    return JSONResponse({"results": rows, "count": len(rows), "usage": usage})
+    # one OpenAI embedding call per fresh query; a cached query embedding makes none
+    api_calls = {"openai": 1 if usage else 0}
+    return JSONResponse({"results": rows, "count": len(rows), "usage": usage, "api_calls": api_calls})
 
 
 @app.post("/buyer-match/load-mandate")

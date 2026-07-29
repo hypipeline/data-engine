@@ -237,7 +237,14 @@ function renderReport(rep, meta, url){
       if(a.jurisdiction_country) line += ' <span class="badge badge-neutral">'+esc(a.jurisdiction_country)+(a.jurisdiction_state?'/'+esc(a.jurisdiction_state):'')+'</span>';
       if(a.registry_id) line += ' <span style="color:#666;"> — #'+esc(a.registry_id)+'</span>';
       if(a.validation_source) line += ' <span style="color:#666;font-size:0.85em;"> ('+esc(a.validation_source)+')</span>';
-      if(a.role) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+esc(a.role)+'</div>';
+      // graded wide-net fields: confidence badge + relationship/status + evidence, so the legal review can triage
+      if(a.confidence) line += ' <span class="badge badge-'+(a.confidence==='high'?'high':a.confidence==='low'?'insufficient':'neutral')+'" title="affiliation confidence">'+esc(a.confidence)+'</span>';
+      var meta=[];
+      if(a.relationship_type) meta.push(esc(String(a.relationship_type).replace(/_/g,' ')));
+      if(a.role) meta.push(esc(a.role));
+      if(a.status && a.status!=='active' && a.status!=='unknown') meta.push('<span style="color:#b45309">'+esc(a.status)+'</span>');
+      if(meta.length) line += '<div style="color:#888;margin-left:1em;font-size:0.9em;">'+meta.join(' &middot; ')+'</div>';
+      if(a.evidence) line += '<div style="color:#aaa;margin-left:1em;font-size:0.85em;">'+esc(a.evidence)+'</div>';
       s += line+'</div>';
     });
     body += s+'</div>'; }
