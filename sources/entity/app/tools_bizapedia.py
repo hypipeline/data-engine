@@ -75,51 +75,60 @@ class BizapediaMixin:
         FilingStatus, EntityType, FilingDate, principal address, registered agent,
         principals/officers, etc.
 
-        `state` (optional postal abbreviation) narrows via Bizapedia's `pa` param — used
-        by the branch-triangulation sweep. `quiet` suppresses the per-call progress line
-        (the wide state sweep fires ~50 of these and would otherwise flood the log).
+        `state` (optional postal abbreviation) narrows via Bizapedia's `pa` param — used to
+        recover the domestic parent in a branch's home jurisdiction. `quiet` suppresses the
+        per-call progress line.
+
+        Robustness: results are memoised per (name, state) for the life of this instance, and a
+        transient HTTP error / throttle is RETRIED with backoff rather than being silently treated
+        as "0 results" — that false-zero is what previously lost the herculite→Aberdeen linkage.
         """
-        self.api_calls['bizapedia'] += 1
+        import time
+
+        memo = self.__dict__.setdefault('_biz_memo', {})
+        mkey = ((entity_name or '').strip().lower(), (state or '').strip().upper())
+        if mkey in memo:
+            return memo[mkey]
+
         if not quiet:
             self._progress('registry', f'Searching Bizapedia for "{entity_name}"...'
                            + (f' (state={state})' if state else ''))
 
-        params = {
-            'ep': 'LCSBN',
-            'k': self.BIZAPEDIA_API_KEY,
-            'n': entity_name,
-        }
+        params = {'ep': 'LCSBN', 'k': self.BIZAPEDIA_API_KEY, 'n': entity_name}
         if state:
             params['pa'] = state
 
-        # curl: RETURNTRANSFER, TIMEOUT 30, ENCODING ''
-        try:
-            r = requests.get(BIZAPEDIA_REST_URL, params=params, timeout=30)
-            http_code = r.status_code
-            response = r.text
-        except requests.RequestException:
-            http_code = 0
-            response = None
+        data = None
+        for attempt in range(3):                       # 1 try + 2 retries on transient failure
+            self.api_calls['bizapedia'] += 1
+            try:
+                r = requests.get(BIZAPEDIA_REST_URL, params=params, timeout=30)
+                http_code, response = r.status_code, r.text
+            except requests.RequestException:
+                http_code, response = 0, None
 
-        if http_code != 200 or not response:
-            self.log.append({'tool': 'bizapedia', 'input': entity_name, 'output': f"HTTP {http_code}"})
-            return []
+            if http_code == 200 and response:
+                data = _json_decode(response)
+                if data and data.get('Success'):
+                    break                              # genuine success (Companies may be [])
+            # transient failure (non-200, empty body, or API error) → back off and retry
+            if attempt < 2:
+                self._progress('registry', f'Bizapedia throttled/error for "{entity_name}"'
+                               + (f' ({state})' if state else '') + f' — retry {attempt + 1}/2')
+                time.sleep(0.6 * (attempt + 1))
+                data = None
 
-        data = _json_decode(response)
         if not data or not data.get('Success'):
-            # PHP: 'API error: ' . ($data['ErrorMessage'] ?? 'unknown')
-            err = (data.get('ErrorMessage') if data else None)
-            err = err if err is not None else 'unknown'
-            self.log.append({
-                'tool': 'bizapedia',
-                'input': entity_name,
-                'output': 'API error: ' + err,
-            })
+            # Exhausted retries: this is an ERROR/throttle, NOT a confirmed empty result.
+            self.log.append({'tool': 'bizapedia', 'input': entity_name, 'output': 'API error/throttled after retries'})
+            self._progress('registry', f'Bizapedia: NO RESPONSE for "{entity_name}" (throttled/error — not a real 0)')
+            memo[mkey] = []
             return []
 
         companies = data.get('Companies') or []
         self.log.append({'tool': 'bizapedia', 'input': entity_name, 'output': f"{len(companies)} results"})
         self._progress('registry', f'Bizapedia: {len(companies)} results for "{entity_name}"')
+        memo[mkey] = companies
         return companies
 
     def search_bizapedia_trademark(self, owner_name: str) -> str:
@@ -315,11 +324,6 @@ class BizapediaMixin:
         et = (r.get('EntityType') or r.get('type') or '').upper()
         return 'FOREIGN' in et or 'OUT OF STATE' in et or 'NON-LOUISIANA' in et
 
-    _US_STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID",
-                  "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO",
-                  "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA",
-                  "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
-
     # Canonicalise legal-suffix synonyms so 'Inc'≡'Incorporated', 'Corp'≡'Corporation', etc.
     # cluster together — but DIFFERENT types (Inc vs LLC) map to different tokens and stay
     # distinct. Multi-word forms must precede the bare 'LIMITED' so they win first.
@@ -347,35 +351,50 @@ class BizapediaMixin:
         return (r.get('FilingJurisdictionPostalAbbreviation') or '').strip().upper()
 
     def build_bizapedia_families(self, name):
-        """Search Bizapedia and, when the entity shows branch structure, INGEST WIDELY — sweep
-        every US state in parallel (Bizapedia calls are cheap/uncapped in cost) to collect the
-        full set of a company's branch registrations — then fuse into a COMPACT block for the LLM.
+        """Detect branch structure from a SINGLE unfiltered name search — the base search already
+        returns up to 50 records spanning all states, branches included, each carrying its own
+        home jurisdiction. Branch detection is post-processing on that one result set.
 
-        Families are keyed on (normalised name, HOME jurisdiction), so two different companies
-        that merely share a name (e.g. an Arizona 'Alianza, LLC' vs the Delaware one) never merge,
-        and the recommended parent is the domestic filing whose OWN state is the home.
+        The only follow-up calls are TARGETED: when branches point to a home jurisdiction whose
+        domestic PARENT record isn't already in the results, fetch it with one `pa=<home>` call per
+        distinct home (capped). No per-state sweep — that previously fired ~50 calls/name, blew the
+        Bizapedia rate limit, and starved later searches (which then returned false zeros).
 
-        Returns (family_block_or_None, all_deduped_records). The wide sweep runs ONLY when the base
-        search already shows a foreign/branch filing, so non-branch entities cost one search."""
+        Families are keyed on (normalised name, HOME jurisdiction) so different same-name companies
+        don't merge, and the recommended parent is the domestic filing whose OWN state is the home.
+
+        Returns (family_block_or_None, all_deduped_records)."""
         import collections
-        import concurrent.futures
-        import re
 
         base = self.search_bizapedia(name)
         if not base:
             return None, []
-        if not any(self._biz_is_foreign(r) for r in base):
-            return None, base                          # no branch structure — cheap path
+        # Branches with a REAL home (populated DomesticJurisdiction) are the only ones we can
+        # triangulate. A "Foreign" type with a blank home gives nothing to recover — skip it.
+        homes = []
+        for r in base:
+            if self._biz_is_foreign(r):
+                h = (r.get('DomesticJurisdictionPostalAbbreviation') or '').strip().upper()
+                if h and h not in homes:
+                    homes.append(h)
+        if not homes:
+            return None, base                          # no triangulatable branch structure — 1 call
 
+        # Targeted parent recovery: only fetch a home state if its domestic parent isn't already
+        # present in the base results. Capped at 3 distinct homes to bound calls.
         all_recs = list(base)
-        self._progress('registry', f'Branch structure detected — sweeping US states for "{name}"...')
-        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
-            futs = [ex.submit(self.search_bizapedia, name, st, True) for st in self._US_STATES]
-            for f in concurrent.futures.as_completed(futs):
-                try:
-                    all_recs += f.result() or []
-                except Exception:                       # noqa: BLE001
-                    pass
+        have_home = {(self._biz_norm_name(r.get('EntityName')),
+                      (r.get('FilingJurisdictionPostalAbbreviation') or '').strip().upper())
+                     for r in base if not self._biz_is_foreign(r)}
+        base_names = {self._biz_norm_name(r.get('EntityName')) for r in base if self._biz_is_foreign(r)}
+        for home in homes[:3]:
+            if any((nm, home) in have_home for nm in base_names):
+                continue                               # parent already in results — no call needed
+            self._progress('registry', f'Recovering home-jurisdiction parent for "{name}" in {home}...')
+            try:
+                all_recs += self.search_bizapedia(name, state=home, quiet=True) or []
+            except Exception:                          # noqa: BLE001
+                pass
 
         seen = {}
         for r in all_recs:
