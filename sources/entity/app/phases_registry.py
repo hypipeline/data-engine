@@ -260,21 +260,26 @@ class RegistrySearchMixin:
             if is_us or is_unknown:
                 fam_block, biz_results = self.tools.build_bizapedia_families(name)
                 if biz_results:
+                    # Owner-linkage hint FIRST — a DBA/fictitious-name record naming an owner is the
+                    # answer for trade-name sites (e.g. Herculite Products -> ABERDEEN ROAD COMPANY).
+                    # Prepended so it always survives truncation; the raw record rank last and get cut.
+                    owner_hints = self.tools.bizapedia_owner_hints(biz_results)
+                    prefix = (owner_hints + "\n\n") if owner_hints else ""
                     if fam_block:
-                        # branch structure detected → lead with the compact fused block, then a
-                        # capped tail of deduped records for context. The wide state sweep ingests
-                        # a lot, but we keep what the LLM sees frugal (block first, tail bounded).
+                        # branch structure detected → owner hints, then the fused block, then a
+                        # capped tail of deduped records. Keep what the LLM sees frugal.
                         compact = self.tools.deduplicate_bizapedia_results(biz_results)
                         registries[f"bizapedia:{name}"] = (
-                            "BRANCH TRIANGULATION — parent + branch registrations fused "
+                            prefix
+                            + "BRANCH TRIANGULATION — parent + branch registrations fused "
                             "(multiple branches -> same home confirms the real parent; "
                             "officers on >1 filing lock identity):\n\n" + fam_block
-                            + "\n\nOTHER BIZAPEDIA RECORDS (deduped, truncated):\n" + compact[:2500]
+                            + "\n\nOTHER BIZAPEDIA RECORDS (deduped, truncated):\n" + compact[:2200]
                         )[:5000]
                     else:
                         self.tools.sort_bizapedia_results(biz_results)
                         biz_json = json.dumps(biz_results, indent=4, ensure_ascii=False)
-                        registries[f"bizapedia:{name}"] = biz_json[:5000]
+                        registries[f"bizapedia:{name}"] = (prefix + biz_json)[:5000]
                 self.log_registry_result('bizapedia', 'Bizapedia', name,
                                          str(len(biz_results)) + ' results'
                                          + (' (+branch family)' if fam_block else ''), name)

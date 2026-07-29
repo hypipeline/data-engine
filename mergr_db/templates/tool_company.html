@@ -180,15 +180,21 @@ function branchHint(results){
     + inner + '</div>';
 }
 
+// Per-request API call counts (e.g. "API calls: 1 bizapedia") — helps spot runaway call patterns.
+function apiCallsNote(data){
+  var ac = (data && data.api_calls) || {}; var parts=[];
+  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
+  return parts.length ? ' <span style="color:#999">· API calls: '+esc(parts.join(', '))+'</span>' : '';
+}
 function render(data){
   var meta = document.getElementById('meta');
   var out = document.getElementById('results');
   data = data || {};
-  if(data.error){ meta.textContent=''; out.innerHTML = '<div class="error-box">'+esc(data.error)+'</div>'; return; }
+  if(data.error){ meta.innerHTML=apiCallsNote(data); out.innerHTML = '<div class="error-box">'+esc(data.error)+'</div>'; return; }
   var results = data.results || [];
-  if(!results.length){ meta.textContent=''; out.innerHTML = '<div class="empty-box">No companies found for "'+esc(data.query||'')+'".</div>'; return; }
+  if(!results.length){ meta.innerHTML='<span class="light">No results'+apiCallsNote(data)+'</span>'; out.innerHTML = '<div class="empty-box">No companies found for "'+esc(data.query||'')+'".</div>'; return; }
   var stateNote = data.state ? ' in '+esc(String(data.state).toUpperCase()) : '';
-  meta.innerHTML = '<b>'+results.length+'</b> result'+(results.length===1?'':'s')+' for "'+esc(data.query||'')+'"'+stateNote;
+  meta.innerHTML = '<b>'+results.length+'</b> result'+(results.length===1?'':'s')+' for "'+esc(data.query||'')+'"'+stateNote+apiCallsNote(data);
   var rows = results.map(function(r,i){ return renderRow(r,i); }).join('');
   out.innerHTML = branchHint(results)
     + '<div class="tbl-wrap"><table class="tbl">'

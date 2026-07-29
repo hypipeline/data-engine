@@ -175,18 +175,21 @@ def api_company_search(q: str = "", state: str = ""):
     """Bizapedia US state-registry company search (port of bizapedia.php)."""
     q = (q or "").strip()
     if not q:
-        return JSONResponse({"query": q, "state": state, "results": [], "error": None})
+        return JSONResponse({"query": q, "state": state, "results": [], "error": None, "api_calls": {}})
+    t = _tools()                                          # fresh instance → per-request API counts
     try:
-        results = _tools().search_bizapedia(q)
+        results = t.search_bizapedia(q)
     except Exception as e:  # noqa: BLE001
-        return JSONResponse({"query": q, "state": state, "results": [], "error": str(e)})
+        return JSONResponse({"query": q, "state": state, "results": [], "error": str(e),
+                             "api_calls": t.get_api_calls()})
     st = (state or "").strip().upper()
     if st:
         results = [r for r in results
                    if (r.get('FilingJurisdictionPostalAbbreviation') or '').upper() == st
                    or (r.get('DomesticJurisdictionPostalAbbreviation') or '').upper() == st]
     return JSONResponse({"query": q, "state": st, "results": results,
-                         "error": None if results else f'No companies found for "{q}".'})
+                         "error": None if results else f'No companies found for "{q}".',
+                         "api_calls": t.get_api_calls()})
 
 
 @app.get("/api/trademark-search")
