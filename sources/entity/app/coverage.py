@@ -227,6 +227,9 @@ _SEED = [
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
     {"name": "NexPhase Capital → Delaware LPs (Bizapedia)", "names": ["NexPhase Capital"],
      "jurisdiction": "us", "expect": ["NEXPHASE CAPITAL", "DE"]},
+    {"name": "Franchise Brands plc → Companies House (UK)", "names": ["Franchise Brands plc"],
+     "jurisdiction": "uk", "expect": ["FRANCHISE BRANDS PLC", "10281033"],
+     "expect_in_source": {"companies_house": ["10281033"]}},
 ]
 
 

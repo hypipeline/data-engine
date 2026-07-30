@@ -309,6 +309,15 @@ def api_validate(entity_name: str = "", registry_id: str = "", country: str = ""
             if not nd.get('country_match'):
                 registry_name = None
 
+    # Singapore → ACRA (data.gov.sg open dataset); registry_id is the UEN, status tells us active
+    if country == 'SG' and not registry_name:
+        sg = t.lookup_singapore_by_uen(registry_id)
+        if sg:
+            registry_name = sg.get('name')
+            registry_status = sg.get('status')
+            source = 'ACRA (Singapore)'
+            raw_data = sg
+
     if not registry_name:
         return JSONResponse({"result": False, "status": "not_found",
                              "message": f'Registry ID "{registry_id}" not found in ' + (source or 'registry'),
@@ -317,7 +326,8 @@ def api_validate(entity_name: str = "", registry_id: str = "", country: str = ""
     norm_llm = re.sub(r'[^A-Z0-9 ]', '', entity_name.upper())
     norm_reg = re.sub(r'[^A-Z0-9 ]', '', (registry_name or '').upper())
     name_match = (not entity_name) or norm_llm == norm_reg
-    status_ok = (registry_status or '').lower() in ('active', 'unknown')
+    # 'registered'/'live'/'existing' are ACRA (Singapore) active statuses; the rest cover US/UK/EU
+    status_ok = (registry_status or '').lower() in ('active', 'unknown', 'registered', 'live', 'existing')
     reg_id_ok = (raw_data or {}).get('registry_id_match') is not False
 
     # link back out to the actual public register (shown on the validation result page)
@@ -328,6 +338,8 @@ def api_validate(entity_name: str = "", registry_id: str = "", country: str = ""
         registry_url = (raw_data or {}).get('url')
     elif source == 'Bizapedia':
         registry_url = (raw_data or {}).get('BizapediaUrl') or (raw_data or {}).get('Url')
+    elif source == 'ACRA (Singapore)':
+        registry_url = "https://www.bizfile.gov.sg/"     # official ACRA search (per-UEN profile is paid)
 
     base = {"registry_name": registry_name, "registry_status": registry_status, "source": source,
             "registry_url": registry_url,

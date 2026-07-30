@@ -27,7 +27,7 @@
 {% block body %}
 <a class="tool-back" href="/entity">← Back to Entity Lookup</a>
 <h1 class="page">Registry Validation</h1>
-<p class="sub">Verify an entity by name + registry ID against the official register (US · Bizapedia, GB · Companies House, EU · NorthData).</p>
+<p class="sub">Verify an entity by name + registry ID against the official register (US · Bizapedia, GB · Companies House, SG · ACRA, EU · NorthData).</p>
 <form class="v-form" id="vform" onsubmit="return validate(event)">
   <div class="fg"><label>Entity Name</label><input type="text" name="entity_name" id="f_name" placeholder="e.g. APPLE INC."></div>
   <div class="fg"><label>Registry ID</label><input type="text" name="registry_id" id="f_id" placeholder="e.g. 806592 or HRB 6684" required></div>
@@ -37,6 +37,7 @@
         <option value="">Select…</option>
         <option value="US">US</option>
         <option value="GB">GB</option>
+        <option value="SG">SG (Singapore · ACRA)</option>
         <optgroup label="Europe (NorthData)">
           <option value="DE">DE</option><option value="NL">NL</option><option value="FR">FR</option>
           <option value="AT">AT</option><option value="CH">CH</option><option value="BE">BE</option>
