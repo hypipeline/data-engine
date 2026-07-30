@@ -244,7 +244,8 @@ async def api_coverage_run(request: Request):
                "pass": sum(1 for r in results if r["status"] == "pass"),
                "fail": sum(1 for r in results if r["status"] == "fail"),
                "inconclusive": sum(1 for r in results if r["status"] == "inconclusive"),
-               "error": sum(1 for r in results if r["status"] == "error")}
+               "error": sum(1 for r in results if r["status"] == "error"),
+               "cost_usd": round(sum(r.get("cost_usd") or 0 for r in results), 4)}
     return JSONResponse({"summary": summary, "results": results})
 
 

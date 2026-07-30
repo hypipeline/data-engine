@@ -41,7 +41,8 @@
 <h1 class="page">Search Coverage</h1>
 <p class="cv-sub">Checks that the entities you <b>expect</b> appear in the registry <b>evidence</b> — a grep over what the
    search surfaced, <b>not</b> the final recommendation. No analysis LLM runs, so it's fast, cheap and deterministic.
-   A case is a <b>URL</b> (fetch + extract + search) or explicit <b>names</b> + jurisdiction (search only, zero LLM).</p>
+   A case is a <b>URL</b> (fetch + extract + search — one cheap extraction LLM call, ~1-2¢) or explicit
+   <b>names</b> + jurisdiction (search only, zero LLM, <b>free</b>). Per-case and total cost are shown on each run.</p>
 
 <div class="cv-bar">
   <button class="btn run" id="runall" onclick="runAll()">▶ Run all cases</button>
@@ -126,9 +127,13 @@ function renderResult(r){
       +'<span class="k">'+esc(ch.kind)+'</span>'+esc(ch.text)+(ch.note?' <span style="color:#999">— '+esc(ch.note)+'</span>':'')+'</div>';
   }).join('');
   var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+k;}).join(', '):'';
+  var cost = (r.mode==='names')
+    ? '<b style="color:#166534">cost: free</b> (names mode, no LLM)'
+    : '<b>cost: $'+(r.cost_usd||0).toFixed(4)+'</b>'+(r.tokens?' <span style="color:#aaa">('+r.tokens.input+' in / '+r.tokens.output+' out tok, extraction LLM)</span>':'');
   var evId='ev'+id_seq++;
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
+    + cost + ' &middot; '
     + (calls?'API calls: '+esc(calls)+' &middot; ':'')
     + (r.extracted_names?'extracted: '+esc((r.extracted_names||[]).join(', ')):'')
     + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')+'</div>'
@@ -144,33 +149,34 @@ function runOne(id){
       var r=(d.results||[])[0]||{status:'error',error:'no result'};
       setBadge(id, r.status, r.status);
       if(box) box.innerHTML=renderResult(r);
-      return r.status;
-    }).catch(function(e){ setBadge(id,'error','error'); return 'error'; });
+      return r;
+    }).catch(function(e){ setBadge(id,'error','error'); return {status:'error',cost_usd:0}; });
 }
 
 function runAll(){
   var btn=document.getElementById('runall'); btn.disabled=true;
   var ids=CASES.map(function(c){return c.id;});
-  var done=0, tally={pass:0,fail:0,inconclusive:0,error:0};
+  var done=0, cost=0, tally={pass:0,fail:0,inconclusive:0,error:0};
   ids.forEach(function(id){ setBadge(id,'running','queued'); });
   document.getElementById('progbar').style.width='0%';
   // run sequentially so progress is visible case-by-case
   function step(i){
     if(i>=ids.length){ btn.disabled=false;
-      document.getElementById('summary').innerHTML=summaryHtml(tally, done, ids.length)+' — done'; return; }
-    document.getElementById('summary').innerHTML=summaryHtml(tally, done, ids.length)+' — running '+(i+1)+'/'+ids.length+'…';
-    runOne(ids[i]).then(function(st){
-      tally[st]=(tally[st]||0)+1; done++;
+      document.getElementById('summary').innerHTML=summaryHtml(tally, cost)+' — done'; return; }
+    document.getElementById('summary').innerHTML=summaryHtml(tally, cost)+' — running '+(i+1)+'/'+ids.length+'…';
+    runOne(ids[i]).then(function(r){
+      tally[r.status]=(tally[r.status]||0)+1; done++; cost+=(r.cost_usd||0);
       document.getElementById('progbar').style.width=Math.round(100*done/ids.length)+'%';
       step(i+1);
     });
   }
   step(0);
 }
-function summaryHtml(t, done, total){
+function summaryHtml(t, cost){
   return '<span class="pill pass">'+(t.pass||0)+' pass</span> <span class="pill fail">'+(t.fail||0)+' fail</span> '
     + '<span class="pill inconclusive">'+(t.inconclusive||0)+' inconc.</span>'
-    + ((t.error)?' <span class="pill error">'+t.error+' error</span>':'');
+    + ((t.error)?' <span class="pill error">'+t.error+' error</span>':'')
+    + ' <span style="color:#555">· total cost: $'+(cost||0).toFixed(4)+'</span>';
 }
 
 var editingId=null;

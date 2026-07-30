@@ -40,9 +40,26 @@ def _domain(url: str) -> str:
     return re.sub(r'^www\.', '', (urlparse(url).hostname or ''))
 
 
+def _model_rates(model: str):
+    """($/M input, $/M output) — mirrors the agent's pricing table so cost matches a real run."""
+    m = model or ''
+    if 'haiku' in m:
+        return (0.80, 4.00)
+    if 'opus' in m:
+        return (15.00, 75.00)
+    if 'sonnet' in m:
+        return (3.00, 15.00)
+    if m == 'gpt-4o-mini':
+        return (0.15, 0.60)
+    if m == 'gpt-4o':
+        return (2.50, 10.00)
+    return (3.00, 15.00)
+
+
 def build_evidence(config, url=None, names=None, jurisdiction=None):
-    """Run the retrieval phases and return (evidence_blob_by_source, api_calls, extracted_info).
-    url mode → fetch + extract + search (1 extraction LLM call). names mode → search only."""
+    """Run the retrieval phases and return (evidence_blob_by_source, api_calls, info, cost).
+    url mode → fetch + extract + search (1 extraction LLM call, so a small cost). names mode →
+    search only (no LLM, cost 0). `cost` = {input_tokens, output_tokens, cost_usd}."""
     from agent import EntityLookup
     agent = EntityLookup(config, progress_callback=None)
     if url:
@@ -58,7 +75,11 @@ def build_evidence(config, url=None, names=None, jurisdiction=None):
     # keep values as strings, keyed by source, for source-scoped grep
     blob = {k: (v if isinstance(v, str) else json.dumps(v, default=str))
             for k, v in registries.items()}
-    return blob, agent.tools.get_api_calls(), info
+    it, ot = agent.total_input_tokens, agent.total_output_tokens
+    ri, ro = _model_rates(config.get('model') or '')
+    cost = {'input_tokens': it, 'output_tokens': ot,
+            'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)}
+    return blob, agent.tools.get_api_calls(), info, cost
 
 
 # ── one case → structured result ──────────────────────────────────────────
@@ -66,11 +87,11 @@ def run_case(config, case: dict) -> dict:
     """Build the evidence for a case and grep it. Returns a structured result with per-check
     outcomes, the api_calls, and a short evidence excerpt for inspection."""
     try:
-        blob, api_calls, info = build_evidence(
+        blob, api_calls, info, cost = build_evidence(
             config, url=case.get('url'),
             names=case.get('names'), jurisdiction=case.get('jurisdiction'))
     except Exception as e:  # noqa: BLE001
-        return {'case': case.get('name'), 'status': 'error', 'error': str(e), 'checks': []}
+        return {'case': case.get('name'), 'status': 'error', 'error': str(e), 'checks': [], 'cost_usd': 0}
 
     full = "\n".join(f"[{k}]\n{v}" for k, v in blob.items())
     full_l = full.lower()
@@ -126,6 +147,9 @@ def run_case(config, case: dict) -> dict:
         'status': status,
         'checks': checks,
         'api_calls': {k: v for k, v in api_calls.items() if v},
+        'cost_usd': cost['cost_usd'],
+        'tokens': {'input': cost['input_tokens'], 'output': cost['output_tokens']},
+        'mode': 'url' if case.get('url') else 'names',
         'extracted_names': info.get('entity_names'),
         'jurisdiction': info.get('jurisdiction'),
         'evidence_excerpt': full[:4000],
