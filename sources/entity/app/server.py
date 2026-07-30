@@ -240,7 +240,14 @@ async def api_coverage_run(request: Request):
     else:
         cases = coverage.list_cases()
     refresh = bool(body.get("refresh"))       # bypass the extraction cache (re-run fetch + LLM)
-    results = [coverage.run_case(CONFIG, c, refresh=refresh) for c in cases if c]
+    results = []
+    for c in cases:
+        if not c:
+            continue
+        r = coverage.run_case(CONFIG, c, refresh=refresh)
+        if c.get("id"):                        # persist so the page shows last result + when
+            coverage.save_last_result(c["id"], r)
+        results.append(r)
     summary = {"total": len(results),
                "pass": sum(1 for r in results if r["status"] == "pass"),
                "fail": sum(1 for r in results if r["status"] == "fail"),

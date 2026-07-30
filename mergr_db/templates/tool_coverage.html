@@ -22,6 +22,7 @@
   .case.editing { border:2px solid #4a90d9; box-shadow:0 0 0 3px rgba(74,144,217,.15); background:#f6f9ff; }
   .case-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .case-h .nm { font-weight:700; font-size:15px; } .case-h .sp { margin-left:auto; display:flex; gap:6px; }
+  .case-h .when { font-size:11px; color:#9aa3af; }
   .case-meta { font-size:12px; color:var(--muted); margin:4px 0 0; }
   .checks { margin:10px 0 0; font-size:13px; }
   .chk { padding:2px 0; } .chk .ic { display:inline-block; width:18px; font-weight:700; }
@@ -92,19 +93,29 @@ function getJSON(url, opts){
   return once().catch(function(){ return new Promise(function(res){ setTimeout(res, 500); }).then(once); });
 }
 
+function fmtWhen(iso){
+  if(!iso) return '';
+  try{ return new Date(iso).toLocaleString([], {dateStyle:'medium', timeStyle:'short'}); }
+  catch(e){ return iso; }
+}
 function caseRow(c){
   var target = c.url ? esc(c.url)
     : (c.names ? esc((c.names||[]).join(', '))+' <span style="color:#aaa">['+esc(c.jurisdiction||'unknown')+']</span>' : '');
   var exp = (c.expect||[]).map(esc).join(', ');
   var budget = (c.max_calls && Object.keys(c.max_calls).length) ? ' &middot; budget: '+esc(JSON.stringify(c.max_calls)) : '';
-  return '<div class="case" id="case-'+c.id+'"><div class="case-h">'
+  // show the last stored run (persisted across page loads) — status badge, checks + when
+  var lr = c.last_result, st = lr ? lr.status : null;
+  var when = '<span class="when" id="when-'+c.id+'"'+((lr&&c.last_run_at)?' title="'+esc(c.last_run_at)+'"':'')+'>'
+    + ((lr && c.last_run_at) ? 'last run '+esc(fmtWhen(c.last_run_at)) : '') + '</span>';
+  return '<div class="case'+(st?' st-'+st:'')+'" id="case-'+c.id+'"><div class="case-h">'
     + '<span class="nm">'+esc(c.name)+'</span>'
-    + '<span class="pill idle" id="badge-'+c.id+'">not run</span>'
+    + '<span class="pill '+(st||'idle')+'" id="badge-'+c.id+'">'+esc(st||'not run')+'</span>'
+    + when
     + '<span class="sp"><button class="btn ghost sm" onclick="runOne('+c.id+')">Run</button>'
     + '<button class="btn ghost sm" onclick="editCase('+c.id+')">Edit</button>'
     + '<button class="btn del sm" onclick="delCase('+c.id+')">Delete</button></span></div>'
     + '<div class="case-meta">'+target+' &middot; expect: <b>'+exp+'</b>'+budget+'</div>'
-    + '<div id="res-'+c.id+'"></div></div>';
+    + '<div id="res-'+c.id+'">'+(lr?renderResult(lr):'')+'</div></div>';
 }
 
 function loadCases(){
@@ -158,6 +169,7 @@ function runOne(id){
       var r=(d.results||[])[0]||{status:'error',error:'no result'};
       setBadge(id, r.status, r.status);
       if(box) box.innerHTML=renderResult(r);
+      var w=document.getElementById('when-'+id); if(w){ w.textContent='last run '+fmtWhen(new Date().toISOString()); }
       return r;
     }).catch(function(e){ setBadge(id,'error','error'); return {status:'error',cost_usd:0}; });
 }

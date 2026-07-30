@@ -228,6 +228,8 @@ def ensure_schema() -> None:
                 );
                 ALTER TABLE entity.coverage_cases
                     ADD COLUMN IF NOT EXISTS include_google boolean NOT NULL DEFAULT false;
+                ALTER TABLE entity.coverage_cases ADD COLUMN IF NOT EXISTS last_result jsonb;
+                ALTER TABLE entity.coverage_cases ADD COLUMN IF NOT EXISTS last_run_at timestamptz;
                 -- extraction cache: (url, model, include_google) → {info, gintel}. Lets URL-mode
                 -- re-runs skip fetch + the extraction LLM (free/fast) while still re-running the
                 -- live registry search — refresh bypasses it to re-test extraction itself.
@@ -270,11 +272,26 @@ def _extract_cache_put(url, model, include_google, payload):
 
 
 def _row(r):
-    """dict-ify a case row, making it JSON-safe (created_at → isoformat)."""
+    """dict-ify a case row, making it JSON-safe (timestamps → isoformat)."""
     d = dict(r)
-    if d.get("created_at") is not None:
-        d["created_at"] = d["created_at"].isoformat()
+    for k in ("created_at", "last_run_at"):
+        if d.get(k) is not None:
+            d[k] = d[k].isoformat()
     return d
+
+
+def save_last_result(cid: int, result: dict) -> None:
+    """Persist a case's most recent run result so the page can show it on load."""
+    if not enabled():
+        return
+    try:
+        with closing(_conn()) as c:
+            with c.cursor() as cur:
+                cur.execute("UPDATE entity.coverage_cases SET last_result=%s, last_run_at=now() WHERE id=%s",
+                            (json.dumps(result, default=str), cid))
+            c.commit()
+    except Exception as e:  # noqa: BLE001
+        print(f"[coverage] save_last_result failed: {e}")
 
 
 def list_cases() -> list:
@@ -317,9 +334,11 @@ def update_case(cid: int, case: dict) -> None:
     """Overwrite a case's fields in place (for the edit form)."""
     with closing(_conn()) as c:
         with c.cursor() as cur:
+            # editing changes what pass/fail means, so the stored last_result is now stale — clear it
             cur.execute(
                 "UPDATE entity.coverage_cases SET name=%s, url=%s, names=%s, jurisdiction=%s, "
-                "expect=%s, forbid=%s, expect_in_source=%s, max_calls=%s, include_google=%s WHERE id=%s",
+                "expect=%s, forbid=%s, expect_in_source=%s, max_calls=%s, include_google=%s, "
+                "last_result=NULL, last_run_at=NULL WHERE id=%s",
                 (case.get('name') or 'unnamed', case.get('url'),
                  json.dumps(case.get('names') or None), case.get('jurisdiction'),
                  json.dumps(case.get('expect') or []), json.dumps(case.get('forbid') or []),
@@ -354,6 +373,11 @@ _SEED = [
      "names": ["ABCA Systems Ltd"], "jurisdiction": "uk",
      "expect": ["ABCA SYSTEMS LIMITED", "06294877", "VULCAN1 TOPCO", "16483240"],
      "expect_in_source": {"companies_house": ["06294877"], "ownership_chain": ["16483240"]}},
+    # German listed company via URL → exercises NorthData; the LEI is a stable anchor. Note the
+    # site classifies as US (adidas America), yet the broad search still surfaces adidas AG from NorthData.
+    {"name": "adidas.com → adidas AG (Germany · NorthData LEI)", "url": "http://www.adidas.com/",
+     "expect": ["adidas AG", "549300JSX0Z4CW0V5023"],
+     "expect_in_source": {"northdata": ["adidas AG"]}},
 ]
 
 
