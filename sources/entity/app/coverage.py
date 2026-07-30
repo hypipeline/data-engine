@@ -227,12 +227,13 @@ _SEED = [
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
     {"name": "NexPhase Capital → Delaware LPs (Bizapedia)", "names": ["NexPhase Capital"],
      "jurisdiction": "us", "expect": ["NEXPHASE CAPITAL", "DE"]},
-    # UK private company — exercises Companies House + PSC ownership-chain traversal (a listed
-    # company would lean on Yahoo Finance instead and not really test Companies House).
-    {"name": "ABCA Systems → Companies House + ownership chain (UK private)",
+    # UK private company — exercises Companies House + the deep PSC ownership-chain traversal all
+    # the way to the ULTIMATE parent (a listed company would lean on Yahoo Finance and not really
+    # test Companies House). Entity #06294877 → … → Vulcan1 TopCo #16483240 (7 levels).
+    {"name": "ABCA Systems → Companies House + ownership chain to ultimate parent (UK private)",
      "names": ["ABCA Systems Ltd"], "jurisdiction": "uk",
-     "expect": ["ABCA SYSTEMS LIMITED", "06294877", "ABCA SYSTEMS GROUP LIMITED", "12500353"],
-     "expect_in_source": {"companies_house": ["06294877"]}},
+     "expect": ["ABCA SYSTEMS LIMITED", "06294877", "VULCAN1 TOPCO", "16483240"],
+     "expect_in_source": {"companies_house": ["06294877"], "ownership_chain": ["16483240"]}},
 ]
 
 
