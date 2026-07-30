@@ -143,6 +143,20 @@ class ValidationMixin:
             else:
                 self.log('validate', f"NorthData: no results for \"{llm_name}\"")
 
+        # Singapore → ACRA by UEN (data.gov.sg open dataset)
+        if country == 'SG' and not registry_name:
+            self.log('validate', f"Looking up ACRA (Singapore): UEN {registry_id}...")
+            sg = self.tools.lookup_singapore_by_uen(registry_id)
+            if sg:
+                registry_name = sg.get('name')
+                registry_status = sg.get('status')
+                registry_data = sg
+                source = 'ACRA (Singapore)'
+                validation_url = 'https://www.bizfile.gov.sg/'
+                self.log('validate', f"ACRA returned: \"{registry_name}\" (status: {registry_status})")
+            else:
+                self.log('validate', f"ACRA: no result for UEN {registry_id}")
+
         # Build validation result
         if not registry_name:
             report['registry_validation'] = {
@@ -157,9 +171,9 @@ class ValidationMixin:
         norm_reg = re.sub(r'[^A-Z0-9 ]', '', (registry_name or '').upper()).upper()
         name_match = norm_llm == norm_reg
 
-        # Check status
+        # Check status ('registered'/'live'/'existing' are ACRA/Singapore active statuses)
         status_lower = (registry_status or '').lower()
-        status_ok = status_lower in ['active', 'unknown']
+        status_ok = status_lower in ['active', 'unknown', 'registered', 'live', 'existing']
 
         if name_match and status_ok:
             report['registry_validation'] = {
@@ -253,6 +267,15 @@ class ValidationMixin:
                 source = 'NorthData'
                 validation_url = nd.get('url')
 
+        # Singapore → ACRA by UEN
+        if country == 'SG' and not registry_name:
+            sg = self.tools.lookup_singapore_by_uen(registry_id)
+            if sg:
+                registry_name = sg.get('name')
+                registry_status = sg.get('status')
+                source = 'ACRA (Singapore)'
+                validation_url = 'https://www.bizfile.gov.sg/'
+
         if not registry_name:
             return {'status': 'not_found', 'source': source}
 
@@ -260,7 +283,7 @@ class ValidationMixin:
         norm_reg = re.sub(r'[^A-Z0-9 ]', '', (registry_name or '').upper()).upper()
         name_match = norm_llm == norm_reg
         status_lower = (registry_status or '').lower()
-        status_ok = status_lower in ['active', 'unknown']
+        status_ok = status_lower in ['active', 'unknown', 'registered', 'live', 'existing']
 
         if name_match and status_ok:
             return {'status': 'verified', 'registry_name': registry_name, 'source': source, 'validation_url': validation_url}
