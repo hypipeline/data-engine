@@ -492,6 +492,11 @@ def tool_validate(request: Request):
     return render(request, "tool_validate.html", "entity")
 
 
+@app.get("/entity/tools/coverage", response_class=HTMLResponse)
+def tool_coverage(request: Request):
+    return render(request, "tool_coverage.html", "entity")
+
+
 _LKP_GROUP = "COALESCE(NULLIF(domain,''), url)"       # canonical dedup key (blank domain -> url)
 
 

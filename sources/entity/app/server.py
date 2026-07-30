@@ -23,6 +23,7 @@ from agent import EntityLookup
 from tools import LookupTools
 import cache
 import linkedin_cache
+import coverage
 
 # Countries validated via NorthData (faithful to validate.php).
 NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
@@ -42,6 +43,10 @@ def _startup():
         linkedin_cache.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[linkedin_cache] schema init skipped: {e}")
+    try:
+        coverage.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[coverage] schema init skipped: {e}")
 
 
 def _domain(url: str) -> str:
@@ -190,6 +195,48 @@ def api_company_search(q: str = "", state: str = ""):
     return JSONResponse({"query": q, "state": st, "results": results,
                          "error": None if results else f'No companies found for "{q}".',
                          "api_calls": t.get_api_calls()})
+
+
+# ── Search-coverage test harness (grep the evidence, not the recommendation) ──
+@app.get("/api/coverage/cases")
+def api_coverage_cases():
+    return JSONResponse({"cases": coverage.list_cases()})
+
+
+@app.post("/api/coverage/cases")
+async def api_coverage_add(request: Request):
+    body = await request.json()
+    if not (body.get("url") or body.get("names")):
+        return JSONResponse({"error": "provide a url or names[]"}, status_code=400)
+    cid = coverage.add_case(body)
+    return JSONResponse({"id": cid})
+
+
+@app.delete("/api/coverage/cases/{cid}")
+def api_coverage_delete(cid: int):
+    coverage.delete_case(cid)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/coverage/run")
+async def api_coverage_run(request: Request):
+    """Run one case (body {id}) or all. Runs the pipeline up to search_registries only —
+    no analysis LLM. Returns per-case, per-check pass/fail/inconclusive."""
+    body = await request.json() if await request.body() else {}
+    if body.get("id"):
+        c = coverage.get_case(int(body["id"]))
+        cases = [c] if c else []
+    elif body.get("case"):                        # ad-hoc, unsaved case
+        cases = [body["case"]]
+    else:
+        cases = coverage.list_cases()
+    results = [coverage.run_case(CONFIG, c) for c in cases if c]
+    summary = {"total": len(results),
+               "pass": sum(1 for r in results if r["status"] == "pass"),
+               "fail": sum(1 for r in results if r["status"] == "fail"),
+               "inconclusive": sum(1 for r in results if r["status"] == "inconclusive"),
+               "error": sum(1 for r in results if r["status"] == "error")}
+    return JSONResponse({"summary": summary, "results": results})
 
 
 @app.get("/api/trademark-search")

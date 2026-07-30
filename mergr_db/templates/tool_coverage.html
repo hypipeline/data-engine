@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Search Coverage — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .back-link { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .cv-sub { color:var(--muted); font-size:14px; max-width:820px; margin:2px 0 18px; line-height:1.5; }
+  .cv-bar { display:flex; gap:10px; align-items:center; margin:8px 0 18px; flex-wrap:wrap; }
+  .btn { padding:9px 18px; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn.run { background:#4a90d9; color:#fff; } .btn.run:hover { background:#3a7bc8; }
+  .btn.ghost { background:#fff; border:1px solid var(--border-2); color:var(--text); }
+  .btn.sm { padding:4px 10px; font-size:12px; }
+  .btn.del { color:#b91c1c; border-color:#fecaca; background:#fff; }
+  .summary { font-size:14px; font-weight:600; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:12px; font-weight:700; }
+  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
+  .pill.inconclusive { background:#fef3c7; color:#92400e; } .pill.error { background:#e5e7eb; color:#374151; }
+  .case { border:1px solid var(--border-2); border-radius:10px; background:#fff; padding:14px 16px; margin:0 0 12px; max-width:960px; }
+  .case-h { display:flex; align-items:center; gap:10px; }
+  .case-h .nm { font-weight:700; font-size:15px; }
+  .case-meta { font-size:12px; color:var(--muted); margin:4px 0 0; }
+  .checks { margin:10px 0 0; font-size:13px; }
+  .chk { padding:2px 0; } .chk .ic { display:inline-block; width:18px; }
+  .chk.pass .ic { color:#16a34a; } .chk.fail .ic { color:#dc2626; } .chk.inconclusive .ic { color:#d97706; }
+  .chk .k { color:#888; font-size:11px; text-transform:uppercase; margin-right:6px; }
+  .evidence { margin-top:8px; } .evidence pre { background:#0b1020; color:#d6e2ff; padding:12px; border-radius:8px; overflow:auto; max-height:340px; font-size:11.5px; white-space:pre-wrap; }
+  .addbox { border:1px dashed var(--border-2); border-radius:10px; padding:16px; max-width:960px; margin-top:8px; background:#fafbff; }
+  .addbox label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
+  .addbox input, .addbox textarea { width:100%; padding:8px 10px; border:1px solid var(--border-2); border-radius:6px; font-size:13px; font-family:inherit; }
+  .addbox .row { display:flex; gap:12px; } .addbox .row>div { flex:1; }
+  .hint { font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="back-link" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Search Coverage</h1>
+<p class="cv-sub">Checks that the entities you <b>expect</b> appear in the registry <b>evidence</b> — a grep over
+   what the search surfaced, <b>not</b> the final recommendation. No analysis LLM runs, so it's fast, cheap and
+   deterministic. Two modes: a <b>URL</b> (fetch + extract + search, one cheap extraction call) or explicit
+   <b>names</b> + jurisdiction (search only, zero LLM). This is exactly what would have caught the herculite,
+   questglobal and Singapore regressions.</p>
+
+<div class="cv-bar">
+  <button class="btn run" onclick="runAll()">▶ Run all cases</button>
+  <span class="summary" id="summary"></span>
+</div>
+
+<div id="results"></div>
+
+<h3 style="margin:22px 0 8px">Test cases</h3>
+<div id="cases"></div>
+
+<div class="addbox">
+  <div style="font-weight:700;margin-bottom:4px">Add a test case</div>
+  <div class="row">
+    <div><label>Name</label><input id="f-name" placeholder="e.g. acme.com → ACME HOLDINGS"></div>
+  </div>
+  <div class="row">
+    <div><label>URL (mode A)</label><input id="f-url" placeholder="https://acme.com"></div>
+    <div><label>OR Names (mode B, comma-separated)</label><input id="f-names" placeholder="Acme Holdings, Inc."></div>
+    <div style="flex:0 0 140px"><label>Jurisdiction</label><input id="f-jur" placeholder="us / singapore …"></div>
+  </div>
+  <label>Expect — these strings MUST appear (comma or newline separated)</label>
+  <textarea id="f-expect" rows="2" placeholder="ACME HOLDINGS, 12345678"></textarea>
+  <div class="row">
+    <div><label>Forbid (optional) — must NOT appear</label><input id="f-forbid" placeholder=""></div>
+    <div><label>Max calls (optional) — e.g. bizapedia:15</label><input id="f-maxcalls" placeholder="bizapedia:15, acra:4"></div>
+    <div><label>Expect in source (optional) — e.g. acra:12345</label><input id="f-insource" placeholder="acra:12345678"></div>
+  </div>
+  <div class="hint">Expect-in-source asserts the string comes from that specific registry block (source keys: bizapedia, acra, northdata, companies_house, sec_company, …).</div>
+  <div style="margin-top:12px"><button class="btn run" onclick="addCase()">＋ Add case</button> <span id="add-msg" style="font-size:13px;margin-left:8px"></span></div>
+</div>
+
+<script>
+var EB='/entity-app';
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function ic(st){ return st==='pass'?'✓':st==='fail'?'✗':st==='inconclusive'?'⚠':'•'; }
+function splitList(v){ return (v||'').split(/[,\n]/).map(function(x){return x.trim();}).filter(Boolean); }
+function parseKV(v){ var o={}; splitList(v).forEach(function(p){ var m=p.split(':'); if(m.length>=2){ var k=m[0].trim(); var val=m.slice(1).join(':').trim(); o[k]=(/^\d+$/.test(val)?parseInt(val,10):val);} }); return o; }
+
+function loadCases(){
+  fetch(EB+'/api/coverage/cases').then(function(r){return r.json();}).then(function(d){
+    var el=document.getElementById('cases'); var cs=(d&&d.cases)||[];
+    if(!cs.length){ el.innerHTML='<div style="color:#888;font-size:13px">No cases yet — add one below.</div>'; return; }
+    el.innerHTML=cs.map(function(c){
+      var target = c.url ? esc(c.url) : (c.names? esc(c.names.join(', '))+' <span style="color:#aaa">['+esc(c.jurisdiction||'unknown')+']</span>' : '');
+      var exp = (c.expect||[]).map(esc).join(', ');
+      return '<div class="case"><div class="case-h"><span class="nm">'+esc(c.name)+'</span>'
+        + '<button class="btn ghost sm" onclick="runOne('+c.id+')">Run</button>'
+        + '<button class="btn del sm" onclick="delCase('+c.id+')">Delete</button></div>'
+        + '<div class="case-meta">'+target+' &middot; expect: <b>'+exp+'</b>'
+        + ((c.max_calls&&Object.keys(c.max_calls).length)?' &middot; budget: '+esc(JSON.stringify(c.max_calls)):'')+'</div>'
+        + '<div id="res-'+c.id+'"></div></div>';
+    }).join('');
+  });
+}
+
+function renderResult(r){
+  var checks=(r.checks||[]).map(function(ch){
+    return '<div class="chk '+ch.status+'"><span class="ic">'+ic(ch.status)+'</span>'
+      +'<span class="k">'+esc(ch.kind)+'</span>'+esc(ch.text)+(ch.note?' <span style="color:#999">— '+esc(ch.note)+'</span>':'')+'</div>';
+  }).join('');
+  var calls = r.api_calls? Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+k;}).join(', ') : '';
+  var evId='ev'+Math.random().toString(36).slice(2);
+  return '<div class="checks">'+checks+'</div>'
+    + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span>':'')
+    + (calls?'API calls: '+esc(calls)+' &middot; ':'')
+    + (r.extracted_names?'extracted: '+esc((r.extracted_names||[]).join(', '))+' ':'')
+    + (r.jurisdiction?'&middot; jurisdiction: '+esc(r.jurisdiction):'')+'</div>'
+    + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'');
+}
+
+function runOne(id){
+  var box=document.getElementById('res-'+id); if(box) box.innerHTML='<div class="case-meta"><span class="spin"></span> running…</div>';
+  fetch(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+    .then(function(r){return r.json();}).then(function(d){
+      var r=(d.results||[])[0]; if(!box)return;
+      box.innerHTML='<div style="margin-top:6px"><span class="pill '+r.status+'">'+r.status+'</span></div>'+renderResult(r);
+    });
+}
+function runAll(){
+  document.getElementById('summary').innerHTML='<span class="spin"></span> running all (this can take a minute for URL cases)…';
+  document.getElementById('results').innerHTML='';
+  fetch(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+    .then(function(r){return r.json();}).then(function(d){
+      var s=d.summary||{};
+      document.getElementById('summary').innerHTML='<span class="pill pass">'+s.pass+' pass</span> '
+        +'<span class="pill fail">'+s.fail+' fail</span> <span class="pill inconclusive">'+(s.inconclusive||0)+' inconclusive</span>'
+        +(s.error?' <span class="pill error">'+s.error+' error</span>':'');
+      document.getElementById('results').innerHTML=(d.results||[]).map(function(r){
+        return '<div class="case"><div class="case-h"><span class="nm">'+esc(r.case||'')+'</span><span class="pill '+r.status+'">'+r.status+'</span></div>'+renderResult(r)+'</div>';
+      }).join('');
+    });
+}
+
+function addCase(){
+  var names=splitList(document.getElementById('f-names').value);
+  var body={ name:document.getElementById('f-name').value||'(unnamed)',
+    url:document.getElementById('f-url').value.trim()||null,
+    names:names.length?names:null, jurisdiction:document.getElementById('f-jur').value.trim()||null,
+    expect:splitList(document.getElementById('f-expect').value),
+    forbid:splitList(document.getElementById('f-forbid').value),
+    max_calls:parseKV(document.getElementById('f-maxcalls').value),
+    expect_in_source:(function(){ var o={}; splitList(document.getElementById('f-insource').value).forEach(function(p){var m=p.split(':');if(m.length>=2){ (o[m[0].trim()]=o[m[0].trim()]||[]).push(m.slice(1).join(':').trim()); }}); return o; })() };
+  if(!body.url && !body.names){ document.getElementById('add-msg').textContent='Provide a URL or names.'; return; }
+  fetch(EB+'/api/coverage/cases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){ document.getElementById('add-msg').textContent=d.error; return; }
+      ['f-name','f-url','f-names','f-jur','f-expect','f-forbid','f-maxcalls','f-insource'].forEach(function(i){document.getElementById(i).value='';});
+      document.getElementById('add-msg').textContent='Added ✓'; loadCases();
+    });
+}
+function delCase(id){ fetch(EB+'/api/coverage/cases/'+id,{method:'DELETE'}).then(function(){loadCases();}); }
+
+loadCases();
+</script>
+{% endblock %}
