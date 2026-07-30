@@ -19,6 +19,7 @@
   .pill.running { background:#e0edff; color:#1e40af; } .pill.idle { background:#f1f3f6; color:#9aa3af; }
   .case { border:1px solid var(--border-2); border-radius:10px; background:#fff; padding:14px 16px; margin:0 0 12px; max-width:960px; }
   .case.st-fail { border-color:#fca5a5; } .case.st-pass { border-color:#bbf7d0; } .case.st-inconclusive { border-color:#fde68a; }
+  .case.editing { border:2px solid #4a90d9; box-shadow:0 0 0 3px rgba(74,144,217,.15); background:#f6f9ff; }
   .case-h { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .case-h .nm { font-weight:700; font-size:15px; } .case-h .sp { margin-left:auto; display:flex; gap:6px; }
   .case-meta { font-size:12px; color:var(--muted); margin:4px 0 0; }
@@ -52,7 +53,7 @@
 <div id="cases"><div class="summary">Loading cases…</div></div>
 
 <div class="addbox">
-  <div style="font-weight:700;margin-bottom:4px">Add a test case</div>
+  <div id="form-title" style="font-weight:700;margin-bottom:4px">Add a test case</div>
   <div class="row"><div><label>Name</label><input id="f-name" placeholder="e.g. acme.com → ACME HOLDINGS"></div></div>
   <div class="row">
     <div><label>URL (mode A)</label><input id="f-url" placeholder="https://acme.com"></div>
@@ -178,6 +179,10 @@ function clearForm(){ ['f-name','f-url','f-names','f-jur','f-expect','f-forbid',
 function kvToText(o){ return Object.keys(o||{}).map(function(k){return k+':'+o[k];}).join(', '); }
 function insourceToText(o){ var out=[]; Object.keys(o||{}).forEach(function(src){ (o[src]||[]).forEach(function(s){ out.push(src+':'+s); }); }); return out.join(', '); }
 
+function highlightEditing(id){
+  document.querySelectorAll('.case.editing').forEach(function(el){ el.classList.remove('editing'); });
+  if(id!=null){ var card=document.getElementById('case-'+id); if(card) card.classList.add('editing'); }
+}
 function editCase(id){
   var c=null; CASES.forEach(function(x){ if(x.id===id) c=x; }); if(!c) return;
   editingId=id;
@@ -185,12 +190,15 @@ function editCase(id){
   setField('f-jur',c.jurisdiction); setField('f-expect',(c.expect||[]).join('\n'));
   setField('f-forbid',(c.forbid||[]).join(', ')); setField('f-maxcalls',kvToText(c.max_calls));
   setField('f-insource',insourceToText(c.expect_in_source));
+  document.getElementById('form-title').innerHTML='✏️ Editing: <span style="color:#4a90d9">'+esc(c.name)+'</span>';
   document.getElementById('save-btn').textContent='💾 Save changes';
   document.getElementById('cancel-edit').style.display='';
-  document.getElementById('add-msg').textContent='Editing "'+esc(c.name)+'"';
+  document.getElementById('add-msg').textContent='';
+  highlightEditing(id);
   document.querySelector('.addbox').scrollIntoView({behavior:'smooth',block:'center'});
 }
-function cancelEdit(){ editingId=null; clearForm();
+function cancelEdit(){ editingId=null; clearForm(); highlightEditing(null);
+  document.getElementById('form-title').textContent='Add a test case';
   document.getElementById('save-btn').textContent='＋ Add case';
   document.getElementById('cancel-edit').style.display='none'; document.getElementById('add-msg').textContent=''; }
 

@@ -235,8 +235,9 @@ def delete_case(cid: int) -> None:
 _SEED = [
     {"name": "herculite → Aberdeen (DBA owner + call budget)", "url": "https://herculite.com",
      "expect": ["ABERDEEN ROAD COMPANY", "2887899"], "max_calls": {"bizapedia": 20}},
-    {"name": "questglobal → Singapore UEN from ACRA", "url": "https://questglobal.com",
-     "expect": ["200904830K", "QUEST GLOBAL SERVICES"],
+    {"name": "questglobal → Quest Global Services Pte. Ltd. (Singapore UEN from ACRA)",
+     "url": "https://questglobal.com",
+     "expect": ["200904830K", "QUEST GLOBAL SERVICES PTE. LTD."],
      "expect_in_source": {"acra": ["200904830K"]}},
     {"name": "Alianza LLC → Delaware parent (branch triangulation)", "names": ["Alianza, LLC"],
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
