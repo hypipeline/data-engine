@@ -137,6 +137,14 @@ class RegistrySearchMixin:
         is_uk = jset & _UK_JUR
         is_eu = jset & _EU_JUR
         is_unknown = 'unknown' in jurisdictions
+        # A recognised-but-unsupported jurisdiction (e.g. Singapore, India, Australia) matches none
+        # of the buckets above and would otherwise fall through to searching ZERO registries. Treat
+        # it as a broad search so NorthData (name-based, international coverage) and the others run
+        # rather than missing the entity entirely. (questglobal.com=singapore searched 0 registries.)
+        if not (is_us or is_uk or is_eu or is_unknown):
+            self.log('registry', f"Jurisdiction '{jurisdiction}' not in a known bucket — "
+                     "falling back to a broad (all-registry) search")
+            is_unknown = True
 
         # ── Declare search plan ──
         registry_sources = []
