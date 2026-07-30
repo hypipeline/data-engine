@@ -621,6 +621,11 @@ function renderReport(rep, meta, url){
   metaHtml += '<span class="cost-badge">'+money(cost)+'</span>';
   metaHtml += '<span>'+r1(meta.total_time_s)+'s</span>';
   metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
+  // API usage — total (visible) with a full per-source breakdown on hover; the detailed
+  // per-source list is also spelled out in the timing footer at the bottom of the card.
+  var ac0 = meta.api_calls||{}; var acParts0=[]; var acTotal0=0;
+  for(var svc0 in ac0){ if(ac0[svc0]>0){ acParts0.push(svc0+' '+ac0[svc0]); acTotal0+=ac0[svc0]; } }
+  if(acTotal0) metaHtml += '<span class="cost-badge" title="'+esc(acParts0.join(' · '))+'">'+acTotal0+' API call'+(acTotal0===1?'':'s')+'</span>';
   if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
   metaHtml += '<a href="api/lookup?url='+encodeURIComponent(url||'')+'" target="_blank" class="evidence-link">View API</a>';
 

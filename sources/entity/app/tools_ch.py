@@ -50,7 +50,7 @@ class CompaniesHouseMixin:
     def search_companies_house(self, query: str) -> str:
         url = ("https://find-and-update.company-information.service.gov.uk/search?q="
                + quote(query, safe=''))
-        html = self.http_get(url)
+        html = self.http_get(url, service='companies_house')
         if not html:
             return "Error: Could not fetch Companies House."
 
@@ -78,7 +78,7 @@ class CompaniesHouseMixin:
         """Returns dict with name, status, etc. or None if not found."""
         url = ("https://find-and-update.company-information.service.gov.uk/company/"
                + quote(company_number, safe=''))
-        html = self.http_get(url)
+        html = self.http_get(url, service='companies_house')
         if not html:
             return None
 
@@ -121,7 +121,7 @@ class CompaniesHouseMixin:
         # Step 1: Search officers index for the corporate entity
         search_url = ("https://find-and-update.company-information.service.gov.uk/search/officers?q="
                       + quote(entity_name, safe=''))
-        html = self.http_get(search_url)
+        html = self.http_get(search_url, service='companies_house')
         if not html:
             self._ch_log('ch_corporate_appointments', entity_name,
                          'Error: could not fetch officers search')
@@ -147,7 +147,7 @@ class CompaniesHouseMixin:
         # Step 2: Fetch appointments page
         appointments_url = (f"https://find-and-update.company-information.service.gov.uk/"
                             f"officers/{officer_id}/appointments")
-        html = self.http_get(appointments_url)
+        html = self.http_get(appointments_url, service='companies_house')
         if not html:
             self._ch_log('ch_corporate_appointments', entity_name,
                          'Error: could not fetch appointments page')
@@ -345,6 +345,7 @@ class CompaniesHouseMixin:
 
     def _ch_api_get(self, url: str, api_key: str):
         try:
+            self.increment_api_call('companies_house')
             r = requests.get(url, auth=(api_key, ''), timeout=10)
         except requests.RequestException:
             return None
@@ -365,7 +366,7 @@ class CompaniesHouseMixin:
             # Fetch company overview for name
             overview_url = (f"https://find-and-update.company-information.service.gov.uk/"
                             f"company/{current}")
-            html = self.http_get(overview_url)
+            html = self.http_get(overview_url, service='companies_house')
             company_name = current
             if html:
                 m = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
@@ -377,7 +378,7 @@ class CompaniesHouseMixin:
             # Fetch PSC page
             psc_url = (f"https://find-and-update.company-information.service.gov.uk/"
                        f"company/{current}/persons-with-significant-control")
-            psc_html = self.http_get(psc_url)
+            psc_html = self.http_get(psc_url, service='companies_house')
             if not psc_html:
                 chain.append("  [TOP OF CHAIN]")
                 break

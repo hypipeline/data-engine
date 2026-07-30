@@ -118,6 +118,7 @@ class NorthDataMixin:
             headers['Cookie'] = "auth={}".format(auth_cookie)
         self._nd_log({'tool': 'northdata_get', 'input': url,
                       'output': 'auth=' + ('yes' if auth_cookie else 'no')})
+        self.increment_api_call('northdata')
         try:
             r = requests.get(url, headers=headers, allow_redirects=True, timeout=30)
         except requests.RequestException:

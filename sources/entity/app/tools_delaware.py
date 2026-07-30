@@ -66,6 +66,7 @@ class DelawareMixin:
             result = "Delaware search unavailable (Browserbase not configured)."
             self._log_tool('search_delaware', entity_name, result)
             return result
+        self.increment_api_call('delaware')  # one Delaware registry lookup (scripted browser flow)
 
         selenium_base = 'http://connect.usw2.browserbase.com/webdriver'
 
@@ -176,6 +177,7 @@ class DelawareMixin:
         if not api_key or not project_id:
             self._log_tool('lookup_delaware', file_number, 'Browserbase not configured')
             return None
+        self.increment_api_call('delaware')  # one Delaware registry lookup (scripted browser flow)
 
         selenium_base = 'http://connect.usw2.browserbase.com/webdriver'
 

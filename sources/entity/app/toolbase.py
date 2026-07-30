@@ -49,6 +49,7 @@ class ToolBase:
         self.log = []          # PHP LookupTools::$log — tool call records (getLog())
         self.api_calls = {
             'claude': 0, 'browserbase': 0, 'brightdata': 0, 'openai': 0, 'bizapedia': 0, 'acra': 0,
+            'sec': 0, 'companies_house': 0, 'delaware': 0, 'northdata': 0, 'opencorporates': 0,
         }
 
     # ── bookkeeping ─────────────────────────────────────────────────────────
@@ -82,7 +83,13 @@ class ToolBase:
         return "\n".join(ln for ln in lines if ln)
 
     # ── simple GET (returns raw html or None) ───────────────────────────────
-    def http_get(self, url: str, headers: dict | None = None, timeout: int = 20) -> str | None:
+    def http_get(self, url: str, headers: dict | None = None, timeout: int = 20,
+                 service: str | None = None) -> str | None:
+        # `service` (e.g. 'sec', 'companies_house', 'opencorporates') counts this request
+        # against that registry so the report's API-usage totals cover every source, not just
+        # the ones (bizapedia/brightdata/acra) that were instrumented directly.
+        if service:
+            self.increment_api_call(service)
         try:
             r = requests.get(url, headers={'User-Agent': _UA, **(headers or {})},
                              timeout=timeout, allow_redirects=True)

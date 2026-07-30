@@ -54,6 +54,7 @@ class OpenCorporatesMixin:
         if jurisdiction_code:
             search_url += '&jurisdiction_code=' + quote_plus(jurisdiction_code)
 
+        self.increment_api_call('opencorporates')  # one OpenCorporates query (captcha-solved fetch)
         html = self.oc_fetch_with_captcha(search_url)
 
         if not html or len(html) < 200:
@@ -104,6 +105,7 @@ class OpenCorporatesMixin:
     def open_corporates_detail(self, jurisdiction: str, company_number: str) -> str:
         """Fetch full details for a single OpenCorporates company page."""
         url = f"https://opencorporates.com/companies/{jurisdiction}/{company_number}"
+        self.increment_api_call('opencorporates')  # one OpenCorporates detail fetch
         html = self.oc_fetch_with_captcha(url)
 
         if not html or html.startswith('Error:'):

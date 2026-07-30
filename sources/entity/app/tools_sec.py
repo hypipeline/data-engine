@@ -78,7 +78,7 @@ class SecMixin:
         clean_query = re.sub(r'\s+', ' ', clean_query.strip())
         url = ("https://www.sec.gov/cgi-bin/browse-edgar?company=" + quote_plus(clean_query)
                + "&CIK=&type=&dateb=&owner=include&count=20&search_text=&action=getcompany")
-        html = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        html = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not html:
             return "Error: Could not reach SEC EDGAR."
 
@@ -110,7 +110,7 @@ class SecMixin:
     # ── searchSecFulltext (tools.php:1079) ──────────────────────────────────
     def search_sec_fulltext(self, query: str) -> str:
         url = "https://efts.sec.gov/LATEST/search-index?q=" + quote_plus(query)
-        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not raw:
             return "Error: Could not reach SEC fulltext."
 
@@ -138,7 +138,7 @@ class SecMixin:
     def fetch_sec_submissions(self, cik: str) -> str:
         cik_padded = str(cik).rjust(10, '0')
         url = f"https://data.sec.gov/submissions/CIK{cik_padded}.json"
-        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not raw:
             return "Error: Could not fetch SEC submissions."
 
@@ -215,7 +215,7 @@ class SecMixin:
         url = (f"https://www.sec.gov/Archives/edgar/data/{cik_clean}/{accession}/"
                f"{filing['primaryDocument']}")
 
-        html = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        html = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not html:
             return None
 
@@ -292,7 +292,7 @@ class SecMixin:
 
     # ── fetchSecFiling (tools.php:1271) ─────────────────────────────────────
     def fetch_sec_filing(self, url: str) -> str:
-        content = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        content = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not content:
             return "Error: Could not fetch SEC filing."
 
@@ -309,7 +309,7 @@ class SecMixin:
     def sec_edgar_financials(self, cik: str) -> str:
         padded_cik = str(cik).rjust(10, '0')
         url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{padded_cik}.json"
-        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15)
+        raw = self.http_get(url, headers={'User-Agent': self.config['sec_user_agent']}, timeout=15, service='sec')
         if not raw:
             self._log('sec_edgar_financials', cik, 'No data')
             return ''
@@ -433,7 +433,7 @@ class SecMixin:
         for query in searches:
             url = ("https://efts.sec.gov/LATEST/search-index?q=" + quote_plus(query)
                    + "&forms=10-K&dateRange=custom&startdt=2022-01-01&enddt=2026-12-31")
-            raw = self.http_get(url, headers={'User-Agent': ua}, timeout=15)
+            raw = self.http_get(url, headers={'User-Agent': ua}, timeout=15, service='sec')
             if not raw:
                 continue
 
@@ -496,7 +496,7 @@ class SecMixin:
             # Fetch filing index to find Exhibit 21 document URL
             index_url = (f"https://www.sec.gov/Archives/edgar/data/{cik_clean}/{adsh_clean}/"
                          f"{hit['adsh']}-index.htm")
-            index_html = self.http_get(index_url, headers={'User-Agent': ua}, timeout=15)
+            index_html = self.http_get(index_url, headers={'User-Agent': ua}, timeout=15, service='sec')
 
             exhibit_url = None
             if index_html:
@@ -506,7 +506,7 @@ class SecMixin:
 
             if exhibit_url:
                 # Fetch exhibit content and check for subsidiary name
-                exhibit_html = self.http_get(exhibit_url, headers={'User-Agent': ua}, timeout=15)
+                exhibit_html = self.http_get(exhibit_url, headers={'User-Agent': ua}, timeout=15, service='sec')
                 if exhibit_html:
                     exhibit_text = self.html_to_text(exhibit_html)
                     name_in_exhibit = False
@@ -591,6 +591,7 @@ class SecMixin:
         # Direct request: PHP used a bespoke curl (Accept: application/json, no User-Agent,
         # CURLOPT_ENCODING => '' to accept all encodings, 15s timeout) and needs the HTTP
         # status code for the error strings, so this does not route through http_get().
+        self.increment_api_call('sec')
         try:
             resp = requests.get(url, headers={'Accept': 'application/json'}, timeout=15,
                                 allow_redirects=True)
