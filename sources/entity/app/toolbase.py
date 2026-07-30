@@ -48,7 +48,7 @@ class ToolBase:
         self.northdata_auth_cookie = None
         self.log = []          # PHP LookupTools::$log — tool call records (getLog())
         self.api_calls = {
-            'claude': 0, 'browserbase': 0, 'brightdata': 0, 'openai': 0, 'bizapedia': 0,
+            'claude': 0, 'browserbase': 0, 'brightdata': 0, 'openai': 0, 'bizapedia': 0, 'acra': 0,
         }
 
     # ── bookkeeping ─────────────────────────────────────────────────────────

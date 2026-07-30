@@ -101,6 +101,7 @@ _UK_JUR = {'uk', 'england', 'scotland', 'wales', 'united kingdom'}
 _EU_JUR = {'germany', 'france', 'netherlands', 'austria', 'switzerland', 'europe',
            'finland', 'denmark', 'sweden', 'norway', 'poland', 'czech republic',
            'belgium', 'luxembourg', 'italy', 'spain', 'ireland'}
+_SG_JUR = {'singapore', 'sg'}
 
 
 def _co(value, default):
@@ -136,12 +137,13 @@ class RegistrySearchMixin:
         is_us = jset & _US_JUR
         is_uk = jset & _UK_JUR
         is_eu = jset & _EU_JUR
+        is_sg = jset & _SG_JUR
         is_unknown = 'unknown' in jurisdictions
-        # A recognised-but-unsupported jurisdiction (e.g. Singapore, India, Australia) matches none
-        # of the buckets above and would otherwise fall through to searching ZERO registries. Treat
-        # it as a broad search so NorthData (name-based, international coverage) and the others run
-        # rather than missing the entity entirely. (questglobal.com=singapore searched 0 registries.)
-        if not (is_us or is_uk or is_eu or is_unknown):
+        # A recognised-but-unsupported jurisdiction (e.g. India, Australia) matches none of the
+        # buckets and would otherwise fall through to searching ZERO registries. Treat it as a broad
+        # search so NorthData (name-based, international) and the others run rather than missing the
+        # entity. (Singapore now has its own ACRA bucket below, so it's excluded from this fallback.)
+        if not (is_us or is_uk or is_eu or is_sg or is_unknown):
             self.log('registry', f"Jurisdiction '{jurisdiction}' not in a known bucket — "
                      "falling back to a broad (all-registry) search")
             is_unknown = True
@@ -158,8 +160,10 @@ class RegistrySearchMixin:
             registry_sources.append('Bizapedia')
         if is_us or is_unknown:
             registry_sources.append('Delaware Div. of Corps.')
-        if is_eu or is_uk or is_unknown:
+        if is_eu or is_uk or is_sg or is_unknown:
             registry_sources.append('North Data')
+        if is_sg or is_unknown:
+            registry_sources.append('ACRA (Singapore)')
         if is_us or is_unknown:
             registry_sources.append('EDGAR Exhibit 21')
 
@@ -312,8 +316,8 @@ class RegistrySearchMixin:
                 registries[f"delaware:{name}"] = delaware_result
                 self.log_registry_result('delaware', 'Delaware', name, delaware_result, name)
 
-            # North Data (EU + UK — provides financial data for UK companies)
-            if is_eu or is_uk or is_unknown:
+            # North Data (EU + UK + Singapore/other — international coverage incl. LEI)
+            if is_eu or is_uk or is_sg or is_unknown:
                 registries[f"northdata:{name}"] = self.tools.search_northdata(name)
                 self.log_registry_result('northdata', 'North Data', name, registries[f"northdata:{name}"], name)
 
@@ -343,6 +347,11 @@ class RegistrySearchMixin:
                             'expandable': True,
                             'sections': [{'label': 'Full Network', 'content': network_result}],
                         })
+
+            # ACRA (Singapore) — free data.gov.sg open dataset; gives the UEN (registry_id) + status
+            if is_sg or is_unknown:
+                registries[f"acra:{name}"] = self.tools.search_singapore(name)
+                self.log_registry_result('acra', 'ACRA (Singapore)', name, registries[f"acra:{name}"], name)
 
             # EDGAR Exhibit 21 parent search (US)
             if is_us or is_unknown:
@@ -738,6 +747,8 @@ class RegistrySearchMixin:
             return 'https://www.bizapedia.com/'
         if key.startswith('trademark:'):
             return 'https://www.bizapedia.com/ (trademark search)'
+        if key.startswith('acra:'):
+            return 'https://data.gov.sg/ (ACRA Singapore registry)'
         if key.startswith('northdata:'):
             return 'https://www.northdata.com/'
         if key == 'northdata_network':

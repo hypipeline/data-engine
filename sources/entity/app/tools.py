@@ -12,9 +12,11 @@ from tools_northdata import NorthDataMixin
 from tools_delaware import DelawareMixin
 from tools_bizapedia import BizapediaMixin
 from tools_opencorporates import OpenCorporatesMixin
+from tools_singapore import SingaporeMixin
 
 
 class LookupTools(ToolBase, GoogleMixin, CompaniesHouseMixin, SecMixin,
-                  NorthDataMixin, DelawareMixin, BizapediaMixin, OpenCorporatesMixin):
+                  NorthDataMixin, DelawareMixin, BizapediaMixin, OpenCorporatesMixin,
+                  SingaporeMixin):
     """All Entity-Lookup registry + fetch tools on one object (ToolBase provides __init__)."""
     pass
