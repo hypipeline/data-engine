@@ -212,6 +212,15 @@ async def api_coverage_add(request: Request):
     return JSONResponse({"id": cid})
 
 
+@app.put("/api/coverage/cases/{cid}")
+async def api_coverage_update(cid: int, request: Request):
+    body = await request.json()
+    if not (body.get("url") or body.get("names")):
+        return JSONResponse({"error": "provide a url or names[]"}, status_code=400)
+    coverage.update_case(cid, body)
+    return JSONResponse({"ok": True, "id": cid})
+
+
 @app.delete("/api/coverage/cases/{cid}")
 def api_coverage_delete(cid: int):
     coverage.delete_case(cid)

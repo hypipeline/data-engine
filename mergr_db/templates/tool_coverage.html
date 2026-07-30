@@ -67,7 +67,9 @@
     <div><label>Expect in source (optional) — e.g. acra:12345</label><input id="f-insource" placeholder="acra:12345678"></div>
   </div>
   <div class="hint">Expect-in-source asserts the string comes from that specific registry block (source keys: bizapedia, acra, northdata, companies_house, sec_company, …).</div>
-  <div style="margin-top:12px"><button class="btn run" onclick="addCase()">＋ Add case</button> <span id="add-msg" style="font-size:13px;margin-left:8px"></span></div>
+  <div style="margin-top:12px"><button class="btn run" id="save-btn" onclick="addCase()">＋ Add case</button>
+    <button class="btn ghost" id="cancel-edit" style="display:none" onclick="cancelEdit()">Cancel edit</button>
+    <span id="add-msg" style="font-size:13px;margin-left:8px"></span></div>
 </div>
 
 <script>
@@ -93,6 +95,7 @@ function caseRow(c){
     + '<span class="nm">'+esc(c.name)+'</span>'
     + '<span class="pill idle" id="badge-'+c.id+'">not run</span>'
     + '<span class="sp"><button class="btn ghost sm" onclick="runOne('+c.id+')">Run</button>'
+    + '<button class="btn ghost sm" onclick="editCase('+c.id+')">Edit</button>'
     + '<button class="btn del sm" onclick="delCase('+c.id+')">Delete</button></span></div>'
     + '<div class="case-meta">'+target+' &middot; expect: <b>'+exp+'</b>'+budget+'</div>'
     + '<div id="res-'+c.id+'"></div></div>';
@@ -169,6 +172,28 @@ function summaryHtml(t, done, total){
     + ((t.error)?' <span class="pill error">'+t.error+' error</span>':'');
 }
 
+var editingId=null;
+function setField(id,v){ document.getElementById(id).value=(v==null?'':v); }
+function clearForm(){ ['f-name','f-url','f-names','f-jur','f-expect','f-forbid','f-maxcalls','f-insource'].forEach(function(i){setField(i,'');}); }
+function kvToText(o){ return Object.keys(o||{}).map(function(k){return k+':'+o[k];}).join(', '); }
+function insourceToText(o){ var out=[]; Object.keys(o||{}).forEach(function(src){ (o[src]||[]).forEach(function(s){ out.push(src+':'+s); }); }); return out.join(', '); }
+
+function editCase(id){
+  var c=null; CASES.forEach(function(x){ if(x.id===id) c=x; }); if(!c) return;
+  editingId=id;
+  setField('f-name',c.name); setField('f-url',c.url); setField('f-names',(c.names||[]).join(', '));
+  setField('f-jur',c.jurisdiction); setField('f-expect',(c.expect||[]).join('\n'));
+  setField('f-forbid',(c.forbid||[]).join(', ')); setField('f-maxcalls',kvToText(c.max_calls));
+  setField('f-insource',insourceToText(c.expect_in_source));
+  document.getElementById('save-btn').textContent='💾 Save changes';
+  document.getElementById('cancel-edit').style.display='';
+  document.getElementById('add-msg').textContent='Editing "'+esc(c.name)+'"';
+  document.querySelector('.addbox').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function cancelEdit(){ editingId=null; clearForm();
+  document.getElementById('save-btn').textContent='＋ Add case';
+  document.getElementById('cancel-edit').style.display='none'; document.getElementById('add-msg').textContent=''; }
+
 function addCase(){
   var names=splitList(document.getElementById('f-names').value);
   var body={ name:document.getElementById('f-name').value||'(unnamed)',
@@ -179,11 +204,13 @@ function addCase(){
     max_calls:parseKV(document.getElementById('f-maxcalls').value),
     expect_in_source:(function(){ var o={}; splitList(document.getElementById('f-insource').value).forEach(function(p){var m=p.split(':');if(m.length>=2){ (o[m[0].trim()]=o[m[0].trim()]||[]).push(m.slice(1).join(':').trim()); }}); return o; })() };
   if(!body.url && !body.names){ document.getElementById('add-msg').textContent='Provide a URL or names.'; return; }
-  getJSON(EB+'/api/coverage/cases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  var url = editingId ? EB+'/api/coverage/cases/'+editingId : EB+'/api/coverage/cases';
+  var method = editingId ? 'PUT' : 'POST';
+  getJSON(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(d){
       if(d.error){ document.getElementById('add-msg').textContent=d.error; return; }
-      ['f-name','f-url','f-names','f-jur','f-expect','f-forbid','f-maxcalls','f-insource'].forEach(function(i){document.getElementById(i).value='';});
-      document.getElementById('add-msg').textContent='Added ✓'; loadCases();
+      var wasEdit=!!editingId; cancelEdit();
+      document.getElementById('add-msg').textContent=wasEdit?'Saved ✓':'Added ✓'; loadCases();
     }).catch(function(e){ document.getElementById('add-msg').textContent='Failed: '+e.message; });
 }
 function delCase(id){ getJSON(EB+'/api/coverage/cases/'+id,{method:'DELETE'}).then(function(){loadCases();}); }

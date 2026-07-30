@@ -209,6 +209,21 @@ def add_case(case: dict) -> int:
     return cid
 
 
+def update_case(cid: int, case: dict) -> None:
+    """Overwrite a case's fields in place (for the edit form)."""
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "UPDATE entity.coverage_cases SET name=%s, url=%s, names=%s, jurisdiction=%s, "
+                "expect=%s, forbid=%s, expect_in_source=%s, max_calls=%s WHERE id=%s",
+                (case.get('name') or 'unnamed', case.get('url'),
+                 json.dumps(case.get('names') or None), case.get('jurisdiction'),
+                 json.dumps(case.get('expect') or []), json.dumps(case.get('forbid') or []),
+                 json.dumps(case.get('expect_in_source') or {}),
+                 json.dumps(case.get('max_calls') or {}), cid))
+        c.commit()
+
+
 def delete_case(cid: int) -> None:
     with closing(_conn()) as c:
         with c.cursor() as cur:
