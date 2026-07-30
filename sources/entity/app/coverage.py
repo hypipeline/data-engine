@@ -227,9 +227,12 @@ _SEED = [
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
     {"name": "NexPhase Capital → Delaware LPs (Bizapedia)", "names": ["NexPhase Capital"],
      "jurisdiction": "us", "expect": ["NEXPHASE CAPITAL", "DE"]},
-    {"name": "Franchise Brands plc → Companies House (UK)", "names": ["Franchise Brands plc"],
-     "jurisdiction": "uk", "expect": ["FRANCHISE BRANDS PLC", "10281033"],
-     "expect_in_source": {"companies_house": ["10281033"]}},
+    # UK private company — exercises Companies House + PSC ownership-chain traversal (a listed
+    # company would lean on Yahoo Finance instead and not really test Companies House).
+    {"name": "ABCA Systems → Companies House + ownership chain (UK private)",
+     "names": ["ABCA Systems Ltd"], "jurisdiction": "uk",
+     "expect": ["ABCA SYSTEMS LIMITED", "06294877", "ABCA SYSTEMS GROUP LIMITED", "12500353"],
+     "expect_in_source": {"companies_house": ["06294877"]}},
 ]
 
 
