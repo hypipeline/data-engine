@@ -56,40 +56,74 @@ def _model_rates(model: str):
     return (3.00, 15.00)
 
 
-def build_evidence(config, url=None, names=None, jurisdiction=None):
+def _google_intel_registries(agent, domain):
+    """Phase 1 (Google Intelligence) → the google/linkedin/yahoo evidence blocks, mirroring the
+    agent's run(). Only used when a case opts into include_google (adds Bright Data/Browserbase
+    calls + latency, so it's off by default)."""
+    reg = {}
+    gi = agent.tools.google_intelligence(domain)
+    if gi.get('google_results'):
+        reg['google_search'] = gi['google_results']
+    if gi.get('linkedin_url'):
+        ld = agent.tools.fetch_linkedin_company(gi['linkedin_url'])
+        if ld:
+            reg['linkedin'] = ld
+    if gi.get('yahoo_ticker'):
+        yd = agent.tools.yahoo_finance_data(gi['yahoo_ticker'])
+        if yd:
+            reg[f"yahoo_finance:{gi['yahoo_ticker']}"] = yd
+    return reg
+
+
+def build_evidence(config, url=None, names=None, jurisdiction=None, include_google=False, refresh=False):
     """Run the retrieval phases and return (evidence_blob_by_source, api_calls, info, cost).
-    url mode → fetch + extract + search (1 extraction LLM call, so a small cost). names mode →
-    search only (no LLM, cost 0). `cost` = {input_tokens, output_tokens, cost_usd}."""
+
+    url mode → (optional Phase 1) + fetch + extract + search. The fetch+extract half is CACHED per
+    (url, model, include_google): a re-run reuses the cached names (cost 0, no LLM) while the
+    registry SEARCH still runs live — so you re-test the search layer for free. refresh=True bypasses
+    the cache to re-run extraction. names mode → search only (no LLM, cost 0)."""
     from agent import EntityLookup
     agent = EntityLookup(config, progress_callback=None)
+    model = config.get('model') or ''
+    gintel, from_cache = {}, False
     if url:
         domain = _domain(url)
-        website_data = agent.fetch_website_data(url, domain)
-        info = agent.extract_entities_with_llm(website_data, {})
-        info['entity_names'] = agent.deduplicate_names(info.get('entity_names') or [])
+        cached = None if refresh else _extract_cache_get(url, model, bool(include_google))
+        if cached:
+            info = cached.get('info') or {}
+            gintel = cached.get('gintel') or {}
+            from_cache = True
+        else:
+            website_data = agent.fetch_website_data(url, domain)
+            gintel = _google_intel_registries(agent, domain) if include_google else {}
+            info = agent.extract_entities_with_llm(website_data, dict(gintel))
+            info['entity_names'] = agent.deduplicate_names(info.get('entity_names') or [])
+            _extract_cache_put(url, model, bool(include_google), {'info': info, 'gintel': gintel})
     else:
         domain = ''
         info = {'entity_names': list(names or []), 'short_names': [],
                 'jurisdiction': (jurisdiction or 'unknown')}
     registries = agent.search_registries(info, domain)
-    # keep values as strings, keyed by source, for source-scoped grep
-    blob = {k: (v if isinstance(v, str) else json.dumps(v, default=str))
-            for k, v in registries.items()}
+    # the google-intel blocks are part of the evidence in prod, so include them (attribution too)
+    merged = {**gintel, **registries}
+    blob = {k: (v if isinstance(v, str) else json.dumps(v, default=str)) for k, v in merged.items()}
     it, ot = agent.total_input_tokens, agent.total_output_tokens
-    ri, ro = _model_rates(config.get('model') or '')
-    cost = {'input_tokens': it, 'output_tokens': ot,
+    ri, ro = _model_rates(model)
+    cost = {'input_tokens': it, 'output_tokens': ot, 'from_cache': from_cache,
             'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)}
     return blob, agent.tools.get_api_calls(), info, cost
 
 
 # ── one case → structured result ──────────────────────────────────────────
-def run_case(config, case: dict) -> dict:
+def run_case(config, case: dict, refresh: bool = False) -> dict:
     """Build the evidence for a case and grep it. Returns a structured result with per-check
-    outcomes, the api_calls, and a short evidence excerpt for inspection."""
+    outcomes, the api_calls, and a short evidence excerpt for inspection. refresh bypasses the
+    extraction cache (re-runs fetch + the extraction LLM)."""
     try:
         blob, api_calls, info, cost = build_evidence(
             config, url=case.get('url'),
-            names=case.get('names'), jurisdiction=case.get('jurisdiction'))
+            names=case.get('names'), jurisdiction=case.get('jurisdiction'),
+            include_google=bool(case.get('include_google')), refresh=refresh)
     except Exception as e:  # noqa: BLE001
         return {'case': case.get('name'), 'status': 'error', 'error': str(e), 'checks': [], 'cost_usd': 0}
 
@@ -97,14 +131,20 @@ def run_case(config, case: dict) -> dict:
     full_l = full.lower()
     throttled = any(m in full_l for m in _THROTTLE_MARKERS)
 
+    def sources_for(s):
+        """Which source block(s) contain this string — attribution (deduped source prefix)."""
+        sl = s.lower()
+        return sorted({k.split(':')[0] for k, v in blob.items() if sl in v.lower()})
+
     checks = []
     hard_fail = False
     inconclusive = False
 
     for s in (case.get('expect') or []):
-        found = s.lower() in full_l
+        srcs = sources_for(s)
+        found = bool(srcs)
         if found:
-            checks.append({'kind': 'expect', 'text': s, 'status': 'pass'})
+            checks.append({'kind': 'expect', 'text': s, 'status': 'pass', 'sources': srcs})
         elif throttled:
             checks.append({'kind': 'expect', 'text': s, 'status': 'inconclusive',
                            'note': 'a registry throttled/errored — not a confirmed miss'})
@@ -149,6 +189,8 @@ def run_case(config, case: dict) -> dict:
         'api_calls': {k: v for k, v in api_calls.items() if v},
         'cost_usd': cost['cost_usd'],
         'tokens': {'input': cost['input_tokens'], 'output': cost['output_tokens']},
+        'from_cache': cost.get('from_cache', False),
+        'include_google': bool(case.get('include_google')),
         'mode': 'url' if case.get('url') else 'names',
         'extracted_names': info.get('entity_names'),
         'jurisdiction': info.get('jurisdiction'),
@@ -184,9 +226,47 @@ def ensure_schema() -> None:
                     max_calls    jsonb NOT NULL DEFAULT '{}',
                     created_at   timestamptz NOT NULL DEFAULT now()
                 );
+                ALTER TABLE entity.coverage_cases
+                    ADD COLUMN IF NOT EXISTS include_google boolean NOT NULL DEFAULT false;
+                -- extraction cache: (url, model, include_google) → {info, gintel}. Lets URL-mode
+                -- re-runs skip fetch + the extraction LLM (free/fast) while still re-running the
+                -- live registry search — refresh bypasses it to re-test extraction itself.
+                CREATE TABLE IF NOT EXISTS entity.coverage_extract_cache (
+                    url            text NOT NULL,
+                    model          text NOT NULL,
+                    include_google boolean NOT NULL DEFAULT false,
+                    payload        jsonb NOT NULL,
+                    created_at     timestamptz NOT NULL DEFAULT now(),
+                    PRIMARY KEY (url, model, include_google)
+                );
             """)
         c.commit()
     _seed_if_empty()
+
+
+def _extract_cache_get(url, model, include_google):
+    if not enabled():
+        return None
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute("SELECT payload FROM entity.coverage_extract_cache "
+                        "WHERE url=%s AND model=%s AND include_google=%s",
+                        (url, model, include_google))
+            r = cur.fetchone()
+            return r[0] if r else None
+
+
+def _extract_cache_put(url, model, include_google, payload):
+    if not enabled():
+        return
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "INSERT INTO entity.coverage_extract_cache (url, model, include_google, payload) "
+                "VALUES (%s,%s,%s,%s) ON CONFLICT (url, model, include_google) "
+                "DO UPDATE SET payload=EXCLUDED.payload, created_at=now()",
+                (url, model, include_google, json.dumps(payload)))
+        c.commit()
 
 
 def _row(r):
@@ -221,13 +301,13 @@ def add_case(case: dict) -> int:
         with c.cursor() as cur:
             cur.execute(
                 "INSERT INTO entity.coverage_cases "
-                "(name,url,names,jurisdiction,expect,forbid,expect_in_source,max_calls) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                "(name,url,names,jurisdiction,expect,forbid,expect_in_source,max_calls,include_google) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (case.get('name') or 'unnamed', case.get('url'),
                  json.dumps(case.get('names') or None), case.get('jurisdiction'),
                  json.dumps(case.get('expect') or []), json.dumps(case.get('forbid') or []),
                  json.dumps(case.get('expect_in_source') or {}),
-                 json.dumps(case.get('max_calls') or {})))
+                 json.dumps(case.get('max_calls') or {}), bool(case.get('include_google'))))
             cid = cur.fetchone()[0]
         c.commit()
     return cid
@@ -239,12 +319,12 @@ def update_case(cid: int, case: dict) -> None:
         with c.cursor() as cur:
             cur.execute(
                 "UPDATE entity.coverage_cases SET name=%s, url=%s, names=%s, jurisdiction=%s, "
-                "expect=%s, forbid=%s, expect_in_source=%s, max_calls=%s WHERE id=%s",
+                "expect=%s, forbid=%s, expect_in_source=%s, max_calls=%s, include_google=%s WHERE id=%s",
                 (case.get('name') or 'unnamed', case.get('url'),
                  json.dumps(case.get('names') or None), case.get('jurisdiction'),
                  json.dumps(case.get('expect') or []), json.dumps(case.get('forbid') or []),
                  json.dumps(case.get('expect_in_source') or {}),
-                 json.dumps(case.get('max_calls') or {}), cid))
+                 json.dumps(case.get('max_calls') or {}), bool(case.get('include_google')), cid))
         c.commit()
 
 

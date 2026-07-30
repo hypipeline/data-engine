@@ -46,6 +46,8 @@
 
 <div class="cv-bar">
   <button class="btn run" id="runall" onclick="runAll()">▶ Run all cases</button>
+  <label style="font-size:12.5px;color:var(--muted)" title="Re-run fetch + the extraction LLM instead of using the cached extraction (costs the extraction fee again)">
+    <input type="checkbox" id="refresh-extract"> refresh extraction (re-run LLM)</label>
   <span class="summary" id="summary"></span>
 </div>
 <div class="prog"><i id="progbar"></i></div>
@@ -61,6 +63,8 @@
     <div><label>OR Names (mode B, comma-separated)</label><input id="f-names" placeholder="Acme Holdings, Inc."></div>
     <div style="flex:0 0 150px"><label>Jurisdiction</label><input id="f-jur" placeholder="us / singapore …"></div>
   </div>
+  <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:8px" title="URL mode only. Runs Phase 1 (Google SERP + LinkedIn + Yahoo) and feeds it to extraction, like prod — adds cost/latency. Off = website text only.">
+    <input type="checkbox" id="f-google"> Include Google Intelligence in extraction (URL mode; adds cost/latency)</label>
   <label>Expect — these strings MUST appear (comma or newline separated)</label>
   <textarea id="f-expect" rows="2" placeholder="ACME HOLDINGS, 12345678"></textarea>
   <div class="row">
@@ -123,13 +127,17 @@ function setBadge(id, status, label){
 
 function renderResult(r){
   var checks=(r.checks||[]).map(function(ch){
+    var attr = (ch.sources&&ch.sources.length) ? ' <span style="color:#2563eb">— found in: '+esc(ch.sources.join(', '))+'</span>' : '';
     return '<div class="chk '+ch.status+'"><span class="ic">'+ic(ch.status)+'</span>'
-      +'<span class="k">'+esc(ch.kind)+'</span>'+esc(ch.text)+(ch.note?' <span style="color:#999">— '+esc(ch.note)+'</span>':'')+'</div>';
+      +'<span class="k">'+esc(ch.kind)+'</span>'+esc(ch.text)+attr+(ch.note?' <span style="color:#999">— '+esc(ch.note)+'</span>':'')+'</div>';
   }).join('');
   var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+k;}).join(', '):'';
   var cost = (r.mode==='names')
     ? '<b style="color:#166534">cost: free</b> (names mode, no LLM)'
-    : '<b>cost: $'+(r.cost_usd||0).toFixed(4)+'</b>'+(r.tokens?' <span style="color:#aaa">('+r.tokens.input+' in / '+r.tokens.output+' out tok, extraction LLM)</span>':'');
+    : (r.from_cache
+        ? '<b style="color:#166534">cost: free</b> <span style="color:#888">(cached extraction — search ran live)</span>'
+        : '<b>cost: $'+(r.cost_usd||0).toFixed(4)+'</b>'+(r.tokens?' <span style="color:#aaa">('+r.tokens.input+' in / '+r.tokens.output+' out tok, extraction LLM)</span>':''))
+    + (r.include_google?' <span style="color:#7c3aed">· +Google intel</span>':'');
   var evId='ev'+id_seq++;
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
@@ -141,10 +149,11 @@ function renderResult(r){
 }
 var id_seq=0;
 
+function refreshOn(){ var e=document.getElementById('refresh-extract'); return !!(e&&e.checked); }
 function runOne(id){
   setBadge(id,'running','running…');
   var box=document.getElementById('res-'+id); if(box) box.innerHTML='';
-  return getJSON(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})})
+  return getJSON(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,refresh:refreshOn()})})
     .then(function(d){
       var r=(d.results||[])[0]||{status:'error',error:'no result'};
       setBadge(id, r.status, r.status);
@@ -181,7 +190,7 @@ function summaryHtml(t, cost){
 
 var editingId=null;
 function setField(id,v){ document.getElementById(id).value=(v==null?'':v); }
-function clearForm(){ ['f-name','f-url','f-names','f-jur','f-expect','f-forbid','f-maxcalls','f-insource'].forEach(function(i){setField(i,'');}); }
+function clearForm(){ ['f-name','f-url','f-names','f-jur','f-expect','f-forbid','f-maxcalls','f-insource'].forEach(function(i){setField(i,'');}); document.getElementById('f-google').checked=false; }
 function kvToText(o){ return Object.keys(o||{}).map(function(k){return k+':'+o[k];}).join(', '); }
 function insourceToText(o){ var out=[]; Object.keys(o||{}).forEach(function(src){ (o[src]||[]).forEach(function(s){ out.push(src+':'+s); }); }); return out.join(', '); }
 
@@ -196,6 +205,7 @@ function editCase(id){
   setField('f-jur',c.jurisdiction); setField('f-expect',(c.expect||[]).join('\n'));
   setField('f-forbid',(c.forbid||[]).join(', ')); setField('f-maxcalls',kvToText(c.max_calls));
   setField('f-insource',insourceToText(c.expect_in_source));
+  document.getElementById('f-google').checked=!!c.include_google;
   document.getElementById('form-title').innerHTML='✏️ Editing: <span style="color:#4a90d9">'+esc(c.name)+'</span>';
   document.getElementById('save-btn').textContent='💾 Save changes';
   document.getElementById('cancel-edit').style.display='';
@@ -216,6 +226,7 @@ function addCase(){
     expect:splitList(document.getElementById('f-expect').value),
     forbid:splitList(document.getElementById('f-forbid').value),
     max_calls:parseKV(document.getElementById('f-maxcalls').value),
+    include_google:document.getElementById('f-google').checked,
     expect_in_source:(function(){ var o={}; splitList(document.getElementById('f-insource').value).forEach(function(p){var m=p.split(':');if(m.length>=2){ (o[m[0].trim()]=o[m[0].trim()]||[]).push(m.slice(1).join(':').trim()); }}); return o; })() };
   if(!body.url && !body.names){ document.getElementById('add-msg').textContent='Provide a URL or names.'; return; }
   var url = editingId ? EB+'/api/coverage/cases/'+editingId : EB+'/api/coverage/cases';
