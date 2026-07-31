@@ -166,6 +166,23 @@ async def lookup_api(request: Request):
     return JSONResponse(result_holder.get('r', {}))
 
 
+@app.get("/api/lookup")
+async def lookup_api_get(url: str = ""):
+    """Read-only companion to the POST handler — backs the report card's 'View API' link.
+    A GET must be safe/idempotent, so this NEVER triggers a new lookup; it just returns the
+    already-stored JSON for the url (the card is only shown once a result exists)."""
+    if not url:
+        return JSONResponse({"error": "url is required"}, status_code=400)
+    try:
+        cached = cache.get_latest(url, CONFIG.get('model'))
+    except Exception:  # noqa: BLE001
+        cached = None
+    if cached:
+        return JSONResponse(cached)
+    return JSONResponse({"error": "No stored result for this URL yet — run the lookup first."},
+                        status_code=404)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Sidebar tools — thin JSON endpoints over existing LookupTools methods.
 # Faithful ports of php/bizapedia.php, php/bizapedia_tm.php, php/validate.php.

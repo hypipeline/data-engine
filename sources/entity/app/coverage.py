@@ -378,6 +378,10 @@ _SEED = [
     {"name": "adidas.com → adidas AG (Germany · NorthData LEI)", "url": "http://www.adidas.com/",
      "expect": ["adidas AG", "549300JSX0Z4CW0V5023"],
      "expect_in_source": {"northdata": ["adidas AG"]}},
+    # Finnish listed company (Oyj) via URL → exercises NorthData; LEI + Business ID as stable anchors.
+    {"name": "scanfil.com → Scanfil Oyj (Finland · NorthData LEI)", "url": "https://www.scanfil.com/",
+     "expect": ["Scanfil Oyj", "7437004XD6U0FFDCT507", "2422742-9"],
+     "expect_in_source": {"northdata": ["Scanfil Oyj"]}},
 ]
 
 
