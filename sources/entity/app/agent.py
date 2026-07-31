@@ -360,7 +360,53 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
                         except Exception:
                             pass
                         break
+        # Last resort: the response was truncated mid-JSON (e.g. hit max_tokens on a very large
+        # group). Salvage the largest complete prefix by dropping the incomplete trailing element
+        # and closing the brackets that were still open at the last completed value.
+        salvaged = self._salvage_truncated_json(clean)
+        if isinstance(salvaged, dict):
+            salvaged.setdefault('note', 'Report recovered from a truncated LLM response — some '
+                                        'trailing entities may be missing.')
+            return salvaged
         return fallback
+
+    @staticmethod
+    def _salvage_truncated_json(s: str):
+        """Best-effort repair of a truncated JSON object: walk to the last completed
+        object/array, then append the closers for whatever was still open there."""
+        start = s.find('{')
+        if start == -1:
+            return None
+        in_str = esc = False
+        stack = []            # expected closing chars, in open order
+        cut = None            # index just after the last completed '}'/']'
+        cut_stack = None      # bracket stack snapshot at that point
+        for i in range(start, len(s)):
+            ch = s[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == '\\':
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in '{[':
+                stack.append('}' if ch == '{' else ']')
+            elif ch in '}]':
+                if stack:
+                    stack.pop()
+                cut, cut_stack = i, list(stack)
+        if cut is None or cut_stack is None:
+            return None
+        candidate = s[start:cut + 1] + ''.join(reversed(cut_stack))
+        try:
+            result = json.loads(candidate)
+            return result if isinstance(result, dict) else None
+        except Exception:
+            return None
 
     # ── phase methods (ported below) ────────────────────────────────────────
     # fetch_website_data, extract_entities_with_llm, deduplicate_names,

@@ -375,7 +375,10 @@ class EvidenceAnalysisMixin:
             'sections': evidence_sections,
         })
 
-        response_text = self.call_llm(system_prompt, user_message, 8192)
+        # 16384 (not 8192): large groups like Inflexion produce reports whose JSON exceeds 8k
+        # output tokens and got truncated mid-object → "LLM returned invalid JSON". Sonnet 4.6
+        # supports far more, so give the analysis room to close the JSON.
+        response_text = self.call_llm(system_prompt, user_message, 16384)
 
         self.log('llm', "LLM analysis response (" + f"{len(response_text):,}" + " chars)", {
             'expandable': True,
