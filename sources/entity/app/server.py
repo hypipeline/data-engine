@@ -317,6 +317,68 @@ async def api_modelcompare_run(request: Request):
     return JSONResponse(out)
 
 
+@app.get("/api/modelcompare/run-stream")
+async def api_modelcompare_run_stream(case_id: int, models: str = "",
+                                      refresh_input: bool = False, refresh_models: bool = False):
+    """Streaming (SSE) model comparison — emits live progress so the UI isn't a black box during
+    the slow Phase-1 build + per-model calls. Events: phase, input_ready, model_start, model_done,
+    done, failed. Each model is isolated, so one failure can't abort the run."""
+    model_list = [m.strip() for m in models.split(",") if m.strip()] or model_compare.DEFAULT_MODELS
+    case = coverage.get_case(int(case_id))
+    q: "queue.Queue" = queue.Queue()
+
+    def worker():
+        try:
+            if not case:
+                q.put(("failed", {"error": "case not found"})); return
+
+            def progress(entry):
+                msg = entry.get("message") if isinstance(entry, dict) else str(entry)
+                if msg:
+                    q.put(("phase", {"message": msg}))
+
+            q.put(("phase", {"message": "Building Phase-1 analysis input (fetch → extract → registries)…"}))
+            inp = model_compare.build_input(CONFIG, case, refresh=refresh_input, progress=progress)
+            q.put(("input_ready", {"meta": inp["meta"]}))
+            spec = model_compare.spec_for(case)
+            cid = case.get("id")
+            results = []
+            for i, m in enumerate(model_list):
+                if cid and not refresh_models:
+                    cached = model_compare._result_get(cid, m)
+                    if cached:
+                        results.append(cached)
+                        q.put(("model_done", {"result": cached, "i": i, "n": len(model_list), "cached": True}))
+                        continue
+                q.put(("model_start", {"model": m, "i": i, "n": len(model_list)}))
+                row = model_compare.run_one_model(CONFIG, inp, m, spec, cid)
+                results.append(row)
+                q.put(("model_done", {"result": row, "i": i, "n": len(model_list)}))
+            total = round(sum((r.get("cost_usd") or 0) for r in results), 4)
+            scored = [r for r in results if r["score"].get("scored")]
+            q.put(("done", {"summary": {"models": len(results), "scored": len(scored),
+                                        "pass": sum(1 for r in scored if r["score"].get("ok")),
+                                        "cost_usd": total},
+                            "input_meta": inp["meta"], "spec": spec}))
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            q.put(("failed", {"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-1500:]}))
+        finally:
+            q.put(("__done__", None))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    async def gen():
+        loop = asyncio.get_event_loop()
+        while True:
+            kind, payload = await loop.run_in_executor(None, q.get)
+            if kind == "__done__":
+                break
+            yield f"event: {kind}\ndata: {json.dumps(payload, default=str)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
 @app.get("/api/modelcompare/expect")
 def api_modelcompare_get_expect(case_id: int):
     """The per-case expected recommendation ({mode:entity,options:[...]} | {mode:none} | null)."""

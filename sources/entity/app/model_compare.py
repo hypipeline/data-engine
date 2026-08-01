@@ -55,10 +55,11 @@ def openrouter_key():
     k = os.environ.get("OPENROUTER_API_KEY")
     if k:
         return k
-    candidates = [
-        "/app/openrouter.secrets.env",                                   # container mount
-        str(pathlib.Path(__file__).resolve().parents[3] / "openrouter.secrets.env"),  # repo root
-    ]
+    candidates = ["/app/openrouter.secrets.env"]                          # container path
+    try:
+        candidates.append(str(pathlib.Path(__file__).resolve().parents[3] / "openrouter.secrets.env"))  # repo root (local)
+    except IndexError:
+        pass
     for p in candidates:
         try:
             for line in open(p):
@@ -228,17 +229,18 @@ def _domain_of(url: str) -> str:
     return re.sub(r"^www\.", "", (urlparse(url).hostname or ""))
 
 
-def build_input(config: dict, case: dict, refresh: bool = False) -> dict:
+def build_input(config: dict, case: dict, refresh: bool = False, progress=None) -> dict:
     """Return {'system', 'user', 'meta'} — the exact analysis input production would feed the
     LLM for this case. Cached per case id; regenerated only on refresh (expensive: it runs
-    fetch/extract/registry against the live toolchain)."""
+    fetch/extract/registry against the live toolchain). `progress` (optional) receives the
+    pipeline's phase logs so a streaming caller can show live feedback."""
     cid = case.get("id")
     if cid and not refresh:
         cached = _input_get(cid)
         if cached:
             return cached
 
-    agent = EntityLookup(config, progress_callback=None)
+    agent = EntityLookup(config, progress_callback=progress)
     url = (case.get("url") or "").strip()
     names = case.get("names") or []
     registries: dict = {}
@@ -271,14 +273,51 @@ def build_input(config: dict, case: dict, refresh: bool = False) -> dict:
     return out
 
 
+def spec_for(case):
+    """Expectation: explicit override on the case > stored per-case spec > fallback from coverage expects."""
+    cid = case.get("id")
+    return case.get("expect_spec") or (get_expect(cid) if cid else None) \
+        or default_spec_from_expect(case.get("expect"))
+
+
+def run_one_model(config, inp, model, spec, cid=None) -> dict:
+    """Run ONE model on the cached input, score it, cache + return the row. Never raises — a
+    failed model becomes an error row so it can't abort a batch/stream (that was the bug that
+    killed a whole run when one model choked)."""
+    try:
+        raw = call_model(model, inp["system"], inp["user"], config)
+    except Exception as e:  # noqa: BLE001
+        raw = {"model": model, "error": f"{type(e).__name__}: {e}"}
+    report = None
+    if raw.get("text"):
+        try:
+            report = agent_parse(config, raw["text"])
+        except Exception as e:  # noqa: BLE001
+            raw["error"] = raw.get("error") or f"parse: {type(e).__name__}: {e}"
+    rec = (report or {}).get("recommended_entity")
+    conf = (report or {}).get("confidence")
+    sc = score(report, spec)
+    row = {
+        "model": model, "route": raw.get("route"), "provider": raw.get("provider"),
+        "error": raw.get("error"),
+        "recommended": rec, "confidence": conf,
+        "cost_usd": raw.get("cost_usd"), "latency_ms": raw.get("latency_ms"),
+        "input_tokens": raw.get("input_tokens"), "output_tokens": raw.get("output_tokens"),
+        "json_ok": bool(rec is not None or (raw.get("text") and not raw.get("error"))),
+        "truncated": raw.get("truncated"),
+        "score": sc, "raw": (raw.get("text") or "")[:60000],
+    }
+    if cid:
+        _result_put(cid, model, row)
+    return row
+
+
 def run_case(config: dict, case: dict, models: list, refresh_input: bool = False,
              refresh_models: bool = False) -> dict:
     """Build (or reuse) the cached input, then run each model, cache + return per-model results."""
     inp = build_input(config, case, refresh=refresh_input)
     cid = case.get("id")
-    # expectation: explicit override on the case > stored per-case spec > fallback from coverage expects
-    spec = case.get("expect_spec") or (get_expect(cid) if cid else None) \
-        or default_spec_from_expect(case.get("expect"))
+    spec = spec_for(case)
     results = []
     for m in models:
         if cid and not refresh_models:
@@ -286,24 +325,7 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
             if cached:
                 results.append(cached)
                 continue
-        raw = call_model(m, inp["system"], inp["user"], config)
-        report = agent_parse(config, raw["text"]) if raw.get("text") else None
-        rec = (report or {}).get("recommended_entity")
-        conf = (report or {}).get("confidence")
-        sc = score(report, spec)
-        row = {
-            "model": m, "route": raw.get("route"), "provider": raw.get("provider"),
-            "error": raw.get("error"),
-            "recommended": rec, "confidence": conf,
-            "cost_usd": raw.get("cost_usd"), "latency_ms": raw.get("latency_ms"),
-            "input_tokens": raw.get("input_tokens"), "output_tokens": raw.get("output_tokens"),
-            "json_ok": bool(rec is not None or (raw.get("text") and not raw.get("error"))),
-            "truncated": raw.get("truncated"),
-            "score": sc, "raw": (raw.get("text") or "")[:60000],
-        }
-        if cid:
-            _result_put(cid, m, row)
-        results.append(row)
+        results.append(run_one_model(config, inp, m, spec, cid))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
     scored = [r for r in results if r["score"].get("scored")]
     return {"case_id": cid, "input_meta": inp["meta"], "spec": spec,

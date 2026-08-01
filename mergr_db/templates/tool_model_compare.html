@@ -205,22 +205,27 @@ function render(results, cached){
 function run(){
   var c=curCase(); if(!c) return;
   var models=modelsList(); if(!models.length){ q('out').innerHTML='<div class="errbox">Add at least one model.</div>'; return; }
-  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running '+models.length+' models…';
-  q('summary').innerHTML='<span class="muted">building Phase-1 input + calling '+models.length+' models…</span>';
+  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running…';
   q('out').innerHTML='';
-  getJSON(EB+'/api/modelcompare/run',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id:c.id, models:models, refresh_input:q('refresh-input').checked, refresh_models:q('refresh-models').checked})})
-  .then(function(d){
-    btn.disabled=false; btn.textContent='▶ Run comparison';
-    if(d.error){ q('out').innerHTML='<div class="errbox">'+esc(d.error)+'</div>'; q('summary').innerHTML=''; return; }
-    renderMeta(d.input_meta);
-    var s=d.summary||{};
-    q('summary').innerHTML='<b>'+esc(s.pass||0)+'/'+esc(s.scored||0)+'</b> scored models correct · '+esc(s.models||0)+' run · total cost <b>$'+Number(s.cost_usd||0).toFixed(4)+'</b>';
-    render(d.results||[], false);
-  }).catch(function(e){
-    btn.disabled=false; btn.textContent='▶ Run comparison';
-    q('out').innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; q('summary').innerHTML='';
-  });
+  q('summary').innerHTML='<span id="run-log" class="muted"></span>';
+  var log=function(t){ var e=q('run-log'); if(e) e.textContent=t; };
+  var live=[], done=false, total=models.length;
+  var params='case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
+    +'&refresh_input='+(q('refresh-input').checked?'true':'false')
+    +'&refresh_models='+(q('refresh-models').checked?'true':'false');
+  var es=new EventSource(EB+'/api/modelcompare/run-stream?'+params);
+  function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run comparison'; }
+  es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
+  es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); renderMeta(d.meta); log('✓ Phase-1 input ready — running '+total+' models…'); });
+  es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); log('▶ ('+(d.i+1)+'/'+d.n+') '+d.model+' …'); });
+  es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); live.push(d.result); render(live, false);
+    log('✓ '+(d.i+1)+'/'+d.n+' '+d.result.model+(d.cached?' (cached)':'')+(d.result.error?' — ERROR':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))); });
+  es.addEventListener('done', function(e){ var s=JSON.parse(e.data).summary; render(live, false);
+    q('summary').innerHTML='<b>'+(s.pass||0)+'/'+(s.scored||0)+'</b> scored correct · '+(s.models||0)+' run · total cost <b>$'+Number(s.cost_usd||0).toFixed(4)+'</b>'; finish(); });
+  es.addEventListener('failed', function(e){ var d={}; try{ d=JSON.parse(e.data); }catch(_){}
+    q('out').innerHTML='<div class="errbox"><b>'+esc(d.error||'run failed')+'</b>'+(d.trace?'<pre style="white-space:pre-wrap;font-size:11px;margin-top:8px">'+esc(d.trace)+'</pre>':'')+'</div>'; finish(); });
+  es.onerror=function(){ if(done) return;
+    q('summary').innerHTML='<span class="errbox" style="display:inline-block">connection lost mid-run — reload to see cached results</span>'; finish(); };
 }
 
 loadModels().then(loadCases);
