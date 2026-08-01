@@ -94,16 +94,30 @@ def resolve_route(model_ref: str, config: dict) -> str:
 
 
 # ── low-level transports ──────────────────────────────────────────────────────
-def _post(url, headers, body, timeout=240):
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
-    t = time.time()
-    try:
-        r = urllib.request.urlopen(req, timeout=timeout)
-        return r.status, json.load(r), int((time.time() - t) * 1000), None
-    except urllib.error.HTTPError as e:
-        return e.code, None, int((time.time() - t) * 1000), f"HTTP {e.code}: {e.read().decode(errors='replace')[:400]}"
-    except Exception as e:  # noqa: BLE001
-        return 0, None, int((time.time() - t) * 1000), f"{type(e).__name__}: {e}"
+_TRANSIENT = {429, 500, 502, 503, 529}   # rate-limit / provider-overload / gateway → worth retrying
+
+
+def _post(url, headers, body, timeout=240, retries=2):
+    """POST with retry+backoff on transient statuses (429 rate-limit, 5xx) — premium/low-capacity
+    models like kimi-k3 get rate-limited upstream, especially under our parallel + multi-case load."""
+    t0 = time.time()
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
+        try:
+            r = urllib.request.urlopen(req, timeout=timeout)
+            return r.status, json.load(r), int((time.time() - t0) * 1000), None
+        except urllib.error.HTTPError as e:
+            code = e.code
+            text = e.read().decode(errors='replace')[:400]
+            if code in _TRANSIENT and attempt < retries:
+                time.sleep(2 * (attempt + 1))          # 2s, then 4s
+                continue
+            return code, None, int((time.time() - t0) * 1000), f"HTTP {code}: {text}"
+        except Exception as e:  # noqa: BLE001
+            if attempt < retries:
+                time.sleep(2 * (attempt + 1))
+                continue
+            return 0, None, int((time.time() - t0) * 1000), f"{type(e).__name__}: {e}"
 
 
 def _call_anthropic(model_name, system, user, key):
