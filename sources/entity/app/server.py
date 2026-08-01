@@ -346,7 +346,7 @@ async def api_modelcompare_run_stream(case_id: int, models: str = "",
             for i, m in enumerate(model_list):
                 if cid and not refresh_models:
                     cached = model_compare._result_get(cid, m)
-                    if cached:
+                    if cached and not cached.get("error"):   # keep successes cached; RETRY failures
                         results.append(cached)
                         q.put(("model_done", {"result": cached, "i": i, "n": len(model_list), "cached": True}))
                         continue

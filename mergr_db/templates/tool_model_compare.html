@@ -179,7 +179,9 @@ function cell(r){
     + '<div class="raw" id="'+rid+'">'+esc(r.raw||'(no output)')+'</div>';
 }
 
+var CURRENT=[];   // last rendered results, so a single column can be re-run in place
 function render(results, cached){
+  CURRENT=results||[];
   if(!results.length){ q('out').innerHTML=''; return; }
   var cheapest=null, fastest=null;
   results.forEach(function(r){
@@ -190,7 +192,7 @@ function render(results, cached){
     ['Result', function(r){ return cell(r); }]
   ];
   var head='<tr><th class="rowlab">'+(cached?'<span class="muted">cached</span>':'')+'</th>'
-    + results.map(function(r){ return '<th>'+esc(r.model)+'</th>'; }).join('') + '</tr>';
+    + results.map(function(r){ return '<th>'+esc(r.model)+' <button class="btn sm" title="re-run just this model" onclick="rerunModel(\''+r.model+'\')">↻</button></th>'; }).join('') + '</tr>';
   var body = rows.map(function(row){
     return '<tr><th class="rowlab">'+row[0]+'</th>'
       + results.map(function(r){
@@ -226,6 +228,22 @@ function run(){
     q('out').innerHTML='<div class="errbox"><b>'+esc(d.error||'run failed')+'</b>'+(d.trace?'<pre style="white-space:pre-wrap;font-size:11px;margin-top:8px">'+esc(d.trace)+'</pre>':'')+'</div>'; finish(); });
   es.onerror=function(){ if(done) return;
     q('summary').innerHTML='<span class="errbox" style="display:inline-block">connection lost mid-run — reload to see cached results</span>'; finish(); };
+}
+
+function rerunModel(m){
+  var c=curCase(); if(!c) return;
+  var s=q('summary'); s.innerHTML='<span class="muted">↻ re-running '+esc(m)+'…</span>';
+  var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(m)+'&refresh_input=false&refresh_models=true');
+  function fin(){ try{es.close();}catch(_){} }
+  es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data);
+    var idx=-1; for(var i=0;i<CURRENT.length;i++){ if(CURRENT[i].model===d.result.model){ idx=i; break; } }
+    if(idx>=0) CURRENT[idx]=d.result; else CURRENT.push(d.result);
+    render(CURRENT, false);
+    s.innerHTML='<span class="muted">✓ re-ran '+esc(m)+(d.result.error?' — still error':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))+'</span>'; });
+  es.addEventListener('done', fin);
+  es.addEventListener('failed', function(e){ var d={}; try{d=JSON.parse(e.data);}catch(_){}
+    s.innerHTML='<span class="errbox" style="display:inline-block">rerun failed: '+esc(d.error||'')+'</span>'; fin(); });
+  es.onerror=function(){ fin(); };
 }
 
 loadModels().then(loadCases);

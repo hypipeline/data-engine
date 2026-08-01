@@ -330,7 +330,7 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
     for m in models:
         if cid and not refresh_models:
             cached = _result_get(cid, m)
-            if cached:
+            if cached and not cached.get("error"):   # keep successes cached; RETRY failures
                 results.append(cached)
                 continue
         results.append(run_one_model(config, inp, m, spec, cid))
