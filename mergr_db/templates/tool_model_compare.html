@@ -54,8 +54,11 @@ run <b>direct</b>; the rest via OpenRouter.</p>
   <textarea id="models"></textarea>
 </div>
 <div class="mc-opts">
-  <label><input type="checkbox" id="refresh-input"> rebuild Phase-1 input (re-fetch/extract/search)</label>
-  <label><input type="checkbox" id="refresh-models"> re-run <b>all</b> models (otherwise keep passes, retry only failed/missing)</label>
+  <span>On run:
+    <label><input type="radio" name="rerun-mode" value="failed" checked> retry only <b>failed / missing</b> (keep passes)</label>
+    <label><input type="radio" name="rerun-mode" value="all"> re-run <b>all</b> models</label>
+  </span>
+  <label><input type="checkbox" id="refresh-input"> also rebuild Phase-1 input (re-fetch/extract/search)</label>
   <button class="btn primary" id="runall-btn" onclick="runAll()">▶ Run all cases</button>
 </div>
 <div class="run-log" id="runall-log"></div>
@@ -94,6 +97,9 @@ function getJSON(url, opts){
   return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
 }
 function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
+function refreshAllModels(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value==='all'; }
+function money2(c){ return c==null?'':'$'+Number(c).toFixed(2); }              // to the nearest cent
+function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }  // cost at 1,000 lookups
 function short(m){ return m.split('/').pop(); }
 var MATRIX={cases:[],models:[]}, SELECTED=null;
 
@@ -109,7 +115,7 @@ function matrixCell(r){
   if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
   var sc=r.score||{};
   var b=!sc.scored?'<span class="muted">·</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
-  return b+'<div class="cost">'+(r.cost_usd!=null?'$'+Number(r.cost_usd).toFixed(4):'')+'</div>';
+  return b+'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
 }
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
@@ -125,8 +131,8 @@ function renderMatrix(){
   var foot='<tr class="agg"><th class="rowlab">pass · avg cost</th>'+models.map(function(m){
     var pass=0,scored=0,costs=[];
     cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored){scored++; if(r.score.ok)pass++;} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
-    var avg=costs.length?('$'+(costs.reduce(function(a,b){return a+b;},0)/costs.length).toFixed(4)):'—';
-    return '<td style="text-align:center">'+(scored?('<b>'+pass+'/'+scored+'</b>'):'—')+'<div class="cost">'+avg+'</div></td>';
+    var avgc=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
+    return '<td style="text-align:center">'+(scored?('<b>'+pass+'/'+scored+'</b>'):'—')+'<div class="cost">'+(avgc!=null?per1k(avgc):'—')+'</div></td>';
   }).join('')+'</tr>';
   q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
 }
@@ -140,7 +146,7 @@ function runAll(){
   var ids=(MATRIX.cases||[]).map(function(c){return c.id;});
   if(!ids.length){ q('runall-log').textContent='No cases.'; return; }
   var btn=q('runall-btn'); btn.disabled=true;
-  var ri=q('refresh-input').checked?'true':'false', rm=q('refresh-models').checked?'true':'false';
+  var ri=q('refresh-input').checked?'true':'false', rm=refreshAllModels()?'true':'false';
   var idx=0;
   function nextCase(){
     if(idx>=ids.length){ btn.disabled=false; q('runall-log').textContent='✓ all '+ids.length+' cases done'; return; }
@@ -186,7 +192,7 @@ function cell(r){
     +'<div style="margin-top:7px" class="ent-name">'+esc(ent.legal_entity_name||'— none —')+'</div>'
     +'<div class="muted">'+esc(ent.registry_id||'no id')+(ent.jurisdiction_country?(' · '+esc(ent.jurisdiction_country)):'')+'</div>'
     +'<div style="margin-top:4px">conf: <b>'+esc(r.confidence||'—')+'</b>'+(r.json_ok?'':' <span class="pill err">JSON invalid</span>')+(r.truncated?' <span class="pill err">truncated</span>':'')+'</div>'
-    +'<div class="muted" style="margin-top:6px">'+(r.cost_usd!=null?('$'+Number(r.cost_usd).toFixed(5)):'cost n/a')
+    +'<div class="muted" style="margin-top:6px">'+(r.cost_usd!=null?('<b>'+money2(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
       +' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')+' · '+(r.input_tokens||0)+'/'+(r.output_tokens||0)+' tok</div>'
     +'<div style="margin-top:4px"><span class="pill route">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span></div>'
     +'<span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span>'
@@ -212,15 +218,15 @@ function run(){
   var log=function(t){ var e=q('run-log'); if(e) e.textContent=t; };
   var live=[], done=false;
   var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
-    +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(q('refresh-models').checked?'true':'false'));
+    +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(refreshAllModels()?'true':'false'));
   function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run this case'; }
   es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
   es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); log('✓ input ready — running '+models.length+' models…'); });
   es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); log('▶ ('+(d.i+1)+'/'+d.n+') '+d.model+' …'); });
   es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); live.push(d.result); render(live,false); updateMatrixCell(c.id, d.result);
-    log('✓ '+(d.i+1)+'/'+d.n+' '+d.result.model+(d.cached?' (cached)':'')+(d.result.error?' — ERROR':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))); });
+    log('✓ '+(d.i+1)+'/'+d.n+' '+d.result.model+(d.cached?' (cached)':'')+(d.result.error?' — ERROR':(' — '+money2(d.result.cost_usd)))); });
   es.addEventListener('done', function(e){ var s=JSON.parse(e.data).summary; render(live,false);
-    q('summary').innerHTML='<b>'+(s.pass||0)+'/'+(s.scored||0)+'</b> scored correct · '+(s.models||0)+' run · total cost <b>$'+Number(s.cost_usd||0).toFixed(4)+'</b>'; finish(); });
+    q('summary').innerHTML='<b>'+(s.pass||0)+'/'+(s.scored||0)+'</b> scored correct · '+(s.models||0)+' run · total cost <b>'+money2(s.cost_usd)+'</b>'; finish(); });
   es.addEventListener('failed', function(e){ var d={}; try{d=JSON.parse(e.data);}catch(_){}
     q('out').innerHTML='<div class="errbox"><b>'+esc(d.error||'run failed')+'</b>'+(d.trace?'<pre style="white-space:pre-wrap;font-size:11px;margin-top:8px">'+esc(d.trace)+'</pre>':'')+'</div>'; finish(); });
   es.onerror=function(){ if(done) return; q('summary').innerHTML='<span class="errbox" style="display:inline-block">connection lost mid-run — reload to see cached results</span>'; finish(); };
@@ -234,7 +240,7 @@ function rerunModel(m){
     var idx=-1; for(var i=0;i<CURRENT.length;i++){ if(CURRENT[i].model===d.result.model){ idx=i; break; } }
     if(idx>=0) CURRENT[idx]=d.result; else CURRENT.push(d.result);
     render(CURRENT,false); updateMatrixCell(c.id, d.result);
-    q('summary').innerHTML='<span class="muted">✓ re-ran '+esc(m)+(d.result.error?' — still error':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))+'</span>'; });
+    q('summary').innerHTML='<span class="muted">✓ re-ran '+esc(m)+(d.result.error?' — still error':(' — '+money2(d.result.cost_usd)))+'</span>'; });
   es.addEventListener('done', fin);
   es.addEventListener('failed', function(){ fin(); });
   es.onerror=function(){ fin(); };
