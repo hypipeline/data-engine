@@ -3,79 +3,87 @@
 {% block head %}
 <style>
   .tool-back { font-size:13px; color:var(--link); display:inline-block; margin-bottom:14px; }
-  .mc-controls { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; margin:14px 0 6px; }
   .mc-fg { display:flex; flex-direction:column; gap:5px; }
   .mc-fg label { font-size:12px; font-weight:600; color:var(--muted); }
-  .mc-fg select, .mc-fg textarea { padding:8px 10px; border:1px solid var(--border-2); border-radius:7px; font-size:13px; background:#fff; color:var(--text); font-family:inherit; }
-  .mc-fg textarea { width:340px; height:118px; font-family:var(--mono); font-size:12px; white-space:pre; }
-  .mc-fg select { min-width:340px; }
-  .mc-opts { font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:6px; }
+  .mc-fg textarea { width:100%; max-width:640px; height:96px; font-family:var(--mono); font-size:12px; white-space:pre;
+    padding:8px 10px; border:1px solid var(--border-2); border-radius:7px; background:#fff; color:var(--text); }
+  .mc-opts { font-size:12px; color:var(--muted); display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin:8px 0; }
   .btn { padding:9px 18px; border:1px solid var(--border-2); border-radius:7px; background:#fff; cursor:pointer; font-size:13px; }
   .btn.primary { background:#4a90d9; color:#fff; border-color:#4a90d9; font-weight:600; }
   .btn.primary:disabled { opacity:.5; cursor:not-allowed; }
-  .btn.sm { padding:3px 8px; font-size:11px; }
-  .mc-expect { margin:10px 0 4px; padding:10px 12px; background:#f7f8fa; border:1px solid var(--border); border-radius:9px; }
+  .btn.sm { padding:2px 7px; font-size:11px; }
+  .muted { color:#9aa3af; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:700; }
+  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
+  .pill.err { background:#fde68a; color:#92400e; } .pill.route { background:#eef2ff; color:#3730a3; }
+  .mc-grid-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:9px; margin-top:8px; }
+  table.mc { border-collapse:collapse; min-width:100%; font-size:12.5px; }
+  table.mc th, table.mc td { border:1px solid var(--border); padding:7px 10px; vertical-align:top; text-align:left; }
+  table.mc th.rowlab { background:#f7f8fa; font-weight:600; color:var(--muted); white-space:nowrap; position:sticky; left:0; z-index:1; }
+  table.mc thead th { background:#f2f5f9; font-family:var(--mono); font-size:11.5px; }
+  /* matrix */
+  table.mtx td.mcell { text-align:center; min-width:96px; cursor:pointer; }
+  table.mtx td.mcell.ok { background:#f0fdf4; } table.mtx td.mcell.bad { background:#fef2f2; }
+  table.mtx th.caserow { cursor:pointer; } table.mtx th.caserow:hover { color:var(--link); }
+  table.mtx tr.agg td, table.mtx tr.agg th { background:#eef2f7; font-size:12px; }
+  .cost { font-size:10px; color:#94a3b8; }
+  .run-log { font-size:12px; color:var(--muted); margin:6px 0; min-height:16px; }
+  .errbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:8px; font-size:13px; margin-top:10px; }
+  /* detail */
+  #detail { display:none; margin-top:26px; padding-top:18px; border-top:2px solid var(--border); }
+  .mc-expect { margin:10px 0; padding:10px 12px; background:#f7f8fa; border:1px solid var(--border); border-radius:9px; }
   .xp-head { display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-size:13px; }
   .xp-title { font-weight:700; color:var(--text); }
   .opt-row { display:flex; gap:8px; margin-top:6px; align-items:center; }
   .opt-row input { padding:6px 9px; border:1px solid var(--border-2); border-radius:6px; font-size:12.5px; }
   .opt-row input.nm { width:280px; } .opt-row input.rid { width:180px; }
-  .mc-meta { font-size:12px; color:var(--muted); margin:8px 0; }
-  .mc-summary { margin:10px 0; font-size:13px; }
-  .pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px; font-weight:700; }
-  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
-  .pill.err { background:#e5e7eb; color:#374151; } .pill.route { background:#eef2ff; color:#3730a3; }
-  .mc-grid-wrap { overflow-x:auto; margin-top:12px; border:1px solid var(--border); border-radius:9px; }
-  table.mc { border-collapse:collapse; min-width:100%; font-size:12.5px; }
-  table.mc th, table.mc td { border:1px solid var(--border); padding:8px 11px; vertical-align:top; text-align:left; }
-  table.mc th.rowlab { background:#f7f8fa; font-weight:600; color:var(--muted); white-space:nowrap; position:sticky; left:0; z-index:1; }
-  table.mc thead th { background:#f2f5f9; font-family:var(--mono); font-size:12px; min-width:210px; }
-  table.mc td.win { background:#f0fdf4; }
   .ent-name { font-weight:700; }
-  .muted { color:#9aa3af; }
   .raw { display:none; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:320px; overflow:auto; }
-  .errbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:8px; font-size:13px; margin-top:12px; }
 </style>
 {% endblock %}
 {% block body %}
 <a class="tool-back" href="/entity">← Back to Entity Lookup</a>
 <h1 class="page">Model Comparison</h1>
-<p class="sub">The step <b>after</b> search coverage. It takes the <b>exact analysis input production builds</b> for a case
-(fetch + extract + registries → the Phase-6 prompt), caches it, then feeds that <b>same input to different models</b>
-and compares the recommended entity, cost and latency. Baseline <code>claude-sonnet-4-6</code> runs direct (= production);
-others via OpenRouter. Each model is scored ✓/✗ against the case's known entity.</p>
+<p class="sub">The step <b>after</b> search coverage. For each case it caches the exact analysis input production builds
+(fetch + extract + registries → the Phase-6 prompt), then feeds that <b>same input to different models</b> and scores each
+✓/✗ against the case's expected recommendation. Baseline <code>claude-sonnet-4-6</code> and other OpenAI/Anthropic models
+run <b>direct</b>; the rest via OpenRouter.</p>
 
-<div class="mc-controls">
-  <div class="mc-fg">
-    <label>Test case</label>
-    <select id="case-sel" onchange="onCaseChange()"></select>
-  </div>
-  <div class="mc-fg">
-    <label>Models (one per line — OpenRouter ids)</label>
-    <textarea id="models"></textarea>
-  </div>
-  <div class="mc-fg">
-    <label>&nbsp;</label>
-    <div class="mc-opts">
-      <label><input type="checkbox" id="refresh-input"> rebuild Phase-1 input (re-fetch/extract/search)</label>
-      <label><input type="checkbox" id="refresh-models" checked> re-run models (ignore cached outputs)</label>
-      <button class="btn primary" id="run-btn" onclick="run()">▶ Run comparison</button>
+<div class="mc-fg">
+  <label>Models (one per line — OpenRouter-style ids)</label>
+  <textarea id="models"></textarea>
+</div>
+<div class="mc-opts">
+  <label><input type="checkbox" id="refresh-input"> rebuild Phase-1 input (re-fetch/extract/search)</label>
+  <label><input type="checkbox" id="refresh-models"> re-run <b>all</b> models (otherwise keep passes, retry only failed/missing)</label>
+  <button class="btn primary" id="runall-btn" onclick="runAll()">▶ Run all cases</button>
+</div>
+<div class="run-log" id="runall-log"></div>
+
+<h3 class="page" style="font-size:16px;margin-top:6px">Overview — all cases × models</h3>
+<div id="matrix"></div>
+<p class="muted" style="font-size:12px;margin-top:6px">Click a case (or a cell) to open its full side-by-side detail below. Green = ✓ matched expectation, red = ✗.</p>
+
+<div id="detail">
+  <h3 class="page" style="font-size:16px" id="detail-title">Detail</h3>
+  <div class="mc-expect" id="expect-panel">
+    <div class="xp-head">
+      <label class="xp-title">Expected recommendation:</label>
+      <label><input type="radio" name="xmode" value="entity" onchange="onModeChange()"> a specific entity <span class="muted">(any listed = ✓)</span></label>
+      <label><input type="radio" name="xmode" value="none" onchange="onModeChange()"> <b>NO</b> recommendation <span class="muted">(should abstain — guessing = ✗)</span></label>
+      <button class="btn sm" onclick="saveExpect()">Save expectation</button>
+      <span id="expect-saved" class="muted"></span>
     </div>
+    <div id="opts-wrap"></div>
   </div>
-</div>
-<div class="mc-expect" id="expect-panel">
-  <div class="xp-head">
-    <label class="xp-title">Expected recommendation:</label>
-    <label><input type="radio" name="xmode" value="entity" onchange="onModeChange()"> a specific entity <span class="muted">(any listed = ✓)</span></label>
-    <label><input type="radio" name="xmode" value="none" onchange="onModeChange()"> <b>NO</b> recommendation <span class="muted">(model should abstain — guessing = ✗)</span></label>
-    <button class="btn sm" onclick="saveExpect()">Save expectation</button>
-    <span id="expect-saved" class="muted"></span>
+  <div class="mc-opts">
+    <button class="btn primary" id="run-btn" onclick="run()">▶ Run this case</button>
+    <span class="muted">re-run one model with the ↻ button in each column header</span>
   </div>
-  <div id="opts-wrap"></div>
+  <div class="run-log" id="detail-meta"></div>
+  <div class="run-log" id="summary"></div>
+  <div id="out"></div>
 </div>
-<div class="mc-meta" id="input-meta"></div>
-<div class="mc-summary" id="summary"></div>
-<div id="out"></div>
 
 <script>
 var EB='/entity-app';
@@ -83,169 +91,183 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
 function q(id){ return document.getElementById(id); }
 function getJSON(url, opts){
   function once(){ return fetch(url, opts).then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||('HTTP '+r.status)); }); return r.json(); }); }
-  return once().catch(function(e){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
-}
-var CASES=[];
-
-function loadCases(){
-  return getJSON(EB+'/api/coverage/cases').then(function(d){
-    CASES=(d&&d.cases)||[];
-    q('case-sel').innerHTML = CASES.map(function(c){ return '<option value="'+c.id+'">'+esc(c.name)+'</option>'; }).join('');
-    if(CASES.length) onCaseChange();
-  });
-}
-function loadModels(){
-  return getJSON(EB+'/api/modelcompare/models').then(function(d){ q('models').value=(d.models||[]).join('\n'); });
+  return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
 }
 function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
-function curCase(){ var id=parseInt(q('case-sel').value,10); return CASES.filter(function(c){return c.id===id;})[0]; }
+function short(m){ return m.split('/').pop(); }
+var MATRIX={cases:[],models:[]}, SELECTED=null;
 
-function onCaseChange(){
-  var c=curCase(); if(!c) return;
-  q('summary').innerHTML=''; q('out').innerHTML=''; q('input-meta').textContent=''; q('expect-saved').textContent='';
-  getJSON(EB+'/api/modelcompare/results?case_id='+c.id).then(function(d){
-    loadExpect(d.spec);
-    if(d.results && d.results.length){ renderMeta(d.input_meta); render(d.results, true); }
-  }).catch(function(){ loadExpect(null); });
-}
+function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
+function curCase(){ return caseById(SELECTED); }
 
-// ── expected-recommendation editor ─────────────────────────────────────────────
-function optRow(o){ o=o||{};
-  return '<div class="opt-row"><input class="nm" placeholder="legal entity name (e.g. adidas AG)" value="'+esc(o.name||'')+'">'
-    + '<input class="rid" placeholder="registry id / LEI" value="'+esc(o.registry_id||'')+'">'
-    + '<button class="btn sm" onclick="this.parentNode.remove()">✕</button></div>';
+function loadModels(){ return getJSON(EB+'/api/modelcompare/models').then(function(d){ if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); }); }
+function loadMatrix(){ return getJSON(EB+'/api/modelcompare/matrix').then(function(d){ MATRIX=d; renderMatrix(); }); }
+
+// ── overview matrix ────────────────────────────────────────────────────────────
+function matrixCell(r){
+  if(!r) return '<span class="muted">–</span>';
+  if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
+  var sc=r.score||{};
+  var b=!sc.scored?'<span class="muted">·</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
+  return b+'<div class="cost">'+(r.cost_usd!=null?'$'+Number(r.cost_usd).toFixed(4):'')+'</div>';
 }
-function renderOptsEditor(spec){
-  var wrap=q('opts-wrap'); var mode=(spec&&spec.mode)||'entity';
-  if(mode==='none'){ wrap.innerHTML=''; wrap.style.display='none'; return; }
-  wrap.style.display='block';
-  var opts=(spec&&spec.options&&spec.options.length)?spec.options:[{}];
-  wrap.innerHTML=opts.map(optRow).join('')
-    + '<div style="margin-top:6px"><button class="btn sm" onclick="addOpt()">+ add acceptable entity</button></div>';
+function renderMatrix(){
+  var models=modelsList().length?modelsList():(MATRIX.models||[]);
+  var cases=MATRIX.cases||[];
+  var head='<tr><th class="rowlab">Case</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var body=cases.map(function(cs){
+    var tds=models.map(function(m){
+      var r=(cs.results||{})[m], cls=r&&r.score&&r.score.scored?(r.score.ok?' ok':' bad'):'';
+      return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>';
+    }).join('');
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'+tds+'</tr>';
+  }).join('');
+  var foot='<tr class="agg"><th class="rowlab">pass · avg cost</th>'+models.map(function(m){
+    var pass=0,scored=0,costs=[];
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored){scored++; if(r.score.ok)pass++;} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
+    var avg=costs.length?('$'+(costs.reduce(function(a,b){return a+b;},0)/costs.length).toFixed(4)):'—';
+    return '<td style="text-align:center">'+(scored?('<b>'+pass+'/'+scored+'</b>'):'—')+'<div class="cost">'+avg+'</div></td>';
+  }).join('')+'</tr>';
+  q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
 }
-function addOpt(){ var w=q('opts-wrap'); var d=document.createElement('div'); d.innerHTML=optRow({}); w.insertBefore(d.firstChild, w.lastChild); }
-function loadExpect(spec){
-  var mode=(spec&&spec.mode)||'entity';
-  Array.prototype.forEach.call(document.querySelectorAll('input[name=xmode]'), function(r){ r.checked=(r.value===mode); });
-  renderOptsEditor(spec);
-}
-function onModeChange(){
-  var mode=(document.querySelector('input[name=xmode]:checked')||{}).value||'entity';
-  renderOptsEditor(mode==='none'?{mode:'none'}:{mode:'entity',options:gatherOpts()});
-}
-function gatherOpts(){
-  return Array.prototype.map.call(q('opts-wrap').querySelectorAll('.opt-row'), function(row){
-    var i=row.querySelectorAll('input'); return {name:i[0].value.trim(), registry_id:i[1].value.trim()};
-  }).filter(function(o){ return o.name||o.registry_id; });
-}
-function gatherSpec(){
-  var mode=(document.querySelector('input[name=xmode]:checked')||{}).value||'entity';
-  return mode==='none'?{mode:'none'}:{mode:'entity',options:gatherOpts()};
-}
-function saveExpect(){
-  var c=curCase(); if(!c) return;
-  getJSON(EB+'/api/modelcompare/expect',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({case_id:c.id, spec:gatherSpec()})})
-    .then(function(){ q('expect-saved').textContent='saved ✓'; })
-    .catch(function(e){ q('expect-saved').textContent='save failed: '+(e.message||e); });
+function updateMatrixCell(cid, result){
+  var cs=caseById(cid); if(!cs) return; cs.results=cs.results||{}; cs.results[result.model]=result; renderMatrix();
 }
 
+// ── run all cases (sequential; each case streams its models) ────────────────────
+function runAll(){
+  var models=modelsList(); if(!models.length){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">Add at least one model.</span>'; return; }
+  var ids=(MATRIX.cases||[]).map(function(c){return c.id;});
+  if(!ids.length){ q('runall-log').textContent='No cases.'; return; }
+  var btn=q('runall-btn'); btn.disabled=true;
+  var ri=q('refresh-input').checked?'true':'false', rm=q('refresh-models').checked?'true':'false';
+  var idx=0;
+  function nextCase(){
+    if(idx>=ids.length){ btn.disabled=false; q('runall-log').textContent='✓ all '+ids.length+' cases done'; return; }
+    var cid=ids[idx], cs=caseById(cid), cname=cs?cs.name:cid, doneFlag=false;
+    var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm);
+    function nextOne(){ if(doneFlag) return; doneFlag=true; try{es.close();}catch(_){} idx++; nextCase(); }
+    es.addEventListener('phase', function(e){ q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+JSON.parse(e.data).message; });
+    es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+short(d.model)+' ('+(d.i+1)+'/'+d.n+')…'; });
+    es.addEventListener('model_done', function(e){ updateMatrixCell(cid, JSON.parse(e.data).result); });
+    es.addEventListener('done', nextOne);
+    es.addEventListener('failed', nextOne);
+    es.onerror=function(){ nextOne(); };
+  }
+  nextCase();
+}
+
+// ── single-case detail ──────────────────────────────────────────────────────────
+function openCase(cid){
+  SELECTED=cid; var cs=caseById(cid); if(!cs) return;
+  q('detail').style.display='block';
+  q('detail-title').textContent='Detail: '+cs.name;
+  q('expect-saved').textContent=''; q('summary').innerHTML='';
+  loadExpect(cs.spec);
+  renderMeta(cs.input_meta);
+  var results=Object.keys(cs.results||{}).map(function(k){return cs.results[k];});
+  render(results, true);
+  q('detail').scrollIntoView({behavior:'smooth', block:'start'});
+}
 function renderMeta(m){
-  if(!m){ q('input-meta').textContent=''; return; }
-  q('input-meta').innerHTML='Input: <b>'+esc(m.mode)+'</b> mode · '
-    + (m.extracted_names?('extracted: '+esc((m.extracted_names||[]).join(', '))+' · '):'')
-    + 'registries: '+esc((m.registries||[]).join(', '))
-    + ' · '+ (m.user_chars||0).toLocaleString() +' input chars';
+  if(!m){ q('detail-meta').textContent=''; return; }
+  q('detail-meta').innerHTML='Input: <b>'+esc(m.mode)+'</b> mode · '
+    +(m.extracted_names?('extracted: '+esc((m.extracted_names||[]).join(', '))+' · '):'')
+    +'registries: '+esc((m.registries||[]).join(', '))+' · '+(m.user_chars||0).toLocaleString()+' input chars';
 }
-
+var CURRENT=[];
 function cell(r){
   if(r.error){ return '<div><span class="pill err">ERROR</span></div><div class="muted" style="margin-top:6px">'+esc(r.error)+'</div>'; }
-  var ent=r.recommended||{};
-  var sc=r.score||{};
-  var badge = !sc.scored ? '<span class="pill err">no expectation set</span>'
-            : (sc.ok ? '<span class="pill pass">✓</span>' : '<span class="pill fail">✗</span>');
-  var verdict = sc.verdict ? ' <span class="muted">'+esc(sc.verdict)+'</span>' : '';
+  var ent=r.recommended||{}, sc=r.score||{};
+  var badge=!sc.scored?'<span class="pill err">no expectation set</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
+  var verdict=sc.verdict?' <span class="muted">'+esc(sc.verdict)+'</span>':'';
   var rid='rw'+Math.random().toString(36).slice(2,8);
   return badge+verdict
-    + '<div style="margin-top:7px" class="ent-name">'+esc(ent.legal_entity_name||'— none —')+'</div>'
-    + '<div class="muted">'+esc(ent.registry_id||'no id')+(ent.jurisdiction_country?(' · '+esc(ent.jurisdiction_country)):'')+'</div>'
-    + '<div style="margin-top:4px">conf: <b>'+esc(r.confidence||'—')+'</b>'+(r.json_ok?'':' <span class="pill err">JSON invalid</span>')+(r.truncated?' <span class="pill err">truncated</span>':'')+'</div>'
-    + '<div class="muted" style="margin-top:6px">'
-      + (r.cost_usd!=null?('$'+Number(r.cost_usd).toFixed(5)):'cost n/a')
-      + ' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')
-      + ' · '+(r.input_tokens||0)+'/'+(r.output_tokens||0)+' tok</div>'
-    + '<div style="margin-top:4px"><span class="pill route">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span></div>'
-    + '<span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span>'
-    + '<div class="raw" id="'+rid+'">'+esc(r.raw||'(no output)')+'</div>';
+    +'<div style="margin-top:7px" class="ent-name">'+esc(ent.legal_entity_name||'— none —')+'</div>'
+    +'<div class="muted">'+esc(ent.registry_id||'no id')+(ent.jurisdiction_country?(' · '+esc(ent.jurisdiction_country)):'')+'</div>'
+    +'<div style="margin-top:4px">conf: <b>'+esc(r.confidence||'—')+'</b>'+(r.json_ok?'':' <span class="pill err">JSON invalid</span>')+(r.truncated?' <span class="pill err">truncated</span>':'')+'</div>'
+    +'<div class="muted" style="margin-top:6px">'+(r.cost_usd!=null?('$'+Number(r.cost_usd).toFixed(5)):'cost n/a')
+      +' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')+' · '+(r.input_tokens||0)+'/'+(r.output_tokens||0)+' tok</div>'
+    +'<div style="margin-top:4px"><span class="pill route">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span></div>'
+    +'<span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span>'
+    +'<div class="raw" id="'+rid+'">'+esc(r.raw||'(no output)')+'</div>';
 }
-
-var CURRENT=[];   // last rendered results, so a single column can be re-run in place
 function render(results, cached){
   CURRENT=results||[];
   if(!results.length){ q('out').innerHTML=''; return; }
-  var cheapest=null, fastest=null;
-  results.forEach(function(r){
-    if(r.cost_usd!=null && (cheapest==null || r.cost_usd<cheapest)) cheapest=r.cost_usd;
-    if(r.latency_ms!=null && (fastest==null || r.latency_ms<fastest)) fastest=r.latency_ms;
-  });
-  var rows=[
-    ['Result', function(r){ return cell(r); }]
-  ];
+  var cheapest=null;
+  results.forEach(function(r){ if(r.cost_usd!=null && (cheapest==null||r.cost_usd<cheapest)) cheapest=r.cost_usd; });
   var head='<tr><th class="rowlab">'+(cached?'<span class="muted">cached</span>':'')+'</th>'
-    + results.map(function(r){ return '<th>'+esc(r.model)+' <button class="btn sm" title="re-run just this model" onclick="rerunModel(\''+r.model+'\')">↻</button></th>'; }).join('') + '</tr>';
-  var body = rows.map(function(row){
-    return '<tr><th class="rowlab">'+row[0]+'</th>'
-      + results.map(function(r){
-          var win = (row[0]==='Result' && r.cost_usd!=null && r.cost_usd===cheapest) ? ' class="win"' : '';
-          return '<td'+win+'>'+row[1](r)+'</td>';
-        }).join('') + '</tr>';
-  }).join('');
-  q('out').innerHTML='<div class="mc-grid-wrap"><table class="mc"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
-    + '<div class="mc-meta">Cheapest cost highlighted green. Fastest: '+(fastest!=null?Math.round(fastest/100)/10+'s':'—')+'.</div>';
+    +results.map(function(r){ return '<th>'+esc(r.model)+' <button class="btn sm" title="re-run just this model" onclick="rerunModel(\''+r.model+'\')">↻</button></th>'; }).join('')+'</tr>';
+  var body='<tr><th class="rowlab">Result</th>'+results.map(function(r){
+    var win=(r.cost_usd!=null && r.cost_usd===cheapest)?' style="background:#f0fdf4"':''; return '<td'+win+'>'+cell(r)+'</td>'; }).join('')+'</tr>';
+  q('out').innerHTML='<div class="mc-grid-wrap"><table class="mc"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
 }
 
 function run(){
   var c=curCase(); if(!c) return;
   var models=modelsList(); if(!models.length){ q('out').innerHTML='<div class="errbox">Add at least one model.</div>'; return; }
-  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running…';
-  q('out').innerHTML='';
+  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running…'; q('out').innerHTML='';
   q('summary').innerHTML='<span id="run-log" class="muted"></span>';
   var log=function(t){ var e=q('run-log'); if(e) e.textContent=t; };
-  var live=[], done=false, total=models.length;
-  var params='case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
-    +'&refresh_input='+(q('refresh-input').checked?'true':'false')
-    +'&refresh_models='+(q('refresh-models').checked?'true':'false');
-  var es=new EventSource(EB+'/api/modelcompare/run-stream?'+params);
-  function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run comparison'; }
+  var live=[], done=false;
+  var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
+    +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(q('refresh-models').checked?'true':'false'));
+  function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run this case'; }
   es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
-  es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); renderMeta(d.meta); log('✓ Phase-1 input ready — running '+total+' models…'); });
+  es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); log('✓ input ready — running '+models.length+' models…'); });
   es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); log('▶ ('+(d.i+1)+'/'+d.n+') '+d.model+' …'); });
-  es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); live.push(d.result); render(live, false);
+  es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); live.push(d.result); render(live,false); updateMatrixCell(c.id, d.result);
     log('✓ '+(d.i+1)+'/'+d.n+' '+d.result.model+(d.cached?' (cached)':'')+(d.result.error?' — ERROR':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))); });
-  es.addEventListener('done', function(e){ var s=JSON.parse(e.data).summary; render(live, false);
+  es.addEventListener('done', function(e){ var s=JSON.parse(e.data).summary; render(live,false);
     q('summary').innerHTML='<b>'+(s.pass||0)+'/'+(s.scored||0)+'</b> scored correct · '+(s.models||0)+' run · total cost <b>$'+Number(s.cost_usd||0).toFixed(4)+'</b>'; finish(); });
-  es.addEventListener('failed', function(e){ var d={}; try{ d=JSON.parse(e.data); }catch(_){}
+  es.addEventListener('failed', function(e){ var d={}; try{d=JSON.parse(e.data);}catch(_){}
     q('out').innerHTML='<div class="errbox"><b>'+esc(d.error||'run failed')+'</b>'+(d.trace?'<pre style="white-space:pre-wrap;font-size:11px;margin-top:8px">'+esc(d.trace)+'</pre>':'')+'</div>'; finish(); });
-  es.onerror=function(){ if(done) return;
-    q('summary').innerHTML='<span class="errbox" style="display:inline-block">connection lost mid-run — reload to see cached results</span>'; finish(); };
+  es.onerror=function(){ if(done) return; q('summary').innerHTML='<span class="errbox" style="display:inline-block">connection lost mid-run — reload to see cached results</span>'; finish(); };
 }
-
 function rerunModel(m){
   var c=curCase(); if(!c) return;
-  var s=q('summary'); s.innerHTML='<span class="muted">↻ re-running '+esc(m)+'…</span>';
+  q('summary').innerHTML='<span class="muted">↻ re-running '+esc(m)+'…</span>';
   var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(m)+'&refresh_input=false&refresh_models=true');
   function fin(){ try{es.close();}catch(_){} }
   es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data);
     var idx=-1; for(var i=0;i<CURRENT.length;i++){ if(CURRENT[i].model===d.result.model){ idx=i; break; } }
     if(idx>=0) CURRENT[idx]=d.result; else CURRENT.push(d.result);
-    render(CURRENT, false);
-    s.innerHTML='<span class="muted">✓ re-ran '+esc(m)+(d.result.error?' — still error':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))+'</span>'; });
+    render(CURRENT,false); updateMatrixCell(c.id, d.result);
+    q('summary').innerHTML='<span class="muted">✓ re-ran '+esc(m)+(d.result.error?' — still error':(' — $'+Number(d.result.cost_usd||0).toFixed(5)))+'</span>'; });
   es.addEventListener('done', fin);
-  es.addEventListener('failed', function(e){ var d={}; try{d=JSON.parse(e.data);}catch(_){}
-    s.innerHTML='<span class="errbox" style="display:inline-block">rerun failed: '+esc(d.error||'')+'</span>'; fin(); });
+  es.addEventListener('failed', function(){ fin(); });
   es.onerror=function(){ fin(); };
 }
 
-loadModels().then(loadCases);
+// ── expected-recommendation editor ─────────────────────────────────────────────
+function optRow(o){ o=o||{};
+  return '<div class="opt-row"><input class="nm" placeholder="legal entity name (e.g. adidas AG)" value="'+esc(o.name||'')+'">'
+    +'<input class="rid" placeholder="registry id / LEI" value="'+esc(o.registry_id||'')+'">'
+    +'<button class="btn sm" onclick="this.parentNode.remove()">✕</button></div>';
+}
+function renderOptsEditor(spec){
+  var wrap=q('opts-wrap'), mode=(spec&&spec.mode)||'entity';
+  if(mode==='none'){ wrap.innerHTML=''; wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  var opts=(spec&&spec.options&&spec.options.length)?spec.options:[{}];
+  wrap.innerHTML=opts.map(optRow).join('')+'<div style="margin-top:6px"><button class="btn sm" onclick="addOpt()">+ add acceptable entity</button></div>';
+}
+function addOpt(){ var w=q('opts-wrap'), d=document.createElement('div'); d.innerHTML=optRow({}); w.insertBefore(d.firstChild, w.lastChild); }
+function loadExpect(spec){ var mode=(spec&&spec.mode)||'entity';
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=xmode]'), function(r){ r.checked=(r.value===mode); });
+  renderOptsEditor(spec); }
+function onModeChange(){ var mode=(document.querySelector('input[name=xmode]:checked')||{}).value||'entity';
+  renderOptsEditor(mode==='none'?{mode:'none'}:{mode:'entity',options:gatherOpts()}); }
+function gatherOpts(){ return Array.prototype.map.call(q('opts-wrap').querySelectorAll('.opt-row'), function(row){
+  var i=row.querySelectorAll('input'); return {name:i[0].value.trim(), registry_id:i[1].value.trim()}; }).filter(function(o){ return o.name||o.registry_id; }); }
+function gatherSpec(){ var mode=(document.querySelector('input[name=xmode]:checked')||{}).value||'entity';
+  return mode==='none'?{mode:'none'}:{mode:'entity',options:gatherOpts()}; }
+function saveExpect(){ var c=curCase(); if(!c) return;
+  getJSON(EB+'/api/modelcompare/expect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({case_id:c.id, spec:gatherSpec()})})
+    .then(function(){ c.spec=gatherSpec(); q('expect-saved').textContent='saved ✓'; })
+    .catch(function(e){ q('expect-saved').textContent='save failed: '+(e.message||e); }); }
+
+loadModels().then(loadMatrix);
 </script>
 {% endblock %}

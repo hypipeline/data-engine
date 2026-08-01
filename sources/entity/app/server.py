@@ -292,6 +292,12 @@ def api_modelcompare_results(case_id: int):
     return JSONResponse(model_compare.get_cached(int(case_id)))
 
 
+@app.get("/api/modelcompare/matrix")
+def api_modelcompare_matrix():
+    """All cases × all cached model results — the overview grid (no LLM calls)."""
+    return JSONResponse(model_compare.matrix())
+
+
 @app.post("/api/modelcompare/run")
 async def api_modelcompare_run(request: Request):
     """Run one coverage case across a set of models. Body: {id | case, models[], refresh_input,

@@ -440,6 +440,20 @@ def get_cached(cid):
     return {"case_id": cid, "input_meta": (inp or {}).get("meta"), "spec": get_expect(cid), "results": rows}
 
 
+def matrix():
+    """Every case + all its cached model results, for the overview grid (cases × models)."""
+    out = []
+    for c in coverage.list_cases():
+        cid = c["id"]
+        cached = get_cached(cid)
+        out.append({
+            "id": cid, "name": c["name"], "url": c.get("url"), "names": c.get("names"),
+            "spec": cached.get("spec"), "input_meta": cached.get("input_meta"),
+            "results": {r["model"]: r for r in (cached.get("results") or [])},
+        })
+    return {"cases": out, "models": DEFAULT_MODELS}
+
+
 def _result_get(cid, model):
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
