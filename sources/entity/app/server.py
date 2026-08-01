@@ -348,18 +348,27 @@ async def api_modelcompare_run_stream(case_id: int, models: str = "",
             q.put(("input_ready", {"meta": inp["meta"]}))
             spec = model_compare.spec_for(case)
             cid = case.get("id")
-            results = []
-            for i, m in enumerate(model_list):
+            n = len(model_list)
+            results, to_run = [], []
+            for m in model_list:
                 if cid and not refresh_models:
                     cached = model_compare._result_get(cid, m)
                     if cached and not cached.get("error"):   # keep successes cached; RETRY failures
                         results.append(cached)
-                        q.put(("model_done", {"result": cached, "i": i, "n": len(model_list), "cached": True}))
+                        q.put(("model_done", {"result": cached, "done": len(results), "total": n, "cached": True}))
                         continue
-                q.put(("model_start", {"model": m, "i": i, "n": len(model_list)}))
-                row = model_compare.run_one_model(CONFIG, inp, m, spec, cid)
-                results.append(row)
-                q.put(("model_done", {"result": row, "i": i, "n": len(model_list)}))
+                to_run.append(m)
+            if to_run:
+                # models are independent HTTP calls to different providers → run in PARALLEL and
+                # stream each result the moment it lands (order = completion, fastest first).
+                q.put(("phase", {"message": f"Running {len(to_run)} models in parallel…"}))
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                with ThreadPoolExecutor(max_workers=min(10, len(to_run))) as ex:
+                    futs = {ex.submit(model_compare.run_one_model, CONFIG, inp, m, spec, cid): m for m in to_run}
+                    for fut in as_completed(futs):
+                        row = fut.result()
+                        results.append(row)
+                        q.put(("model_done", {"result": row, "done": len(results), "total": n}))
             total = round(sum((r.get("cost_usd") or 0) for r in results), 4)
             scored = [r for r in results if r["score"].get("scored")]
             q.put(("done", {"summary": {"models": len(results), "scored": len(scored),

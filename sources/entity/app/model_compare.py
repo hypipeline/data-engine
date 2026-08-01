@@ -21,6 +21,7 @@ import pathlib
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 
 from psycopg2.extras import RealDictCursor
@@ -327,14 +328,17 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
     inp = build_input(config, case, refresh=refresh_input)
     cid = case.get("id")
     spec = spec_for(case)
-    results = []
+    results, to_run = [], []
     for m in models:
         if cid and not refresh_models:
             cached = _result_get(cid, m)
             if cached and not cached.get("error"):   # keep successes cached; RETRY failures
                 results.append(cached)
                 continue
-        results.append(run_one_model(config, inp, m, spec, cid))
+        to_run.append(m)
+    if to_run:                                        # models are independent HTTP calls → run in parallel
+        with ThreadPoolExecutor(max_workers=min(10, len(to_run))) as ex:
+            results.extend(ex.map(lambda m: run_one_model(config, inp, m, spec, cid), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
     scored = [r for r in results if r["score"].get("scored")]
     return {"case_id": cid, "input_meta": inp["meta"], "spec": spec,
