@@ -349,8 +349,11 @@ class EvidenceAnalysisMixin:
             detail['entity_name'] = entity_name
         self.log(phase, f"{source}: \"{name}\" → {summary}", detail if detail else None)
 
-    def analyze_evidence(self, url, domain, website_data, entity_info, registries):
-        # PHP analyzeEvidence(string $url, string $domain, array $websiteData, array $entityInfo, array $registries): array
+    def build_analysis_messages(self, url, domain, website_data, entity_info, registries):
+        """Build the EXACT (system_prompt, user_message) the analysis LLM receives, plus the
+        expandable evidence sections. Extracted so both production analyze_evidence() and the
+        model-comparison tester feed candidate models byte-identical input (the tester caches
+        this per case and fans it out across models)."""
         evidence_text = self.format_evidence(url, domain, website_data, entity_info, registries)
         system_prompt = self.analysis_prompt + "\n\n" + self.json_schema
         user_message = f"Analyze the following evidence and produce the entity lookup report:\n\n{evidence_text}"
@@ -370,7 +373,13 @@ class EvidenceAnalysisMixin:
         for key, result in registries.items():
             truncated = result[:10000]
             evidence_sections.append({'label': f"Registry: {key} (" + f"{len(truncated):,}" + " chars)", 'content': truncated})
-        self.log('llm', "LLM analysis — calling " + self.config['model'] + " with " + str(len(registries)) + " registry results (" + f"{len(evidence_text):,}" + " chars)", {
+        return system_prompt, user_message, evidence_sections
+
+    def analyze_evidence(self, url, domain, website_data, entity_info, registries):
+        # PHP analyzeEvidence(string $url, string $domain, array $websiteData, array $entityInfo, array $registries): array
+        system_prompt, user_message, evidence_sections = self.build_analysis_messages(
+            url, domain, website_data, entity_info, registries)
+        self.log('llm', "LLM analysis — calling " + self.config['model'] + " with " + str(len(registries)) + " registry results (" + f"{len(user_message):,}" + " chars)", {
             'expandable': True,
             'sections': evidence_sections,
         })

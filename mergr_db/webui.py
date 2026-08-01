@@ -497,6 +497,11 @@ def tool_coverage(request: Request):
     return render(request, "tool_coverage.html", "entity")
 
 
+@app.get("/entity/tools/model-compare", response_class=HTMLResponse)
+def tool_model_compare(request: Request):
+    return render(request, "tool_model_compare.html", "entity")
+
+
 _LKP_GROUP = "COALESCE(NULLIF(domain,''), url)"       # canonical dedup key (blank domain -> url)
 
 

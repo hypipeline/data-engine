@@ -24,6 +24,7 @@ from tools import LookupTools
 import cache
 import linkedin_cache
 import coverage
+import model_compare
 
 # Countries validated via NorthData (faithful to validate.php).
 NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
@@ -47,6 +48,10 @@ def _startup():
         coverage.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[coverage] schema init skipped: {e}")
+    try:
+        model_compare.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[model_compare] schema init skipped: {e}")
 
 
 def _domain(url: str) -> str:
@@ -272,6 +277,60 @@ async def api_coverage_run(request: Request):
                "error": sum(1 for r in results if r["status"] == "error"),
                "cost_usd": round(sum(r.get("cost_usd") or 0 for r in results), 4)}
     return JSONResponse({"summary": summary, "results": results})
+
+
+# ── Model-comparison tester (the stage after coverage: same cases, feed the cached ────
+# ── Phase-1 analysis input to different models and compare the recommended entity) ────
+@app.get("/api/modelcompare/models")
+def api_modelcompare_models():
+    return JSONResponse({"models": model_compare.DEFAULT_MODELS})
+
+
+@app.get("/api/modelcompare/results")
+def api_modelcompare_results(case_id: int):
+    """Cached results for a case (shown on page load, no LLM calls)."""
+    return JSONResponse(model_compare.get_cached(int(case_id)))
+
+
+@app.post("/api/modelcompare/run")
+async def api_modelcompare_run(request: Request):
+    """Run one coverage case across a set of models. Body: {id | case, models[], refresh_input,
+    refresh_models}. Builds/reuses the cached Phase-1 analysis input, then fans out per model."""
+    body = await request.json() if await request.body() else {}
+    models = body.get("models") or model_compare.DEFAULT_MODELS
+    if body.get("id"):
+        c = coverage.get_case(int(body["id"]))
+        if not c:
+            return JSONResponse({"error": "case not found"}, status_code=404)
+    elif body.get("case"):
+        c = body["case"]
+    else:
+        return JSONResponse({"error": "provide an id or a case"}, status_code=400)
+    try:
+        out = model_compare.run_case(CONFIG, c, models,
+                                     refresh_input=bool(body.get("refresh_input")),
+                                     refresh_models=bool(body.get("refresh_models")))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
+    return JSONResponse(out)
+
+
+@app.get("/api/modelcompare/expect")
+def api_modelcompare_get_expect(case_id: int):
+    """The per-case expected recommendation ({mode:entity,options:[...]} | {mode:none} | null)."""
+    return JSONResponse({"case_id": case_id, "spec": model_compare.get_expect(int(case_id))})
+
+
+@app.post("/api/modelcompare/expect")
+async def api_modelcompare_set_expect(request: Request):
+    body = await request.json()
+    cid = body.get("case_id")
+    if not cid:
+        return JSONResponse({"error": "case_id required"}, status_code=400)
+    model_compare.put_expect(int(cid), body.get("spec"))
+    return JSONResponse({"ok": True})
 
 
 @app.get("/api/trademark-search")
