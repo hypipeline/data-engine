@@ -394,6 +394,9 @@ def _input_put(cid, out):
                 "system_prompt=EXCLUDED.system_prompt, user_message=EXCLUDED.user_message, "
                 "meta=EXCLUDED.meta, created_at=now()",
                 (cid, out["system"], out["user"], json.dumps(out["meta"])))
+            # the input was (re)generated → any stored model results were run against the OLD
+            # input and are now stale. Clear them so they get re-run against this input.
+            cur.execute("DELETE FROM entity.model_compare_results WHERE case_id=%s", (cid,))
         c.commit()
 
 
