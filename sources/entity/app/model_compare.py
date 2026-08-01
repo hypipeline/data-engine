@@ -38,7 +38,8 @@ DEFAULT_MODELS = [
     "anthropic/claude-haiku-4.5",           # cheaper candidate (~1/3 of Sonnet)
     "google/gemini-2.5-flash",              # ~10x cheaper
     "deepseek/deepseek-chat",               # ~15x cheaper
-    "moonshotai/kimi-k2-thinking",          # Kimi K2 (reasoning) — strong on abstention
+    "moonshotai/kimi-k2-thinking",          # Kimi K2 (reasoning) — cheap reasoner (~$30/1k)
+    "moonshotai/kimi-k3",                    # Kimi K3 — newer/bigger (1M ctx) but Sonnet-tier price
 ]
 
 # per-1M-token (input, output) USD for DIRECT providers, keyed by the provider's NATIVE model id.
