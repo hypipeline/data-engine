@@ -41,11 +41,21 @@ DEFAULT_MODELS = [
     "moonshotai/kimi-k2-thinking",          # Kimi K2 (reasoning) — strong on abstention
 ]
 
-# per-1M-token (input, output) USD for DIRECT providers. OpenRouter returns its own cost, so we
-# only need rates for models we call directly. Unknown → cost reported as null (not guessed).
+# per-1M-token (input, output) USD for DIRECT providers, keyed by the provider's NATIVE model id.
+# OpenRouter returns its own cost, so we only need rates for models we call directly. Unknown →
+# cost reported as null (not guessed).
 _DIRECT_RATES = {
     "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+    "gpt-5": (1.25, 10.0),
+    "gpt-5.6-sol": (5.0, 30.0),
 }
+
+
+def _direct_cost(model_name, it, ot):
+    r = _DIRECT_RATES.get(model_name)
+    return (it * r[0] / 1e6 + ot * r[1] / 1e6) if r else None
 
 MAX_TOKENS = 16384                   # match production analysis cap
 
@@ -105,9 +115,7 @@ def _call_anthropic(model_name, system, user, key):
     txt = "".join(b.get("text", "") for b in (d.get("content") or []) if b.get("type") == "text")
     u = d.get("usage") or {}
     it, ot = u.get("input_tokens", 0), u.get("output_tokens", 0)
-    rate = _DIRECT_RATES.get(model_name, (None, None))
-    cost = (it * rate[0] / 1e6 + ot * rate[1] / 1e6) if rate[0] is not None else None
-    return {"text": txt, "input_tokens": it, "output_tokens": ot, "cost_usd": cost,
+    return {"text": txt, "input_tokens": it, "output_tokens": ot, "cost_usd": _direct_cost(model_name, it, ot),
             "latency_ms": ms, "provider": "anthropic-direct", "truncated": d.get("stop_reason") == "max_tokens"}
 
 
@@ -115,14 +123,15 @@ def _call_openai(model_name, system, user, key):
     status, d, ms, err = _post(
         "https://api.openai.com/v1/chat/completions",
         {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        {"model": model_name, "max_tokens": MAX_TOKENS,
+        {"model": model_name, "max_completion_tokens": MAX_TOKENS,   # newer OpenAI models reject max_tokens
          "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
     if err or not d:
         return {"error": err or f"HTTP {status}", "latency_ms": ms}
     txt = d["choices"][0]["message"].get("content") or ""
     u = d.get("usage") or {}
-    return {"text": txt, "input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0),
-            "cost_usd": None, "latency_ms": ms, "provider": "openai-direct"}
+    it, ot = u.get("prompt_tokens", 0), u.get("completion_tokens", 0)
+    return {"text": txt, "input_tokens": it, "output_tokens": ot,
+            "cost_usd": _direct_cost(model_name, it, ot), "latency_ms": ms, "provider": "openai-direct"}
 
 
 def _call_openrouter(model_ref, system, user, key):
@@ -143,18 +152,17 @@ def _call_openrouter(model_ref, system, user, key):
 
 
 def call_model(model_ref: str, system: str, user: str, config: dict) -> dict:
-    """Dispatch one model call by route, returning a normalised result dict."""
+    """Dispatch one model call by route. Per agreement: Anthropic and OpenAI ALWAYS use their
+    direct APIs (never OpenRouter) — a direct failure is surfaced as-is, not silently rerouted.
+    OpenRouter is used ONLY for providers we hold no direct key for (Google, DeepSeek, Kimi, …)."""
     route = resolve_route(model_ref, config)
     name = model_ref.split("/", 1)[1] if "/" in model_ref else model_ref
     if route == "anthropic":
-        res = _call_anthropic(name, system, user, config["anthropic_api_key"])
+        # OpenRouter spells versions with a dot (claude-opus-4.8); Anthropic's own API wants the
+        # native hyphenated id (claude-opus-4-8).
+        res = _call_anthropic(name.replace(".", "-"), system, user, config["anthropic_api_key"])
     elif route == "openai":
         res = _call_openai(name, system, user, config["openai_api_key"])
-        if res.get("error"):                         # restricted/unavailable direct key → fall back
-            k = openrouter_key()
-            if k:
-                res = _call_openrouter(model_ref, system, user, k)
-                route = "openai→openrouter"
     else:
         k = openrouter_key()
         res = {"error": "no OpenRouter key configured"} if not k else _call_openrouter(model_ref, system, user, k)
