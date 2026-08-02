@@ -38,6 +38,10 @@
   .opt-row { display:flex; gap:8px; margin-top:6px; align-items:center; }
   .opt-row input { padding:6px 9px; border:1px solid var(--border-2); border-radius:6px; font-size:12.5px; }
   .opt-row input.nm { width:280px; } .opt-row input.rid { width:180px; }
+  .stages { display:flex; flex-direction:column; gap:10px; margin:12px 0; padding:12px 14px; border:1px solid var(--border); border-radius:9px; background:#fafbfc; }
+  .stage { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:13px; }
+  .stage-lbl { font-weight:700; min-width:230px; }
+  .btn.primary:disabled { opacity:.45; cursor:not-allowed; }
   .ent-name { font-weight:700; }
   .raw { display:none; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:320px; overflow:auto; }
 </style>
@@ -80,9 +84,17 @@ run <b>direct</b>; the rest via OpenRouter.</p>
     </div>
     <div id="opts-wrap"></div>
   </div>
-  <div class="mc-opts">
-    <button class="btn primary" id="run-btn" onclick="run()">▶ Run this case</button>
-    <span class="muted">re-run one model with the ↻ button in each column header</span>
+  <div class="stages">
+    <div class="stage">
+      <span class="stage-lbl">Stage 1 — content + coverage:</span>
+      <span id="cov-status" class="muted">—</span>
+      <button class="btn" id="cov-btn" onclick="runCoverage()">▶ Run coverage test</button>
+    </div>
+    <div class="stage">
+      <span class="stage-lbl">Stage 2 — model comparison:</span>
+      <button class="btn primary" id="run-btn" onclick="run()" disabled>▶ Run models</button>
+      <span id="stage2-note" class="muted">locked until coverage (Stage 1) passes</span>
+    </div>
   </div>
   <div class="run-log" id="detail-meta"></div>
   <div class="run-log" id="summary"></div>
@@ -184,9 +196,29 @@ function openCase(cid){
   q('expect-saved').textContent=''; q('summary').innerHTML='';
   loadExpect(cs.spec);
   renderMeta(cs.input_meta);
+  updateStages((cs.input_meta||{}).coverage);
   var results=Object.keys(cs.results||{}).map(function(k){return cs.results[k];});
   render(results, true);
   q('detail').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function updateStages(cov){
+  var st=(cov||{}).status, el=q('cov-status'), btn=q('run-btn'), note=q('stage2-note');
+  if(!cov||!st){ el.innerHTML='<span class="muted">not built yet</span>'; btn.disabled=true; note.textContent='locked — run Stage 1 first'; return; }
+  if(st==='pass'){ el.innerHTML='<span class="pill pass">✓ passed</span>'; btn.disabled=false; note.textContent='coverage passed — models unlocked'; }
+  else if(st==='fail'){ el.innerHTML='<span class="pill fail">✗ failed</span> <span class="muted">missing: '+esc((cov.missing||[]).join(", "))+'</span>'; btn.disabled=true; note.textContent='Stage 1 must pass first — fix the content, then re-run coverage'; }
+  else { el.innerHTML='<span class="pill err">'+esc(st)+'</span>'; btn.disabled=true; note.textContent='Stage 1 not passed'; }
+}
+function runCoverage(){
+  var c=curCase(); if(!c) return;
+  var btn=q('cov-btn'); btn.disabled=true; btn.textContent='Running…';
+  q('cov-status').innerHTML='<span class="muted">building content + validating…</span>';
+  getJSON(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:c.id, refresh:q('refresh-input').checked})})
+  .then(function(){ return getJSON(EB+'/api/modelcompare/results?case_id='+c.id); })
+  .then(function(mc){ c.input_meta=mc.input_meta; renderMeta(c.input_meta); updateStages((c.input_meta||{}).coverage); renderMatrix();
+    btn.disabled=false; btn.textContent='▶ Run coverage test'; })
+  .catch(function(e){ btn.disabled=false; btn.textContent='▶ Run coverage test';
+    q('cov-status').innerHTML='<span class="pill fail">error</span> <span class="muted">'+esc(e.message||e)+'</span>'; });
 }
 function renderMeta(m){
   if(!m){ q('detail-meta').innerHTML=''; return; }
@@ -235,7 +267,7 @@ function run(){
   var live=[], done=false;
   var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
     +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(refreshAllModels()?'true':'false'));
-  function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run this case'; }
+  function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run models'; }
   es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
   es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); renderMatrix(); log('✓ input ready — running '+models.length+' models…'); });
   es.addEventListener('blocked', function(e){ var d=JSON.parse(e.data); c.input_meta=d.input_meta; renderMeta(d.input_meta); renderMatrix(); var cov=d.coverage||{};
