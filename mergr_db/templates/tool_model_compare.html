@@ -43,6 +43,7 @@
   .stage-lbl { font-weight:700; min-width:230px; }
   .btn.primary:disabled { opacity:.45; cursor:not-allowed; }
   .ent-name { font-weight:700; }
+  .llm-pre { background:#fff; border:1px solid var(--border); border-radius:6px; padding:10px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:440px; overflow:auto; }
   .raw { display:none; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:320px; overflow:auto; }
 </style>
 {% endblock %}
@@ -97,6 +98,8 @@ run <b>direct</b>; the rest via OpenRouter.</p>
     </div>
   </div>
   <div class="run-log" id="detail-meta"></div>
+  <div style="margin:4px 0 8px"><span class="btn sm" onclick="toggleInput()">▾ View full LLM input (exact system + user prompt sent to every model)</span></div>
+  <div id="llm-input" style="display:none"></div>
   <div class="run-log" id="summary"></div>
   <div id="out"></div>
 </div>
@@ -219,6 +222,18 @@ function runCoverage(){
     btn.disabled=false; btn.textContent='▶ Run coverage test'; })
   .catch(function(e){ btn.disabled=false; btn.textContent='▶ Run coverage test';
     q('cov-status').innerHTML='<span class="pill fail">error</span> <span class="muted">'+esc(e.message||e)+'</span>'; });
+}
+function toggleInput(){
+  var box=q('llm-input');
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  var c=curCase(); if(!c) return;
+  box.style.display='block'; box.innerHTML='<span class="muted">loading…</span>';
+  getJSON(EB+'/api/modelcompare/input?case_id='+c.id).then(function(d){
+    var sl=(d.system||'').length, ul=(d.user||'').length;
+    box.innerHTML='<div class="muted" style="margin:6px 0">Exact input every model receives — system '+sl.toLocaleString()+' chars + user/evidence '+ul.toLocaleString()+' chars.</div>'
+      +'<div style="font-weight:700;margin-top:8px">SYSTEM PROMPT</div><pre class="llm-pre">'+esc(d.system||'')+'</pre>'
+      +'<div style="font-weight:700;margin-top:10px">USER MESSAGE (the evidence)</div><pre class="llm-pre">'+esc(d.user||'')+'</pre>';
+  }).catch(function(e){ box.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
 }
 function renderMeta(m){
   if(!m){ q('detail-meta').innerHTML=''; return; }

@@ -298,6 +298,17 @@ def api_modelcompare_matrix():
     return JSONResponse(model_compare.matrix())
 
 
+@app.get("/api/modelcompare/input")
+def api_modelcompare_input(case_id: int):
+    """The FULL analysis input (system + user prompt) fed to every model for a case — the exact
+    Phase-1 content the coverage/Stage-1 test validated. Read-only; requires content to exist."""
+    c = coverage.content_cache_get(int(case_id))
+    if not c:
+        return JSONResponse({"error": "No content built yet — run Stage 1 (coverage) first."},
+                            status_code=404)
+    return JSONResponse({"system": c.get("system"), "user": c.get("user"), "meta": c.get("meta")})
+
+
 @app.post("/api/modelcompare/run")
 async def api_modelcompare_run(request: Request):
     """Run one coverage case across a set of models. Body: {id | case, models[], refresh_input,
