@@ -295,10 +295,20 @@ def run_one_model(config, inp, model, spec, cid=None) -> dict:
     """Run ONE model on the cached input, score it, cache + return the row. Never raises — a
     failed model becomes an error row so it can't abort a batch/stream (that was the bug that
     killed a whole run when one model choked)."""
-    try:
-        raw = call_model(model, inp["system"], inp["user"], config)
-    except Exception as e:  # noqa: BLE001
-        raw = {"model": model, "error": f"{type(e).__name__}: {e}"}
+    raw = {}
+    for attempt in range(3):                          # retry a flaky EMPTY response
+        try:
+            raw = call_model(model, inp["system"], inp["user"], config)
+        except Exception as e:  # noqa: BLE001
+            raw = {"model": model, "error": f"{type(e).__name__}: {e}"}
+        # reasoning models (e.g. gemini-2.5-pro) intermittently return only reasoning with an
+        # empty content field — no error, no text. That's transient: retry, it usually lands.
+        if raw.get("error") or (raw.get("text") or "").strip():
+            break
+        if attempt < 2:
+            time.sleep(2)
+    if not raw.get("error") and not (raw.get("text") or "").strip():
+        raw["error"] = "empty response — model returned no content (reasoning only) after 3 tries"
     report = None
     if raw.get("text"):
         try:
