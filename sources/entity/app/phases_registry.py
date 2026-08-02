@@ -324,12 +324,30 @@ class RegistrySearchMixin:
                 # Follow up on first NorthData result to get ownership graph
                 if not northdata_network_done and 'No North Data results' not in registries[f"northdata:{name}"] \
                         and not registries[f"northdata:{name}"].startswith('Error:'):
-                    # Extract URL — from search results (→ url) or reconstruct from direct page
+                    # Pick the NorthData entity page for the ownership graph. Taking the FIRST hit
+                    # blindly can land on a branch registration (/BR …) or a similarly-named company,
+                    # neither of which has a network graph — so skip branches and prefer the result
+                    # whose name best matches the entity we searched for.
                     nd_url = None
-                    url_match = re.search(r'→ (https://www\.northdata\.com/[^\s]+)', registries[f"northdata:{name}"])
-                    if url_match:
-                        nd_url = url_match.group(1)
-                    elif '=== NorthData Company Page:' in registries[f"northdata:{name}"]:
+                    _nn = re.sub(r'[^a-z0-9]', '', name.lower())
+                    _cands = []
+                    for _ln in registries[f"northdata:{name}"].split("\n"):
+                        _m = re.search(r'→ (https://www\.northdata\.com/\S+)', _ln)
+                        if not _m:
+                            continue
+                        _u, _label = _m.group(1), _ln.split("→")[0]
+                        if re.search(r'/BR[%\s]', _u) or 'filial' in _label.lower() or 'branch' in _label.lower():
+                            continue                                    # branch registration → no network
+                        _lbl = re.sub(r'[^a-z0-9]', '', _label.lower())
+                        _cands.append((2 if (_nn and _lbl.startswith(_nn)) else (1 if (_nn and _nn in _lbl) else 0), _u))
+                    if _cands:
+                        _cands.sort(key=lambda c: -c[0])
+                        nd_url = _cands[0][1]
+                    if not nd_url:                                      # all branches/none → old fallback
+                        _m0 = re.search(r'→ (https://www\.northdata\.com/[^\s]+)', registries[f"northdata:{name}"])
+                        if _m0:
+                            nd_url = _m0.group(1)
+                    if not nd_url and '=== NorthData Company Page:' in registries[f"northdata:{name}"]:
                         nd_url = "https://www.northdata.com/" + quote_plus(name)
                     if nd_url:
                         self.log('northdata', "Loading ownership graph via Browserbase...", {'entity_name': name})
