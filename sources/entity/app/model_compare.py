@@ -267,48 +267,21 @@ def coverage_status(case, user_message):
 
 
 def build_input(config: dict, case: dict, refresh: bool = False, progress=None) -> dict:
-    """Return {'system', 'user', 'meta'} — the exact analysis input production would feed the
-    LLM for this case. Cached per case id; regenerated only on refresh (expensive: it runs
-    fetch/extract/registry against the live toolchain). `progress` (optional) receives the
-    pipeline's phase logs so a streaming caller can show live feedback."""
-    cid = case.get("id")
-    if cid and not refresh:
-        cached = _input_get(cid)
-        if cached:
-            return cached
+    """The analysis input for a case — but it is NOT built here. It delegates to the ONE shared
+    builder, coverage.build_content(), so the content the models receive is byte-identical to what
+    the coverage test validated (meta.coverage carries the grep verdict, which gates the run).
+    Rebuilding (refresh) invalidates this case's stored model results."""
+    content = coverage.build_content(config, case, refresh=refresh, progress=progress)
+    if refresh and case.get("id"):
+        _clear_results(case["id"])            # rebuilt content → stored model results are now stale
+    return {"system": content["system"], "user": content["user"], "meta": content["meta"]}
 
-    agent = EntityLookup(config, progress_callback=progress)
-    url = (case.get("url") or "").strip()
-    names = case.get("names") or []
-    registries: dict = {}
 
-    if url:                                           # URL mode — full pipeline (phases 2-5)
-        domain = _domain_of(url)
-        website_data = agent.fetch_website_data(url, domain)
-        entity_info = agent.extract_entities_with_llm(website_data, registries)
-        registries.update(agent.search_registries(entity_info, domain))
-        cross = agent.cross_reference_sec_data(website_data, registries, entity_info)
-        if cross:
-            registries["sec_cross_reference"] = cross
-    else:                                             # names mode — search only, no fetch/extract LLM
-        url, domain = "", ""
-        entity_info = {"entity_names": names, "jurisdiction": case.get("jurisdiction") or "unknown",
-                       "addresses": []}
-        website_data = {"pages": {}, "whois": "Not available"}
-        registries.update(agent.search_registries(entity_info, domain))
-
-    system_prompt, user_message, _sections = agent.build_analysis_messages(
-        url, domain, website_data, entity_info, registries)
-    meta = {"mode": "url" if case.get("url") else "names",
-            "registries": list(registries.keys()),
-            "extracted_names": entity_info.get("entity_names"),
-            "jurisdiction": entity_info.get("jurisdiction"),
-            "user_chars": len(user_message), "system_chars": len(system_prompt),
-            "coverage": coverage_status(case, user_message)}   # first-stage gate on THIS input
-    out = {"system": system_prompt, "user": user_message, "meta": meta}
-    if cid:
-        _input_put(cid, out)
-    return out
+def _clear_results(cid):
+    with closing(coverage._conn()) as c:
+        with c.cursor() as cur:
+            cur.execute("DELETE FROM entity.model_compare_results WHERE case_id=%s", (cid,))
+        c.commit()
 
 
 def spec_for(case):
@@ -468,13 +441,14 @@ def _input_put(cid, out):
 
 
 def get_cached(cid):
-    """Everything the page needs on load for a case: the input meta + all stored model rows."""
-    inp = _input_get(cid)
+    """Everything the page needs on load for a case: the shared content's meta (coverage status +
+    extracted names) + all stored model rows. Read-only — never triggers a build."""
+    content = coverage.content_cache_get(cid)
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT result FROM entity.model_compare_results WHERE case_id=%s ORDER BY model", (cid,))
             rows = [r["result"] for r in cur.fetchall()]
-    return {"case_id": cid, "input_meta": (inp or {}).get("meta"), "spec": get_expect(cid), "results": rows}
+    return {"case_id": cid, "input_meta": (content or {}).get("meta"), "spec": get_expect(cid), "results": rows}
 
 
 def matrix():

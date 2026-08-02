@@ -114,36 +114,33 @@ def build_evidence(config, url=None, names=None, jurisdiction=None, include_goog
     return blob, agent.tools.get_api_calls(), info, cost
 
 
-# ── one case → structured result ──────────────────────────────────────────
-def run_case(config, case: dict, refresh: bool = False) -> dict:
-    """Build the evidence for a case and grep it. Returns a structured result with per-check
-    outcomes, the api_calls, and a short evidence excerpt for inspection. refresh bypasses the
-    extraction cache (re-runs fetch + the extraction LLM)."""
-    try:
-        blob, api_calls, info, cost = build_evidence(
-            config, url=case.get('url'),
-            names=case.get('names'), jurisdiction=case.get('jurisdiction'),
-            include_google=bool(case.get('include_google')), refresh=refresh)
-    except Exception as e:  # noqa: BLE001
-        return {'case': case.get('name'), 'status': 'error', 'error': str(e), 'checks': [], 'cost_usd': 0}
+# ══════════════════════════════════════════════════════════════════════════
+# THE single Phase-1 content build — shared by the coverage test AND the model
+# comparison. It produces BOTH the coverage evidence blob (for the grep) AND the
+# exact analysis prompt (system,user) prod feeds the LLM, from one pipeline run,
+# and caches the lot per case. Coverage greps `blob`; the model test feeds
+# (system,user) to the models — they can never diverge again.
+# ══════════════════════════════════════════════════════════════════════════
+def _content_key(case) -> str:
+    return json.dumps([case.get('url'), case.get('names'), case.get('jurisdiction'),
+                       bool(case.get('include_google'))], default=str)
 
+
+def grade_coverage(case: dict, blob: dict, api_calls: dict) -> dict:
+    """Pure coverage grep verdict over an evidence blob (source→text). No I/O — shared by the
+    coverage test and the model-comparison gate so they judge the SAME content."""
     full = "\n".join(f"[{k}]\n{v}" for k, v in blob.items())
     full_l = full.lower()
     throttled = any(m in full_l for m in _THROTTLE_MARKERS)
 
     def sources_for(s):
-        """Which source block(s) contain this string — attribution (deduped source prefix)."""
         sl = s.lower()
         return sorted({k.split(':')[0] for k, v in blob.items() if sl in v.lower()})
 
-    checks = []
-    hard_fail = False
-    inconclusive = False
-
+    checks, hard_fail, inconclusive = [], False, False
     for s in (case.get('expect') or []):
         srcs = sources_for(s)
-        found = bool(srcs)
-        if found:
+        if srcs:
             checks.append({'kind': 'expect', 'text': s, 'status': 'pass', 'sources': srcs})
         elif throttled:
             checks.append({'kind': 'expect', 'text': s, 'status': 'inconclusive',
@@ -152,14 +149,11 @@ def run_case(config, case: dict, refresh: bool = False) -> dict:
         else:
             checks.append({'kind': 'expect', 'text': s, 'status': 'fail'})
             hard_fail = True
-
     for s in (case.get('forbid') or []):
         if s.lower() in full_l:
-            checks.append({'kind': 'forbid', 'text': s, 'status': 'fail'})
-            hard_fail = True
+            checks.append({'kind': 'forbid', 'text': s, 'status': 'fail'}); hard_fail = True
         else:
             checks.append({'kind': 'forbid', 'text': s, 'status': 'pass'})
-
     for src, strings in (case.get('expect_in_source') or {}).items():
         src_blob = "\n".join(v for k, v in blob.items()
                              if k.split(':')[0].lower() == src.lower()).lower()
@@ -172,7 +166,6 @@ def run_case(config, case: dict, refresh: bool = False) -> dict:
             else:
                 checks.append({'kind': 'in_source', 'text': f'{s} @ {src}', 'status': 'fail'})
                 hard_fail = True
-
     for svc, limit in (case.get('max_calls') or {}).items():
         used = api_calls.get(svc, 0)
         ok = used <= limit
@@ -180,20 +173,87 @@ def run_case(config, case: dict, refresh: bool = False) -> dict:
                        'status': 'pass' if ok else 'fail'})
         if not ok:
             hard_fail = True
-
     status = 'fail' if hard_fail else ('inconclusive' if inconclusive else 'pass')
+    return {'status': status, 'checks': checks, 'throttled': throttled}
+
+
+def build_content(config, case: dict, refresh: bool = False, progress=None) -> dict:
+    """Run the pipeline once (fetch + optional Google intel + extract + search + cross-ref),
+    then produce the coverage blob AND the analysis prompt from the same state; cache per case.
+    Returns {system, user, blob, api_calls, info, cost, meta}. meta.coverage is the grep verdict."""
+    from agent import EntityLookup
+    cid, ck = case.get('id'), _content_key(case)
+    if cid and not refresh:
+        hit = _content_get(cid, ck)
+        if hit:
+            return hit
+    agent = EntityLookup(config, progress_callback=progress)
+    model = config.get('model') or ''
+    url, names = case.get('url'), case.get('names')
+    include_google = bool(case.get('include_google'))
+    gintel = {}
+    if url:
+        domain = _domain(url)
+        website_data = agent.fetch_website_data(url, domain)
+        gintel = _google_intel_registries(agent, domain) if include_google else {}
+        info = agent.extract_entities_with_llm(website_data, dict(gintel))
+        info['entity_names'] = agent.deduplicate_names(info.get('entity_names') or [])
+    else:
+        domain = ''
+        website_data = {'pages': {}, 'whois': 'Not available'}
+        info = {'entity_names': list(names or []), 'short_names': [],
+                'jurisdiction': (case.get('jurisdiction') or 'unknown')}
+    registries = agent.search_registries(info, domain)
+    cross = agent.cross_reference_sec_data(website_data, registries, info)
+    if cross:
+        registries['sec_cross_reference'] = cross
+    merged = {**gintel, **registries}
+    blob = {k: (v if isinstance(v, str) else json.dumps(v, default=str)) for k, v in merged.items()}
+    system, user, _sections = agent.build_analysis_messages(url or '', domain, website_data, info, merged)
+    it, ot = agent.total_input_tokens, agent.total_output_tokens
+    ri, ro = _model_rates(model)
+    api_calls = agent.tools.get_api_calls()
+    cov = grade_coverage(case, blob, api_calls)
+    content = {
+        'system': system, 'user': user, 'blob': blob, 'api_calls': api_calls, 'info': info,
+        'from_cache': False,
+        'cost': {'input_tokens': it, 'output_tokens': ot,
+                 'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)},
+        'meta': {'mode': 'url' if url else 'names', 'registries': list(merged.keys()),
+                 'extracted_names': info.get('entity_names'), 'jurisdiction': info.get('jurisdiction'),
+                 'include_google': include_google, 'user_chars': len(user),
+                 'coverage': {'status': cov['status'],
+                              'missing': [c['text'] for c in cov['checks']
+                                          if c['kind'] == 'expect' and c['status'] == 'fail']}},
+    }
+    if cid:
+        _content_put(cid, ck, content)
+    return content
+
+
+# ── one case → structured result ──────────────────────────────────────────
+def run_case(config, case: dict, refresh: bool = False) -> dict:
+    """Build (or reuse) the case's Phase-1 content and grep it — the coverage test. Uses the SAME
+    build_content the model comparison consumes, so the two can't diverge. refresh rebuilds."""
+    try:
+        content = build_content(config, case, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        return {'case': case.get('name'), 'status': 'error', 'error': str(e), 'checks': [], 'cost_usd': 0}
+    grade = grade_coverage(case, content['blob'], content['api_calls'])
+    full = "\n".join(f"[{k}]\n{v}" for k, v in content['blob'].items())
+    cost = content['cost']
     return {
         'case': case.get('name'),
-        'status': status,
-        'checks': checks,
-        'api_calls': {k: v for k, v in api_calls.items() if v},
+        'status': grade['status'],
+        'checks': grade['checks'],
+        'api_calls': {k: v for k, v in content['api_calls'].items() if v},
         'cost_usd': cost['cost_usd'],
         'tokens': {'input': cost['input_tokens'], 'output': cost['output_tokens']},
-        'from_cache': cost.get('from_cache', False),
+        'from_cache': content.get('from_cache', False),
         'include_google': bool(case.get('include_google')),
-        'mode': 'url' if case.get('url') else 'names',
-        'extracted_names': info.get('entity_names'),
-        'jurisdiction': info.get('jurisdiction'),
+        'mode': content['meta']['mode'],
+        'extracted_names': content['meta']['extracted_names'],
+        'jurisdiction': content['meta']['jurisdiction'],
         'evidence_excerpt': full[:4000],
     }
 
@@ -241,6 +301,14 @@ def ensure_schema() -> None:
                     created_at     timestamptz NOT NULL DEFAULT now(),
                     PRIMARY KEY (url, model, include_google)
                 );
+                -- the ONE Phase-1 content artifact per case (blob + analysis prompt), shared by
+                -- the coverage test and the model comparison so they can't diverge.
+                CREATE TABLE IF NOT EXISTS entity.phase1_content (
+                    case_id     bigint PRIMARY KEY,
+                    content_key text NOT NULL,
+                    content     jsonb NOT NULL,
+                    built_at    timestamptz NOT NULL DEFAULT now()
+                );
             """)
         c.commit()
     _seed_if_empty()
@@ -269,6 +337,47 @@ def _extract_cache_put(url, model, include_google, payload):
                 "DO UPDATE SET payload=EXCLUDED.payload, created_at=now()",
                 (url, model, include_google, json.dumps(payload)))
         c.commit()
+
+
+# ── shared Phase-1 content cache (the one artifact both tools consume) ────────
+def _content_get(cid, ck):
+    if not enabled():
+        return None
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute("SELECT content FROM entity.phase1_content WHERE case_id=%s AND content_key=%s",
+                        (cid, ck))
+            r = cur.fetchone()
+            if not r:
+                return None
+            content = r[0]
+            content['from_cache'] = True
+            return content
+
+
+def _content_put(cid, ck, content):
+    if not enabled():
+        return
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "INSERT INTO entity.phase1_content (case_id, content_key, content) VALUES (%s,%s,%s) "
+                "ON CONFLICT (case_id) DO UPDATE SET content_key=EXCLUDED.content_key, "
+                "content=EXCLUDED.content, built_at=now()",
+                (cid, ck, json.dumps(content, default=str)))
+        c.commit()
+
+
+def content_cache_get(cid):
+    """Read-only: the cached content for a case, or None (never triggers a build). For the
+    matrix / page-load, which must not run the pipeline."""
+    if not enabled() or not cid:
+        return None
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute("SELECT content FROM entity.phase1_content WHERE case_id=%s", (cid,))
+            r = cur.fetchone()
+            return r[0] if r else None
 
 
 def _row(r):
