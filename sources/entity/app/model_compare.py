@@ -253,6 +253,19 @@ def _domain_of(url: str) -> str:
     return re.sub(r"^www\.", "", (urlparse(url).hostname or ""))
 
 
+def coverage_status(case, user_message):
+    """The first-stage 'coverage' gate: does the Phase-1 evidence we're about to feed the models
+    actually contain the case's expected entity strings (case.expect)? If not, the input is broken
+    (e.g. a blocked fetch → empty extraction) and running models on it is meaningless — they'd all
+    'fail' on garbage. Greps the EXACT input we feed the models, not a separate evidence build."""
+    expects = [e for e in (case.get("expect") or []) if str(e).strip()]
+    if not expects:
+        return {"status": "none"}
+    hay = (user_message or "").lower()
+    missing = [e for e in expects if e.lower() not in hay]
+    return {"status": "pass" if not missing else "fail", "missing": missing, "checked": expects}
+
+
 def build_input(config: dict, case: dict, refresh: bool = False, progress=None) -> dict:
     """Return {'system', 'user', 'meta'} — the exact analysis input production would feed the
     LLM for this case. Cached per case id; regenerated only on refresh (expensive: it runs
@@ -290,7 +303,8 @@ def build_input(config: dict, case: dict, refresh: bool = False, progress=None) 
             "registries": list(registries.keys()),
             "extracted_names": entity_info.get("entity_names"),
             "jurisdiction": entity_info.get("jurisdiction"),
-            "user_chars": len(user_message), "system_chars": len(system_prompt)}
+            "user_chars": len(user_message), "system_chars": len(system_prompt),
+            "coverage": coverage_status(case, user_message)}   # first-stage gate on THIS input
     out = {"system": system_prompt, "user": user_message, "meta": meta}
     if cid:
         _input_put(cid, out)
@@ -342,6 +356,10 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
     inp = build_input(config, case, refresh=refresh_input)
     cid = case.get("id")
     spec = spec_for(case)
+    cov = inp["meta"].get("coverage") or {}
+    if cov.get("status") == "fail":                   # gate: don't test models on broken evidence
+        return {"case_id": cid, "input_meta": inp["meta"], "spec": spec, "blocked": cov,
+                "summary": {"models": 0, "scored": 0, "pass": 0, "cost_usd": 0}, "results": []}
     results, to_run = [], []
     for m in models:
         if cid and not refresh_models:

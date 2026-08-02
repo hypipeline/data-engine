@@ -346,6 +346,12 @@ async def api_modelcompare_run_stream(case_id: int, models: str = "",
             q.put(("phase", {"message": "Building Phase-1 analysis input (fetch → extract → registries)…"}))
             inp = model_compare.build_input(CONFIG, case, refresh=refresh_input, progress=progress)
             q.put(("input_ready", {"meta": inp["meta"]}))
+            cov = inp["meta"].get("coverage") or {}
+            if cov.get("status") == "fail":
+                # first-stage gate: the Phase-1 evidence doesn't contain the expected entity, so
+                # feeding it to the models is meaningless — block instead of a misleading run.
+                q.put(("blocked", {"coverage": cov, "input_meta": inp["meta"]}))
+                return
             spec = model_compare.spec_for(case)
             cid = case.get("id")
             n = len(model_list)

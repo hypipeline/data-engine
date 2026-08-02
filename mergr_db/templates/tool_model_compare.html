@@ -24,6 +24,7 @@
   /* matrix */
   table.mtx td.mcell { text-align:center; min-width:96px; cursor:pointer; }
   table.mtx td.mcell.ok { background:#f0fdf4; } table.mtx td.mcell.bad { background:#fef2f2; }
+  table.mtx td.mcell.covfail { opacity:.35; }   /* input broken → model results meaningless */
   table.mtx th.caserow { cursor:pointer; } table.mtx th.caserow:hover { color:var(--link); }
   table.mtx tr.agg td, table.mtx tr.agg th { background:#eef2f7; font-size:12px; }
   .cost { font-size:10px; color:#94a3b8; }
@@ -117,18 +118,26 @@ function matrixCell(r){
   var b=!sc.scored?'<span class="muted">·</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
   return b+'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
 }
+function covBadge(cs){
+  var cov=(cs.input_meta||{}).coverage;
+  if(!cov||!cov.status) return '<span class="muted">–</span>';
+  if(cov.status==='pass') return '<span class="pill pass" title="evidence contains the expected entity">✓</span>';
+  if(cov.status==='fail') return '<span class="pill fail" title="evidence MISSING: '+esc((cov.missing||[]).join(", "))+'">✗ input</span>';
+  return '<span class="muted" title="no expect strings on this case">n/a</span>';
+}
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
   var cases=MATRIX.cases||[];
-  var head='<tr><th class="rowlab">Case</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var head='<tr><th class="rowlab">Case</th><th title="Coverage gate: does the Phase-1 evidence contain the expected entity? Models are blocked if this fails.">Coverage</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
   var body=cases.map(function(cs){
+    var covfail=(((cs.input_meta||{}).coverage||{}).status==='fail');
     var tds=models.map(function(m){
       var r=(cs.results||{})[m], cls=r&&r.score&&r.score.scored?(r.score.ok?' ok':' bad'):'';
-      return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>';
+      return '<td class="mcell'+cls+(covfail?' covfail':'')+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>';
     }).join('');
-    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'+tds+'</tr>';
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th><td class="mcell" onclick="openCase('+cs.id+')">'+covBadge(cs)+'</td>'+tds+'</tr>';
   }).join('');
-  var foot='<tr class="agg"><th class="rowlab">pass · avg cost</th>'+models.map(function(m){
+  var foot='<tr class="agg"><th class="rowlab">pass · avg cost</th><td></td>'+models.map(function(m){
     var pass=0,scored=0,costs=[];
     cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored){scored++; if(r.score.ok)pass++;} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
     var avgc=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
@@ -154,6 +163,9 @@ function runAll(){
     var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm);
     function nextOne(){ if(doneFlag) return; doneFlag=true; try{es.close();}catch(_){} idx++; nextCase(); }
     es.addEventListener('phase', function(e){ q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+JSON.parse(e.data).message; });
+    es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.meta; renderMatrix(); } });
+    es.addEventListener('blocked', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.input_meta; renderMatrix(); }
+      q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — ⛔ coverage failing, skipped'; nextOne(); });
     es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+short(d.model)+' ('+(d.i+1)+'/'+d.n+')…'; });
     es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); updateMatrixCell(cid, d.result);
       q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+d.done+'/'+d.total+' models done'; });
@@ -177,10 +189,13 @@ function openCase(cid){
   q('detail').scrollIntoView({behavior:'smooth', block:'start'});
 }
 function renderMeta(m){
-  if(!m){ q('detail-meta').textContent=''; return; }
+  if(!m){ q('detail-meta').innerHTML=''; return; }
+  var cov=m.coverage||{}, covHtml='';
+  if(cov.status==='fail') covHtml='<div class="errbox" style="margin:6px 0">⚠ <b>Coverage FAILING</b> — the Phase-1 evidence is missing: <b>'+esc((cov.missing||[]).join(', '))+'</b>. The fetch/extraction broke, so models are <b>blocked</b> on this case. Tick <b>"rebuild Phase-1 input"</b> and Run to re-fetch.</div>';
+  else if(cov.status==='pass') covHtml=' <span class="pill pass">coverage ✓</span>';
   q('detail-meta').innerHTML='Input: <b>'+esc(m.mode)+'</b> mode · '
-    +(m.extracted_names?('extracted: '+esc((m.extracted_names||[]).join(', '))+' · '):'')
-    +'registries: '+esc((m.registries||[]).join(', '))+' · '+(m.user_chars||0).toLocaleString()+' input chars';
+    +((m.extracted_names&&m.extracted_names.length)?('extracted: '+esc(m.extracted_names.join(', '))+' · '):'<b style="color:#991b1b">extracted: none</b> · ')
+    +'registries: '+esc((m.registries||[]).join(', '))+' · '+(m.user_chars||0).toLocaleString()+' input chars'+covHtml;
 }
 var CURRENT=[];
 function cell(r){
@@ -222,7 +237,10 @@ function run(){
     +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(refreshAllModels()?'true':'false'));
   function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run this case'; }
   es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
-  es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); log('✓ input ready — running '+models.length+' models…'); });
+  es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); renderMatrix(); log('✓ input ready — running '+models.length+' models…'); });
+  es.addEventListener('blocked', function(e){ var d=JSON.parse(e.data); c.input_meta=d.input_meta; renderMeta(d.input_meta); renderMatrix(); var cov=d.coverage||{};
+    q('out').innerHTML='<div class="errbox">⛔ <b>Blocked — coverage failing.</b> The Phase-1 evidence is missing <b>'+esc((cov.missing||[]).join(", "))+'</b>, so models were <b>not run</b> (they would all fail on broken context). Tick <b>"rebuild Phase-1 input"</b> and Run again to re-fetch.</div>';
+    q('summary').innerHTML=''; finish(); });
   es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); log('▶ ('+(d.i+1)+'/'+d.n+') '+d.model+' …'); });
   es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); live.push(d.result); render(live,false); updateMatrixCell(c.id, d.result);
     log('✓ '+d.done+'/'+d.total+' '+d.result.model+(d.cached?' (cached)':'')+(d.result.error?' — ERROR':(' — '+money2(d.result.cost_usd)))); });
