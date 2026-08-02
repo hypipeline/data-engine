@@ -209,13 +209,14 @@ def build_content(config, case: dict, refresh: bool = False, progress=None) -> d
         registries['sec_cross_reference'] = cross
     merged = {**gintel, **registries}
     blob = {k: (v if isinstance(v, str) else json.dumps(v, default=str)) for k, v in merged.items()}
-    system, user, _sections = agent.build_analysis_messages(url or '', domain, website_data, info, merged)
+    system, user, sections = agent.build_analysis_messages(url or '', domain, website_data, info, merged)
     it, ot = agent.total_input_tokens, agent.total_output_tokens
     ri, ro = _model_rates(model)
     api_calls = agent.tools.get_api_calls()
     cov = grade_coverage(case, blob, api_calls)
     content = {
-        'system': system, 'user': user, 'blob': blob, 'api_calls': api_calls, 'info': info,
+        'system': system, 'user': user, 'sections': sections,   # sections = expandable chunks for display
+        'blob': blob, 'api_calls': api_calls, 'info': info,
         'from_cache': False,
         'cost': {'input_tokens': it, 'output_tokens': ot,
                  'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)},

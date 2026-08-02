@@ -306,7 +306,8 @@ def api_modelcompare_input(case_id: int):
     if not c:
         return JSONResponse({"error": "No content built yet — run Stage 1 (coverage) first."},
                             status_code=404)
-    return JSONResponse({"system": c.get("system"), "user": c.get("user"), "meta": c.get("meta")})
+    return JSONResponse({"system": c.get("system"), "user": c.get("user"),
+                         "sections": c.get("sections"), "meta": c.get("meta")})
 
 
 @app.post("/api/modelcompare/run")

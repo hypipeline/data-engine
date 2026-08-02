@@ -29,6 +29,10 @@
   .chk.pass .ic { color:#16a34a; } .chk.fail .ic { color:#dc2626; } .chk.inconclusive .ic { color:#d97706; }
   .chk .k { color:#888; font-size:11px; text-transform:uppercase; margin-right:6px; }
   .evidence pre { background:#0b1020; color:#d6e2ff; padding:12px; border-radius:8px; overflow:auto; max-height:340px; font-size:11.5px; white-space:pre-wrap; margin-top:6px; }
+  .isec { border:1px solid var(--border); border-radius:6px; margin:5px 0; overflow:hidden; max-width:960px; }
+  .isec-h { padding:7px 10px; background:#f2f5f9; cursor:pointer; font-size:12.5px; font-weight:600; }
+  .isec-h:hover { background:#e8eef5; } .isec-h .tri { color:var(--muted); }
+  .isec-pre { margin:0; padding:10px; background:#fff; border-top:1px solid var(--border); font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:420px; overflow:auto; }
   .addbox { border:1px dashed var(--border-2); border-radius:10px; padding:16px; max-width:960px; margin-top:8px; background:#fafbff; }
   .addbox label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
   .addbox input, .addbox textarea { width:100%; padding:8px 10px; border:1px solid var(--border-2); border-radius:6px; font-size:13px; font-family:inherit; }
@@ -115,7 +119,7 @@ function caseRow(c){
     + '<button class="btn ghost sm" onclick="editCase('+c.id+')">Edit</button>'
     + '<button class="btn del sm" onclick="delCase('+c.id+')">Delete</button></span></div>'
     + '<div class="case-meta">'+target+' &middot; expect: <b>'+exp+'</b>'+budget+'</div>'
-    + '<div id="res-'+c.id+'">'+(lr?renderResult(lr):'')+'</div></div>';
+    + '<div id="res-'+c.id+'">'+(lr?renderResult(lr, c.id):'')+'</div></div>';
 }
 
 function loadCases(){
@@ -136,7 +140,24 @@ function setBadge(id, status, label){
   var card=document.getElementById('case-'+id); if(card){ card.className='case st-'+status; }
 }
 
-function renderResult(r){
+function inputSections(d){
+  var secs=(d.sections && d.sections.length) ? d.sections
+    : [{label:'System Prompt', content:d.system||''},{label:'User message (evidence)', content:d.user||''}];
+  return secs.map(function(s){
+    var id='cs_'+Math.random().toString(36).slice(2,8), len=(s.content||'').length;
+    return '<div class="isec"><div class="isec-h" onclick="var e=document.getElementById(\''+id+'\');var o=e.style.display!=\'block\';e.style.display=o?\'block\':\'none\';this.querySelector(\'.tri\').textContent=o?\'▾\':\'▸\'">'
+      +'<span class="tri">▸</span> '+esc(s.label)+' <span style="color:#999">('+len.toLocaleString()+' chars)</span></div>'
+      +'<pre class="isec-pre" id="'+id+'" style="display:none">'+esc(s.content||'')+'</pre></div>';
+  }).join('');
+}
+function viewInput(cid, btn){
+  var box=btn.nextElementSibling;
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  box.style.display='block'; box.innerHTML='<span style="color:#888">loading…</span>';
+  getJSON(EB+'/api/modelcompare/input?case_id='+cid).then(function(d){ box.innerHTML=inputSections(d); })
+    .catch(function(e){ box.innerHTML='<span style="color:#dc2626">'+esc(e.message||e)+'</span>'; });
+}
+function renderResult(r, cid){
   var checks=(r.checks||[]).map(function(ch){
     var attr = (ch.sources&&ch.sources.length) ? ' <span style="color:#2563eb">— found in: '+esc(ch.sources.join(', '))+'</span>' : '';
     return '<div class="chk '+ch.status+'"><span class="ic">'+ic(ch.status)+'</span>'
@@ -156,7 +177,8 @@ function renderResult(r){
     + (calls?'API calls: '+esc(calls)+' &middot; ':'')
     + (r.extracted_names?'extracted: '+esc((r.extracted_names||[]).join(', ')):'')
     + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')+'</div>'
-    + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'');
+    + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence excerpt ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'')
+    + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
 }
 var id_seq=0;
 
@@ -168,7 +190,7 @@ function runOne(id){
     .then(function(d){
       var r=(d.results||[])[0]||{status:'error',error:'no result'};
       setBadge(id, r.status, r.status);
-      if(box) box.innerHTML=renderResult(r);
+      if(box) box.innerHTML=renderResult(r, id);
       var w=document.getElementById('when-'+id); if(w){ w.textContent='last run '+fmtWhen(new Date().toISOString()); }
       return r;
     }).catch(function(e){ setBadge(id,'error','error'); return {status:'error',cost_usd:0}; });
