@@ -44,6 +44,13 @@
 
   .meta-line { font-size:13px; color:var(--muted); margin:2px 0 12px; min-height:18px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:12px 14px; color:#991b1b; margin:8px 0 14px; }
+  .bma-audit { border:1px solid var(--border); border-radius:8px; margin:8px 0 14px; background:var(--bg-2); }
+  .bma-ahd { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); padding:9px 12px; cursor:pointer; }
+  .bma-acall { border-top:1px solid var(--border); }
+  .bma-acallhd { font-size:12px; font-weight:700; padding:8px 12px; cursor:pointer; } .bma-acallhd .m { color:var(--muted); font-weight:400; font-family:var(--mono); font-size:11px; }
+  .bma-plabel { font-size:9px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--faint); margin:8px 12px 2px; }
+  .bma-pre { font-family:var(--mono); font-size:11px; white-space:pre-wrap; background:var(--panel); border:1px solid var(--border); border-radius:6px; margin:2px 12px 10px; padding:9px 11px; max-height:300px; overflow:auto; color:var(--text); }
+  .bma-hidden { display:none; }
   .empty-box { color:var(--muted); font-size:14px; padding:12px 0; }
   .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--border-2); border-top-color:var(--accent); border-radius:50%; animation:sp .7s linear infinite; vertical-align:middle; margin-right:6px; }
   @keyframes sp { to { transform:rotate(360deg); } }
@@ -1374,6 +1381,12 @@ function aiSorted(){ var b=(aiData.buyers||[]).slice(), r={in_on:2,in_mergr:1,no
   else if(aiSort==='on')b.sort(function(x,y){return (r[y.verify.status]-r[x.verify.status])||(y.score-x.score);});
   else if(aiSort==='deals')b.sort(function(x,y){return (y.n_deals-x.n_deals)||(y.score-x.score);});
   else b.sort(function(x,y){return (y.score-x.score)||(y.n_rec-x.n_rec);}); return b; }
+function buyerAuditBlock(res){
+  var calls=(res.audit||[]);
+  if(!calls.length){ return ''; }
+  var body=calls.map(function(c){ var p=c.prompt||{}; return '<div class="bma-acall"><div class="bma-acallhd" onclick="this.nextElementSibling.classList.toggle(\'bma-hidden\')">'+esc(c.model)+' · '+esc(c.part)+' <span class="m">'+(c.parse_ok?'ok':'FAIL')+' · in '+((c.usage||{}).input_tokens||0)+' / out '+((c.usage||{}).output_tokens||0)+' tok'+(c.error?' · '+esc(c.error):'')+'</span></div><div class="bma-hidden"><div class="bma-plabel">System prompt</div><div class="bma-pre">'+esc(p.system||'—')+'</div><div class="bma-plabel">User prompt</div><div class="bma-pre">'+esc(p.user||'—')+'</div><div class="bma-plabel">Raw model output</div><div class="bma-pre">'+esc(c.raw||'—')+'</div></div></div>'; }).join('');
+  return '<div class="bma-audit"><div class="bma-ahd" onclick="this.nextElementSibling.classList.toggle(\'bma-hidden\')">↳ Prompt &amp; raw AI output — every model call, in and out ('+calls.length+') · click to expand</div><div class="bma-hidden">'+body+'</div></div>';
+}
 function renderAiBuyers(res){
   aiData=res; var bs=res.buyers||[]; bs.forEach(registerAiBuyer);
   var c=res.counts||{};
@@ -1393,7 +1406,7 @@ function renderAiBuyers(res){
     +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
     +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Condensed</button>'
     +'<button data-v="sheet" class="'+(aiView==='sheet'?'active':'')+'" onclick="setAiView(\'sheet\')" title="Full tearsheet per buyer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg>Tearsheet</button></div></div>';
-  document.getElementById('results').innerHTML=warn+tools+'<div id="ai-list"></div>';
+  document.getElementById('results').innerHTML=warn+buyerAuditBlock(res)+tools+'<div id="ai-list"></div>';
   paintAi();
 }
 function setAiView(v){ aiView=v; var seg=document.getElementById('ai-viewseg'); if(seg)seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v===v); }); paintAi(); }
