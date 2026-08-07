@@ -1177,6 +1177,21 @@ async function doAiSearch(){
   }catch(e){ aiDone(); document.getElementById('search-meta').innerHTML='<span class="error-box">'+esc(e&&e.message?e.message:e)+'</span>'; }
 }
 function aiDone(){ document.getElementById('search-btn').disabled=false; if(aiPollTimer){ clearTimeout(aiPollTimer); aiPollTimer=null; } document.getElementById('ai-progress').style.display='none'; }
+function aiRetryFailed(ev){
+  var res=aiData||{}; var btn=ev&&ev.target;
+  var errs=(res.models||[]).filter(function(m){return m.error;}).map(function(m){return m.model;});
+  if(!res.search_id||!errs.length){ return; }
+  if(btn){ btn.disabled=true; btn.textContent='Retrying…'; }
+  aiStart=Date.now();
+  document.getElementById('search-btn').disabled=true;
+  var ap=document.getElementById('ai-progress'); if(ap){ ap.style.display=''; ap.innerHTML=renderAiProgress([], 0); }
+  fetch('/acquirer-finder/retry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({search_id:res.search_id,models:errs})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){ if(btn){ btn.disabled=false; btn.textContent='↻ Retry failed model'+(errs.length>1?'s':''); } document.getElementById('search-btn').disabled=false; alert('Retry failed: '+d.error); return; }
+      localStorage.setItem(BM_AI_ACTIVE, d.search_id);
+      pollAi(d.search_id);
+    }).catch(function(e){ if(btn){ btn.disabled=false; } document.getElementById('search-btn').disabled=false; alert('Retry failed: '+(e&&e.message?e.message:e)); });
+}
 // Icon + label for one of the six leaf calls (model × {acquirers,deals})
 function aiCellIcon(s){ return s==='running'?'<span class="spin"></span>':s==='done'?'✓':s==='error'?'✗':'·'; }
 function aiModelShort(m){ return String(m).replace('claude-','').replace('-4-6',''); }
@@ -1201,7 +1216,7 @@ function renderAiProgress(progress, secs){
 }
 function pollAi(sid){
   fetch('/acquirer-finder/search/'+sid).then(function(r){return r.json();}).then(function(d){
-    if(d.status==='pending'){
+    if(d.status==='pending' || (d.result && d.result.retrying)){   // retry keeps buyers but shows progress
       var s=Math.round((Date.now()-aiStart)/1000);
       var ap=document.getElementById('ai-progress'); ap.style.display=''; ap.innerHTML=renderAiProgress(d.progress, s);
       document.getElementById('search-meta').style.display='none';
@@ -1363,7 +1378,9 @@ function renderAiBuyers(res){
   aiData=res; var bs=res.buyers||[]; bs.forEach(registerAiBuyer);
   var c=res.counts||{};
   var errs=(res.models||[]).filter(function(m){return m.error;});
-  var warn = errs.length ? '<div class="error-box" style="margin-bottom:12px">⚠ '+errs.length+' AI model'+(errs.length>1?'s':'')+' returned an error — this list is PARTIAL (only the models that succeeded):<br>'+errs.map(function(m){return '<b>'+esc(m.model)+'</b> — '+esc(m.error);}).join('<br>')+'</div>' : '';
+  var retryBtn = (errs.length && res.search_id) ? '<div style="margin-top:10px"><button class="btn" onclick="aiRetryFailed(event)">↻ Retry failed model'+(errs.length>1?'s':'')+'</button><span class="bmv-vlabel" style="margin-left:8px">re-runs only the failed model'+(errs.length>1?'s':'')+' and merges into this list — keeps the ones that worked</span></div>' : '';
+  var warn = errs.length ? '<div class="error-box" style="margin-bottom:12px">⚠ '+errs.length+' AI model'+(errs.length>1?'s':'')+' returned an error — this list is PARTIAL (only the models that succeeded):<br>'+errs.map(function(m){return '<b>'+esc(m.model)+'</b> — '+esc(m.error);}).join('<br>')+retryBtn+'</div>' : '';
+  if(res.retry_error){ warn = '<div class="error-box" style="margin-bottom:12px">↻ Retry failed: '+esc(res.retry_error)+'</div>' + warn; }
   var meta=document.getElementById('search-meta'); meta.style.display='';
   meta.innerHTML=(errs.length?'<span style="color:#b91c1c;font-weight:800">⚠ '+errs.length+' model error'+(errs.length>1?'s':'')+' · </span>':'')+'<b>'+(c.buyers||0)+'</b> buyers · ★<b>'+(c.both||0)+'</b> recommended+proven · '+(c.consensus||0)+' multi-model · '+(c.in_on||0)+' ON · '+(c.deals||0)+' deals · <b>$'+Number(res.total_cost||0).toFixed(2)+'</b>';
   var tools='<div class="dh-toolbar"><span class="bmv-vlabel">Sort</span><select class="bmv-specsel" onchange="aiSort=this.value;paintAi()"><option value="score">Confidence</option><option value="consensus">Consensus</option><option value="on">ON first</option><option value="deals">Most deals</option></select>'

@@ -796,6 +796,71 @@ def af_run(req: _AFRunReq):
     return JSONResponse({"search_id": sid, "status": "pending"})
 
 
+class _AFRetryReq(BaseModel):
+    search_id: int
+    models: list = []                                     # model strings to retry; default = all errored
+
+
+@app.post("/acquirer-finder/retry")
+def af_retry(req: _AFRetryReq):
+    """Re-run only the FAILED model(s) of a past unified search and merge them into that same search
+    IN PLACE — keeping the models that already succeeded (no re-spend on them). Used to complete a
+    PARTIAL run after fixing e.g. an API-quota (401) error. Returns the search_id to poll."""
+    row = query("SELECT target, result FROM acquirer_gen.searches WHERE id=%s", (req.search_id,), one=True)
+    if not row:
+        return JSONResponse({"error": "search not found"}, status_code=404)
+    saved = row["result"] or {}
+    if not saved.get("buyers"):
+        return JSONResponse({"error": "this search has no results to merge into"}, status_code=400)
+    errored = [m.get("model") for m in (saved.get("models") or []) if m.get("error")]
+    retry_list = [m for m in (req.models or errored) if m in errored] or errored
+    if not retry_list:
+        return JSONResponse({"error": "no failed models to retry"}, status_code=400)
+
+    from acquirer_gen import unified as ag_uni
+    tuples = [t for t in (ag_uni._tuple_for(m) for m in retry_list) if t]
+    if not tuples:
+        return JSONResponse({"error": "failed models are not part of the retryable trio"}, status_code=400)
+
+    sid = req.search_id
+    conn = POOL.getconn()                                 # flag retrying — keeps existing buyers visible
+    try:
+        flag = dict(saved); flag["retrying"] = True; flag.pop("retry_error", None)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE acquirer_gen.searches SET result=%s WHERE id=%s", (json.dumps(flag), sid))
+        conn.commit()
+    finally:
+        POOL.putconn(conn)
+
+    def worker():
+        _af_progress_init(sid, tuples)
+        c = POOL.getconn()
+        try:
+            new = ag_uni.retry_models(
+                c, saved, retry_list,
+                progress_cb=lambda m, p, s, n: _af_progress_update(sid, m, p, s, n))
+            new["search_id"] = sid
+            cc = new.get("counts", {})
+            with c.cursor() as cur:
+                cur.execute("UPDATE acquirer_gen.searches SET total_cost=%s,n_acquirers=%s,n_deals=%s,"
+                            "n_consensus=%s,result=%s WHERE id=%s",
+                            (new.get("total_cost", 0), cc.get("buyers", 0), cc.get("deals", 0),
+                             cc.get("consensus", 0), json.dumps(new), sid))
+            c.commit()
+        except Exception as e:                            # noqa: BLE001
+            c.rollback()
+            keep = dict(saved); keep.pop("retrying", None); keep["retry_error"] = str(e)[:300]
+            with c.cursor() as cur:                       # clear the flag so the user isn't stuck polling
+                cur.execute("UPDATE acquirer_gen.searches SET result=%s WHERE id=%s", (json.dumps(keep), sid))
+            c.commit()
+        finally:
+            _af_progress_clear(sid)
+            POOL.putconn(c)
+
+    _threading.Thread(target=worker, daemon=True).start()
+    return JSONResponse({"search_id": sid, "status": "retrying"})
+
+
 @app.get("/acquirer-finder/search/{sid}")
 def af_search(sid: int):
     row = query("SELECT id, target, total_cost, result, created_at FROM acquirer_gen.searches WHERE id=%s",

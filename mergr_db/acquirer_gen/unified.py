@@ -50,23 +50,21 @@ def _dkey(d):
     return (verify.norm_name(d.get("acquirer")), verify.norm_name(d.get("target")))
 
 
-def run_unified(conn, target, index=None, models=None, progress_cb=None):
-    if index is None:
-        index = verify.build_index(conn)
-    models = models or DEFAULT_MODELS
-
+def _run_models(target, model_tuples, index, progress_cb=None):
+    """Fire the given (provider, model, mode) tuples concurrently and return the per-model result
+    list. do_log=False (the shared conn isn't thread-safe); callers log sequentially afterwards.
+    An errored model comes back as a record with an 'error' and empty acquirers/deals."""
     def run_one(provider, model, mode):
         cb = None
         if progress_cb:
             def cb(part, status, n):                 # model is stable (a run_one param, not a loop var)
                 progress_cb(model, part, status, n)
         fn = generate.generate_split if mode == "split" else generate.generate
-        # do_log=False here (shared conn isn't thread-safe); we log sequentially after.
         return fn(None, target, provider, model, dict(SETTINGS), index=index, do_log=False, on_progress=cb)
 
     per = []
-    with ThreadPoolExecutor(max_workers=len(models)) as ex:
-        futs = {ex.submit(run_one, p, m, mode): (p, m) for (p, m, mode) in models}
+    with ThreadPoolExecutor(max_workers=len(model_tuples)) as ex:
+        futs = {ex.submit(run_one, p, m, mode): (p, m) for (p, m, mode) in model_tuples}
         for f in as_completed(futs):
             try:
                 per.append(f.result())
@@ -75,6 +73,20 @@ def run_unified(conn, target, index=None, models=None, progress_cb=None):
                 per.append({"provider": p, "model": m, "acquirers": [], "deals": [],
                             "usage": {"input_tokens": 0, "output_tokens": 0, "web_searches": 0},
                             "cost_usd": 0, "error": str(e)[:300], "latency_ms": 0, "counts": {}})
+    return per
+
+
+def _model_summary(per):
+    return [{"model": r.get("model"), "cost_usd": round(r.get("cost_usd", 0), 4),
+             "n_acquirers": len(r.get("acquirers", [])), "n_deals": len(r.get("deals", [])),
+             "latency_ms": r.get("latency_ms", 0), "error": r.get("error")} for r in per]
+
+
+def run_unified(conn, target, index=None, models=None, progress_cb=None):
+    if index is None:
+        index = verify.build_index(conn)
+    models = models or DEFAULT_MODELS
+    per = _run_models(target, models, index, progress_cb)
 
     for r in per:                                        # persist each run for cost history
         try:
@@ -99,13 +111,96 @@ def run_unified(conn, target, index=None, models=None, progress_cb=None):
     return {
         "target": target,
         "buyers": blist,
-        "models": [{"model": r.get("model"), "cost_usd": round(r.get("cost_usd", 0), 4),
-                    "n_acquirers": len(r.get("acquirers", [])), "n_deals": len(r.get("deals", [])),
-                    "latency_ms": r.get("latency_ms", 0), "error": r.get("error")} for r in per],
+        "models": _model_summary(per),
         "audit": [dict(c, model=_label(r.get("model", "?"))) for r in per for c in r.get("calls", [])],
         "total_cost": total_cost,
         "counts": counts,
     }
+
+
+def _tuple_for(model_str):
+    """Map a result 'model' string (e.g. 'sonar-deep-research (split)') back to its
+    (provider, model, mode) tuple in DEFAULT_MODELS, so it can be re-run."""
+    base = (model_str or "").replace(" (split)", "").replace(" (combined)", "").strip()
+    for (p, m, mode) in DEFAULT_MODELS:
+        if m == base:
+            return (p, m, mode)
+    return None
+
+
+def _entries_from_buyers(buyers, exclude=()):
+    """Reconstruct rec/deal entries from a saved merged buyer list so a retry can re-merge into
+    the existing results. Contributions from the `exclude` model-labels are dropped, so re-running
+    a model never double-counts its earlier output."""
+    exclude = set(exclude or ())
+    rec_entries, deal_entries = [], []
+    for b in buyers or []:
+        srcs = [s for s in (b.get("rec_sources") or []) if s not in exclude]
+        if srcs:
+            rec_entries.append({"name": b.get("name"), "website": b.get("website"),
+                                "type": b.get("type"), "rationale": b.get("rationale"),
+                                "source_url": b.get("source_url"), "models": srcs})
+        for dl in (b.get("deals") or []):
+            dsrcs = [s for s in (dl.get("sources") or []) if s not in exclude]
+            if not dsrcs:
+                continue
+            d = {k: v for k, v in dl.items() if k not in ("sources", "n_sources")}
+            d["acquirer"] = b.get("name")
+            d.setdefault("acquirer_website", b.get("website"))
+            deal_entries.append(dict(d, models=dsrcs))
+    return rec_entries, deal_entries
+
+
+def retry_models(conn, saved_result, retry_model_strs, index=None, progress_cb=None):
+    """Re-run ONLY the given models and merge their results into an existing saved search, keeping
+    the models that already succeeded (no re-spend on them). Returns a fresh result dict shaped like
+    run_unified's output, with target/search_id preserved. Used to complete a PARTIAL run after
+    fixing e.g. an API-quota (401) error."""
+    if index is None:
+        index = verify.build_index(conn)
+    target = saved_result.get("target")
+    tuples = [t for t in (_tuple_for(ms) for ms in retry_model_strs) if t]
+    if not tuples:
+        raise ValueError("none of the requested models are part of the retryable trio")
+
+    exclude = {_label(ms) for ms in retry_model_strs}        # drop any prior output of the retried models
+    rec_entries, deal_entries = _entries_from_buyers(saved_result.get("buyers", []), exclude)
+
+    per = _run_models(target, tuples, index, progress_cb)
+    for r in per:
+        try:
+            generate.log_run(conn, target, r, {"unified": True, "retry": True})
+        except Exception:                                    # noqa: BLE001
+            conn.rollback()
+
+    for r in per:
+        model = _label(r.get("model", "?"))
+        for a in r.get("acquirers", []):
+            rec_entries.append(dict(a, models=[model]))
+        for d in r.get("deals", []):
+            deal_entries.append(dict(d, models=[model]))
+
+    blist, counts = _build_buyers(index, rec_entries, deal_entries)
+    try:
+        verify.enrich_buyers(conn, blist)
+    except Exception:                                        # noqa: BLE001
+        conn.rollback()
+
+    retried = set(retry_model_strs)
+    models_summary = [m for m in (saved_result.get("models") or []) if m.get("model") not in retried]
+    models_summary += _model_summary(per)
+    total_cost = round(sum(m.get("cost_usd", 0) for m in models_summary), 4)
+
+    out = dict(saved_result)
+    out.pop("retrying", None)
+    out.pop("retry_error", None)
+    out.update({
+        "target": target, "buyers": blist, "counts": counts,
+        "models": models_summary, "total_cost": total_cost,
+        "audit": (saved_result.get("audit") or [])
+                 + [dict(c, model=_label(r.get("model", "?"))) for r in per for c in r.get("calls", [])],
+    })
+    return out
 
 
 def _build_buyers(index, rec_entries, deal_entries):
