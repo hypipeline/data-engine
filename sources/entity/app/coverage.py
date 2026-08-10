@@ -93,6 +93,9 @@ def build_evidence(config, url=None, names=None, jurisdiction=None, include_goog
             info = cached.get('info') or {}
             gintel = cached.get('gintel') or {}
             from_cache = True
+            # Extraction served from cache: the first-level LLM call didn't re-run. Record it as a
+            # cached call so the (only) LLM stage in coverage stays visible in the usage summary.
+            agent.tools.count('openai' if agent._is_openai_model() else 'claude', op='extraction', cached=True)
         else:
             website_data = agent.fetch_website_data(url, domain)
             gintel = _google_intel_registries(agent, domain) if include_google else {}
@@ -232,6 +235,7 @@ def build_content(config, case: dict, refresh: bool = False, progress=None) -> d
                  'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)},
         'meta': {'mode': 'url' if url else 'names', 'registries': list(merged.keys()),
                  'extracted_names': info.get('entity_names'), 'jurisdiction': info.get('jurisdiction'),
+                 'known_jurisdiction': info.get('known_jurisdiction'),
                  'include_google': include_google, 'user_chars': len(user),
                  'coverage': {'status': cov['status'],
                               'missing': [c['text'] for c in cov['checks']
@@ -265,6 +269,8 @@ def run_case(config, case: dict, refresh: bool = False) -> dict:
         'mode': content['meta']['mode'],
         'extracted_names': content['meta']['extracted_names'],
         'jurisdiction': content['meta']['jurisdiction'],
+        'known_jurisdiction': content['meta'].get('known_jurisdiction'),
+        'usage': content.get('usage'),
         'evidence_excerpt': full[:4000],
     }
 

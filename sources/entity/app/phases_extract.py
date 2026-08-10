@@ -211,7 +211,7 @@ class ExtractionMixin:
             ],
         })
 
-        response_text = self.call_llm(self.extraction_prompt, user_msg, 2048)
+        response_text = self.call_llm(self.extraction_prompt, user_msg, 2048, op='extraction')
 
         self.log('llm', "LLM extraction output:", {
             'expandable': True,

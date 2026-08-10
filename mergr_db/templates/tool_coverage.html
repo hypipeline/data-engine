@@ -163,7 +163,10 @@ function renderResult(r, cid){
     return '<div class="chk '+ch.status+'"><span class="ic">'+ic(ch.status)+'</span>'
       +'<span class="k">'+esc(ch.kind)+'</span>'+esc(ch.text)+attr+(ch.note?' <span style="color:#999">— '+esc(ch.note)+'</span>':'')+'</div>';
   }).join('');
-  var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+k;}).join(', '):'';
+  var _SVCL={sec:'SEC/EDGAR',nzco:'NZ Companies Office',acra:'Singapore (ACRA)',companies_house:'Companies House',northdata:'NorthData',delaware:'Delaware',bizapedia:'Bizapedia',opencorporates:'OpenCorporates',google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo Finance',brightdata:'Bright Data',browserbase:'Browserbase',scraping_browser:'Scraping Browser',http:'HTTP',whois:'WHOIS',wayback:'Wayback',claude:'Claude',openai:'OpenAI'};
+  var _lbl=function(k){return _SVCL[k]||k;};
+  var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+_lbl(k);}).join(', '):'';
+  var cached=(r.usage&&r.usage.cached)?Object.keys(r.usage.cached).map(function(k){return r.usage.cached[k]+' '+_lbl(k);}).join(', '):'';
   var cost = (r.mode==='names')
     ? '<b style="color:#166534">cost: free</b> (names mode, no LLM)'
     : (r.from_cache
@@ -174,9 +177,10 @@ function renderResult(r, cid){
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
     + cost + ' &middot; '
-    + (calls?'API calls: '+esc(calls)+' &middot; ':'')
+    + (calls?'API calls: '+esc(calls)+(cached?' <span style="color:#999">(cached: '+esc(cached)+')</span>':'')+' &middot; ':'')
     + (r.extracted_names?'extracted: '+esc((r.extracted_names||[]).join(', ')):'')
-    + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')+'</div>'
+    + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')
+    + (r.known_jurisdiction && (r.known_jurisdiction||'').toLowerCase()!==(r.jurisdiction||'').toLowerCase()?' <span style="color:#a16207">(known parent: '+esc(r.known_jurisdiction)+')</span>':'')+'</div>'
     + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence excerpt ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'')
     + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
 }

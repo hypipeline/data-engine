@@ -270,13 +270,13 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         m = self.config.get('model') or ''
         return m.startswith('gpt-') or m.startswith('o1') or m.startswith('o3') or m.startswith('o4')
 
-    def call_llm(self, system_prompt: str, user_message: str, max_tokens: int) -> str:
+    def call_llm(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
         if self._is_openai_model():
-            return self.call_openai(system_prompt, user_message, max_tokens)
-        return self.call_claude(system_prompt, user_message, max_tokens)
+            return self.call_openai(system_prompt, user_message, max_tokens, op=op)
+        return self.call_claude(system_prompt, user_message, max_tokens, op=op)
 
-    def call_claude(self, system_prompt: str, user_message: str, max_tokens: int) -> str:
-        self.tools.increment_api_call('claude')
+    def call_claude(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        self.tools.count('claude', op=op)
         input_chars = len(system_prompt) + len(user_message)
         self.log('llm', f"Calling Claude ({self.config['model']}) — input: {input_chars:,} chars, max_tokens: {max_tokens}")
         try:
@@ -312,8 +312,8 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             self.log('llm', f"WARNING: Response truncated (hit max_tokens={max_tokens}). Output may be incomplete.")
         return text
 
-    def call_openai(self, system_prompt: str, user_message: str, max_tokens: int) -> str:
-        self.tools.increment_api_call('openai')
+    def call_openai(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        self.tools.count('openai', op=op)
         input_chars = len(system_prompt) + len(user_message)
         model = self.config['model']
         self.log('llm', f"Calling OpenAI ({model}) — input: {input_chars:,} chars, max_tokens: {max_tokens}")

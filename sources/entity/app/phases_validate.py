@@ -432,7 +432,7 @@ class ValidationMixin:
 
         # 16384 to match the main analysis — re-analysis re-emits the full report and would
         # otherwise truncate on large groups (see phases_analysis note).
-        response_text = self.call_llm(system_prompt, user_message, 16384)
+        response_text = self.call_llm(system_prompt, user_message, 16384, op='validate')
 
         reanalysis_cost = ((self.total_input_tokens - input_tokens_before) * 3.0 / 1_000_000) \
             + ((self.total_output_tokens - output_tokens_before) * 15.0 / 1_000_000)
