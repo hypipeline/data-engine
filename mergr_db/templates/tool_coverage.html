@@ -165,7 +165,11 @@ function renderResult(r, cid){
   }).join('');
   var _SVCL={sec:'SEC/EDGAR',nzco:'NZ Companies Office',acra:'Singapore (ACRA)',companies_house:'Companies House',northdata:'NorthData',delaware:'Delaware',bizapedia:'Bizapedia',opencorporates:'OpenCorporates',google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo Finance',brightdata:'Bright Data',browserbase:'Browserbase',scraping_browser:'Scraping Browser',http:'HTTP',whois:'WHOIS',wayback:'Wayback',claude:'Claude',openai:'OpenAI'};
   var _lbl=function(k){return _SVCL[k]||k;};
-  var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+_lbl(k);}).join(', '):'';
+  // For LLM keys, append the stage(s) from usage.detail so 'Claude 1' reads 'Claude 1 (extraction)'.
+  var _llmOp=function(k){ if((k!=='claude'&&k!=='openai')||!(r.usage&&r.usage.detail)) return '';
+    var ops=Object.keys(r.usage.detail).filter(function(d){return d.indexOf(k+':')===0;}).map(function(d){return d.split(':')[1];});
+    return ops.length?' ('+ops.join('+')+')':''; };
+  var calls=r.api_calls?Object.keys(r.api_calls).map(function(k){return r.api_calls[k]+' '+_lbl(k)+_llmOp(k);}).join(', '):'';
   var cached=(r.usage&&r.usage.cached)?Object.keys(r.usage.cached).map(function(k){return r.usage.cached[k]+' '+_lbl(k);}).join(', '):'';
   var cost = (r.mode==='names')
     ? '<b style="color:#166534">cost: free</b> (names mode, no LLM)'
