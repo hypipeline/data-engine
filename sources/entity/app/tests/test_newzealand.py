@@ -120,3 +120,31 @@ def test_lookup_by_nzbn(tools):
 def test_lookup_unknown_number_returns_none(tools):
     assert tools.lookup_newzealand_by_number("00000000") is None
     assert tools.lookup_newzealand_by_number("") is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  Tool-use counting (count() + usage_summary) — no network for the pure test
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_count_mechanism_and_grouping():
+    t = LookupTools(load_config())
+    t.count("northdata", op="search")
+    t.count("northdata", op="network", n=2)
+    t.count("browserbase", n=3)
+    t.count("nzco", op="search", cached=True)     # cache hit — not billed
+    u = t.usage_summary()
+    assert u["sources"]["northdata"] == 3          # 1 + 2, grouped as a source
+    assert u["transport"]["browserbase"] == 3      # grouped as transport
+    assert u["detail"]["northdata:network"] == 2   # per-operation detail
+    assert u["cached"]["nzco"] == 1                # cache hits tracked separately
+    assert u["total"] == 6                          # cached excluded from billed total
+
+
+@pytest.mark.skipif(not _bb_configured(), reason="Browserbase not configured")
+def test_nz_search_counts_sources_and_transport():
+    t = LookupTools(load_config())
+    t.search_newzealand("Pioneer Capital Management")
+    u = t.usage_summary()
+    assert u["sources"].get("nzco", 0) >= 2          # search + detail (+ ownership)
+    assert u["transport"].get("browserbase", 0) >= 1 # single-page ownership render
+    assert "nzco:ownership" in u["detail"]

@@ -645,6 +645,47 @@ def api_linkedin(q: str = "", refresh: str = ""):
     return JSONResponse(result)
 
 
+@app.get("/api/linkedin/by-url")
+def api_linkedin_by_url(url: str = "", refresh: str = ""):
+    """Fetch a company's LinkedIn page + employee count from the EXACT company URL (no Google
+    step) — so a precise URL isn't mis-resolved to a similarly-named company. Cached by slug."""
+    import re as _re
+    url = (url or "").strip()
+    if not url:
+        return JSONResponse({"error": "Enter a LinkedIn company URL."})
+    m = _re.search(r"/company/([^/?#]+)", url)
+    slug = (m.group(1) if m else url).lower()
+    if not refresh:
+        cached = linkedin_cache.get_latest(slug)
+        if cached:
+            # Only trust a cache hit whose linkedin_url slug EXACTLY matches the requested one —
+            # the query-keyed cache can hold a Google-mis-resolved entry under this slug.
+            cu = cached.get("linkedin_url") or ""
+            mc = _re.search(r"/company/([^/?#]+)", cu)
+            if (mc.group(1).lower() if mc else "") == slug:
+                return JSONResponse(cached)
+    t = _tools()
+    result = {"query": slug, "linkedin_url": url, "name": None, "employees": None,
+              "website": None, "address": None, "description": None, "org": None, "from_cache": False}
+    try:
+        data = t.linkedin_company_data(url)
+    except Exception as e:  # noqa: BLE001
+        data = None
+        result["linkedin_error"] = str(e)
+    if data:
+        for k in ("name", "employees", "website", "address", "address_locality",
+                  "address_country", "description", "slogan", "org"):
+            result[k] = data.get(k)
+    if result["employees"] is None and result["name"] is None:
+        result["error"] = "Couldn't read the LinkedIn company data for that URL."
+    if not result.get("error"):
+        try:
+            linkedin_cache.save(slug, result)
+        except Exception as e:  # noqa: BLE001
+            print(f"[linkedin_cache] save failed: {e}")
+    return JSONResponse(result)
+
+
 @app.get("/api/linkedin/history")
 def api_linkedin_history(limit: int = 100):
     return JSONResponse({"history": linkedin_cache.history(limit)})
@@ -794,9 +835,18 @@ function renderReport(rep, meta, url){
   metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
   // API usage — total (visible) with a full per-source breakdown on hover; the detailed
   // per-source list is also spelled out in the timing footer at the bottom of the card.
-  var ac0 = meta.api_calls||{}; var acParts0=[]; var acTotal0=0;
-  for(var svc0 in ac0){ if(ac0[svc0]>0){ acParts0.push(svc0+' '+ac0[svc0]); acTotal0+=ac0[svc0]; } }
-  if(acTotal0) metaHtml += '<span class="cost-badge" title="'+esc(acParts0.join(' · '))+'">'+acTotal0+' API call'+(acTotal0===1?'':'s')+'</span>';
+  var usage0 = meta.usage||null; var ac0 = meta.api_calls||{};
+  if(usage0){
+    var kv=function(o){return Object.keys(o||{}).map(function(k){return k+' '+o[k];}).join(' · ');};
+    var cch0 = (usage0.cached&&Object.keys(usage0.cached).length)?('\ncached: '+kv(usage0.cached)):'';
+    var tip0 = 'Sources: '+(kv(usage0.sources)||'—')+'\nTransport: '+(kv(usage0.transport)||'—')
+             + (Object.keys(usage0.llm||{}).length?('\nLLM: '+kv(usage0.llm)):'') + cch0;
+    if(usage0.total) metaHtml += '<span class="cost-badge" title="'+esc(tip0)+'">'+usage0.total+' tool call'+(usage0.total===1?'':'s')+'</span>';
+  } else {
+    var acParts0=[]; var acTotal0=0;
+    for(var svc0 in ac0){ if(ac0[svc0]>0){ acParts0.push(svc0+' '+ac0[svc0]); acTotal0+=ac0[svc0]; } }
+    if(acTotal0) metaHtml += '<span class="cost-badge" title="'+esc(acParts0.join(' · '))+'">'+acTotal0+' API call'+(acTotal0===1?'':'s')+'</span>';
+  }
   if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
   metaHtml += '<a href="api/lookup?url='+encodeURIComponent(url||'')+'" target="_blank" class="evidence-link">View API</a>';
 

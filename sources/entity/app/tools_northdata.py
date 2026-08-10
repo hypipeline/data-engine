@@ -118,7 +118,7 @@ class NorthDataMixin:
             headers['Cookie'] = "auth={}".format(auth_cookie)
         self._nd_log({'tool': 'northdata_get', 'input': url,
                       'output': 'auth=' + ('yes' if auth_cookie else 'no')})
-        self.increment_api_call('northdata')
+        self.count('northdata', op='search')
         try:
             r = requests.get(url, headers=headers, allow_redirects=True, timeout=30)
         except requests.RequestException:
@@ -882,6 +882,10 @@ class NorthDataMixin:
         project_id = self.config.get('browserbase_project_id') or ''
         if not api_key or not project_id:
             return "Error: Browserbase not configured."
+        # Drives its own Browserbase session directly (not via browserbase_fetch_html), so count
+        # both the NorthData op and the Browserbase use here.
+        self.count('northdata', op='network')
+        self.count('browserbase', op='northdata_network')
 
         selenium_base = 'http://connect.usw2.browserbase.com/webdriver'
 

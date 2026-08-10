@@ -49,7 +49,7 @@ class NewZealandMixin:
         """GET the NZ Companies Office entity search with retry/backoff on transient failures."""
         last = None
         for attempt in range(3):
-            self.api_calls['nzco'] = self.api_calls.get('nzco', 0) + 1
+            self.count('nzco', op='search')
             try:
                 r = requests.get(
                     NZ_SEARCH_URL,
@@ -86,7 +86,7 @@ class NewZealandMixin:
         ident = str(identifier or "").strip()
         if not ident:
             return {}
-        self.api_calls['nzco'] = self.api_calls.get('nzco', 0) + 1
+        self.count('nzco', op='detail')
         try:
             r = requests.get(NZ_ENTITY_URL + ident,
                              headers={"Accept": "application/json", "User-Agent": _NZ_UA},
@@ -157,6 +157,7 @@ class NewZealandMixin:
         ident = str(company_number or "").strip()
         if not ident:
             return ""
+        self.count('nzco', op='ownership')
         html = self.browserbase_fetch_html(NZ_DETAIL_URL.format(ident))
         if not html or html.startswith("Error"):
             self.log.append({'tool': 'nzco_ownership', 'input': ident, 'output': 'browserbase unavailable/empty'})

@@ -47,10 +47,17 @@ class ToolBase:
         self.progress_callback = progress_callback
         self.northdata_auth_cookie = None
         self.log = []          # PHP LookupTools::$log — tool call records (getLog())
+        # Tool-use counting. api_calls = per-service totals of REAL calls; api_calls_detail =
+        # per-operation ("service:op"); api_calls_cache = cache hits (not billed). Every call site
+        # routes through self.count(), so nothing can silently skip counting.
         self.api_calls = {
             'claude': 0, 'browserbase': 0, 'brightdata': 0, 'openai': 0, 'bizapedia': 0, 'acra': 0,
             'sec': 0, 'companies_house': 0, 'delaware': 0, 'northdata': 0, 'opencorporates': 0,
+            'nzco': 0, 'google': 0, 'linkedin': 0, 'yahoo': 0, 'http': 0, 'whois': 0,
+            'wayback': 0, 'scraping_browser': 0,
         }
+        self.api_calls_detail: dict = {}
+        self.api_calls_cache: dict = {}
 
     # ── bookkeeping ─────────────────────────────────────────────────────────
     def get_api_calls(self) -> dict:
@@ -59,8 +66,39 @@ class ToolBase:
     def get_log(self) -> list:
         return self.log
 
+    # ── tool-use counting ───────────────────────────────────────────────────
+    # Grouping for readable summaries. Anything not listed here is treated as a data SOURCE.
+    _TRANSPORT_KEYS = {'browserbase', 'brightdata', 'scraping_browser', 'http', 'whois', 'wayback'}
+    _LLM_KEYS = {'claude', 'openai'}
+
+    def count(self, service: str, op: str | None = None, n: int = 1, cached: bool = False) -> None:
+        """The single choke point for all tool-use counting. Records `n` real (or cached) calls to
+        `service`, optionally tagged with an operation (recorded under `service:op`)."""
+        if cached:
+            self.api_calls_cache[service] = self.api_calls_cache.get(service, 0) + n
+        else:
+            self.api_calls[service] = self.api_calls.get(service, 0) + n
+        if op:
+            key = f"{service}:{op}"
+            self.api_calls_detail[key] = self.api_calls_detail.get(key, 0) + n
+
     def increment_api_call(self, service: str) -> None:
-        self.api_calls[service] = self.api_calls.get(service, 0) + 1
+        self.count(service)
+
+    def usage_summary(self) -> dict:
+        """Grouped tool-use totals for the report / coverage / model-compare surfaces."""
+        srcs = {k: v for k, v in self.api_calls.items()
+                if v and k not in self._TRANSPORT_KEYS and k not in self._LLM_KEYS}
+        trans = {k: v for k, v in self.api_calls.items() if v and k in self._TRANSPORT_KEYS}
+        llm = {k: v for k, v in self.api_calls.items() if v and k in self._LLM_KEYS}
+        return {
+            'sources': dict(sorted(srcs.items(), key=lambda x: -x[1])),
+            'transport': dict(sorted(trans.items(), key=lambda x: -x[1])),
+            'llm': llm,
+            'detail': dict(sorted(self.api_calls_detail.items())),
+            'cached': {k: v for k, v in self.api_calls_cache.items() if v},
+            'total': sum(v for v in self.api_calls.values()),
+        }
 
     def _progress(self, phase: str, message: str) -> None:
         if self.progress_callback:
@@ -101,6 +139,7 @@ class ToolBase:
 
     # ── level 1: direct curl ────────────────────────────────────────────────
     def _http_fetch_text(self, url: str, meta: dict) -> str | None:
+        self.count('http', op='direct')
         try:
             r = requests.get(url, headers={'User-Agent': _UA}, timeout=15, allow_redirects=True)
         except requests.RequestException:
@@ -117,7 +156,7 @@ class ToolBase:
         zone = self.config.get('brightdata_zone') or 'web_unlocker1'
         if not api_key:
             return "Error: Bright Data not configured."
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata')
         try:
             r = requests.post('https://api.brightdata.com/request',
                               headers={'Content-Type': 'application/json',
@@ -136,7 +175,7 @@ class ToolBase:
         zone = self.config.get('brightdata_zone') or 'web_unlocker1'
         if not api_key:
             return None, None
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata')
         try:
             r = requests.post('https://api.brightdata.com/request',
                               headers={'Content-Type': 'application/json',
@@ -154,7 +193,7 @@ class ToolBase:
         project_id = self.config.get('browserbase_project_id') or ''
         if not api_key or not project_id:
             return "Error: Browserbase not configured."
-        self.api_calls['browserbase'] += 1
+        self.count('browserbase')
         base = 'http://connect.usw2.browserbase.com/webdriver'
         try:
             sess = requests.post('https://api.browserbase.com/v1/sessions',
@@ -196,6 +235,7 @@ class ToolBase:
         ws = self.config.get('brightdata_scraping_browser_ws') or ''
         if not ws:
             return "Error: Scraping Browser not configured.", None
+        self.count('scraping_browser')
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
@@ -219,6 +259,7 @@ class ToolBase:
         y = date.today().year
         for year in (str(y), str(y - 1), str(y - 2)):
             archive = f"https://web.archive.org/web/{year}id_/{url}"
+            self.count('wayback')
             try:
                 r = requests.get(archive, headers={'User-Agent': _UA}, timeout=20, allow_redirects=True)
             except requests.RequestException:
@@ -296,6 +337,7 @@ class ToolBase:
 
     # ── parallel curl for many urls ─────────────────────────────────────────
     def curl_fetch_multi(self, urls: list[str]) -> dict:
+        self.count('http', op='multi', n=len(urls))
         def one(u):
             try:
                 r = requests.get(u, headers={'User-Agent': _UA}, timeout=15, allow_redirects=True)
@@ -319,7 +361,7 @@ class ToolBase:
 
     # ── parallel browser fetches (PHP browserbaseFetchParallel / scrapingBrowserFetchParallel) ──
     def browserbase_fetch_parallel(self, urls: list[str]) -> dict:
-        self.api_calls['browserbase'] += len(urls)
+        self.count('browserbase', op='parallel', n=len(urls))
 
         def one(u):
             text, html = self.single_browserbase_fetch(u)
@@ -346,6 +388,7 @@ class ToolBase:
 
     # ── WHOIS ───────────────────────────────────────────────────────────────
     def whois_lookup(self, domain: str) -> str:
+        self.count('whois')
         try:
             out = subprocess.run(['whois', domain], capture_output=True, text=True,
                                  timeout=10).stdout

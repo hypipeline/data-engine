@@ -173,6 +173,15 @@ def grade_coverage(case: dict, blob: dict, api_calls: dict) -> dict:
                        'status': 'pass' if ok else 'fail'})
         if not ok:
             hard_fail = True
+    # expect_calls{}: {service: min_count} — assert a source/transport was actually exercised
+    # (e.g. nzco>=1 and browserbase>=1 for a NZ case with the ownership fetch).
+    for svc, need in (case.get('expect_calls') or {}).items():
+        used = api_calls.get(svc, 0)
+        ok = used >= need
+        checks.append({'kind': 'calls', 'text': f'{svc} ≥ {need} (used {used})',
+                       'status': 'pass' if ok else 'fail'})
+        if not ok:
+            hard_fail = True
     status = 'fail' if hard_fail else ('inconclusive' if inconclusive else 'pass')
     return {'status': status, 'checks': checks, 'throttled': throttled}
 
@@ -213,10 +222,11 @@ def build_content(config, case: dict, refresh: bool = False, progress=None) -> d
     it, ot = agent.total_input_tokens, agent.total_output_tokens
     ri, ro = _model_rates(model)
     api_calls = agent.tools.get_api_calls()
+    usage = agent.tools.usage_summary()
     cov = grade_coverage(case, blob, api_calls)
     content = {
         'system': system, 'user': user, 'sections': sections,   # sections = expandable chunks for display
-        'blob': blob, 'api_calls': api_calls, 'info': info,
+        'blob': blob, 'api_calls': api_calls, 'usage': usage, 'info': info,
         'from_cache': False,
         'cost': {'input_tokens': it, 'output_tokens': ot,
                  'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)},
@@ -499,7 +509,8 @@ _SEED = [
     {"name": "pioneercapital.co.nz → Pioneer Capital Management Ltd (NZ Companies Office + shareholdings)",
      "url": "https://pioneercapital.co.nz/",
      "expect": ["PIONEER CAPITAL MANAGEMENT LIMITED", "1585146"],
-     "expect_in_source": {"nzco": ["1585146", "9429035043362", "Directors", "Shareholdings"]}},
+     "expect_in_source": {"nzco": ["1585146", "9429035043362", "Directors", "Shareholdings"]},
+     "expect_calls": {"nzco": 1, "browserbase": 1}},
 ]
 
 

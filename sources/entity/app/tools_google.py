@@ -59,7 +59,7 @@ class GoogleMixin:
             return result
 
         self._progress('google', f"Google Intelligence: searching 3 queries for {domain}...")
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata'); self.count('google', op='intelligence')
 
         payload = {
             'input': [
@@ -162,7 +162,7 @@ class GoogleMixin:
             return ''
 
         self._progress('linkedin', f"Fetching LinkedIn: {linkedin_url}...")
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata'); self.count('linkedin', op='company')
 
         payload = {
             'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
@@ -263,7 +263,7 @@ class GoogleMixin:
         if not api_key:
             return None
         self._progress('google', f"Google: searching LinkedIn for {query}...")
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata'); self.count('linkedin', op='find')
         search_url = ('https://www.google.com/search?q='
                       + quote_plus(f"{query} linkedin company") + '&num=20')
         payload = {
@@ -302,7 +302,7 @@ class GoogleMixin:
         if not api_key:
             return None
         self._progress('linkedin', f"Fetching LinkedIn: {url}...")
-        self.api_calls['brightdata'] += 1
+        self.count('brightdata'); self.count('linkedin', op='data')
         payload = {
             'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
             'url': url,
@@ -356,6 +356,7 @@ class GoogleMixin:
     # ── Yahoo Finance ─────────────────────────────────────────────────────────
     def yahoo_finance_data(self, ticker: str) -> str:
         self._progress('yahoo', f"Yahoo Finance: fetching data for {ticker}...")
+        self.count('yahoo')
 
         # Step 1: Get crumb + cookies (shared cookie jar via a Session)
         session = requests.Session()

@@ -235,6 +235,21 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             rates = (3.00, 15.00)
         cost = (self.total_input_tokens * rates[0] / 1_000_000) + (self.total_output_tokens * rates[1] / 1_000_000)
 
+        # Tool-use summary — surfaced in the report meta AND as an end-of-run log line so it is
+        # visible in the main entity-lookup run, not only in tests.
+        usage = self.tools.usage_summary()
+        def _fmt(d):
+            return ', '.join(f"{k} {v}" for k, v in d.items()) or '—'
+        cache_note = ''
+        if usage['cached']:
+            cache_note = '  |  cached: ' + _fmt(usage['cached'])
+        self.log('summary',
+                 f"Tool usage — {usage['total']} calls total. "
+                 f"Sources: {_fmt(usage['sources'])}. "
+                 f"Transport: {_fmt(usage['transport'])}." + cache_note,
+                 {'expandable': True, 'sections': [
+                     {'label': 'Per-operation breakdown', 'content': _fmt(usage['detail'])}]})
+
         return {
             'report': report,
             'meta': {
@@ -245,6 +260,7 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
                 'output_tokens': self.total_output_tokens,
                 'cost_usd': round(cost, 4),
                 'api_calls': self.tools.get_api_calls(),
+                'usage': usage,
             },
             'progress_log': self.progress_log,
         }
