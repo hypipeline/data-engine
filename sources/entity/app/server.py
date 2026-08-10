@@ -835,16 +835,18 @@ function renderReport(rep, meta, url){
   metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
   // API usage — total (visible) with a full per-source breakdown on hover; the detailed
   // per-source list is also spelled out in the timing footer at the bottom of the card.
+  var SVC_LABELS={sec:'SEC/EDGAR',nzco:'NZ Companies Office',acra:'Singapore (ACRA)',companies_house:'Companies House',northdata:'NorthData',delaware:'Delaware',bizapedia:'Bizapedia',opencorporates:'OpenCorporates',google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo Finance',brightdata:'Bright Data',browserbase:'Browserbase',scraping_browser:'Scraping Browser',http:'HTTP',whois:'WHOIS',wayback:'Wayback',claude:'Claude',openai:'OpenAI'};
+  function svcLabel(k){return SVC_LABELS[k]||k;}
   var usage0 = meta.usage||null; var ac0 = meta.api_calls||{};
   if(usage0){
-    var kv=function(o){return Object.keys(o||{}).map(function(k){return k+' '+o[k];}).join(' · ');};
+    var kv=function(o){return Object.keys(o||{}).map(function(k){return svcLabel(k)+' '+o[k];}).join(' · ');};
     var cch0 = (usage0.cached&&Object.keys(usage0.cached).length)?('\ncached: '+kv(usage0.cached)):'';
     var tip0 = 'Sources: '+(kv(usage0.sources)||'—')+'\nTransport: '+(kv(usage0.transport)||'—')
              + (Object.keys(usage0.llm||{}).length?('\nLLM: '+kv(usage0.llm)):'') + cch0;
     if(usage0.total) metaHtml += '<span class="cost-badge" title="'+esc(tip0)+'">'+usage0.total+' tool call'+(usage0.total===1?'':'s')+'</span>';
   } else {
     var acParts0=[]; var acTotal0=0;
-    for(var svc0 in ac0){ if(ac0[svc0]>0){ acParts0.push(svc0+' '+ac0[svc0]); acTotal0+=ac0[svc0]; } }
+    for(var svc0 in ac0){ if(ac0[svc0]>0){ acParts0.push(svcLabel(svc0)+' '+ac0[svc0]); acTotal0+=ac0[svc0]; } }
     if(acTotal0) metaHtml += '<span class="cost-badge" title="'+esc(acParts0.join(' · '))+'">'+acTotal0+' API call'+(acTotal0===1?'':'s')+'</span>';
   }
   if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
@@ -924,7 +926,7 @@ function renderReport(rep, meta, url){
     + (pt.reanalysis?', reanalysis: '+r1(pt.reanalysis)+'s':'')+')'
     + ' | Cost: '+money(cost)+' ('+nf(meta.input_tokens)+' input + '+nf(meta.output_tokens)+' output tokens)';
   var ac = meta.api_calls||{}; var parts=[];
-  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
+  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svcLabel(svc)); }
   if(parts.length) timing += ' | API calls: '+esc(parts.join(', '));
   body += '<div class="report-timing">'+timing+'</div>';
 
