@@ -40,6 +40,14 @@
   .io-sub { font-weight:500; text-transform:none; letter-spacing:0; opacity:.9; margin-left:8px; font-size:10px; }
   pre.io { margin:0; padding:11px 13px; background:#0b1020; color:#d6e2ff; font-family:var(--mono); font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:380px; overflow:auto; }
   pre.io.json .j-key{color:#7dd3fc} pre.io.json .j-str{color:#86efac} pre.io.json .j-num{color:#fca5a5} pre.io.json .j-bool{color:#fcd34d} pre.io.json .j-null{color:#c4b5fd}
+  .io-toolbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:10px; }
+  .io-toolbar .io-lbl { font-size:11px; color:var(--muted); margin-right:2px; }
+  .io-tab { font-size:11.5px; font-weight:600; padding:5px 12px; border:1px solid var(--border-2); border-radius:999px; cursor:pointer; color:#334155; background:#fff; user-select:none; white-space:nowrap; transition:all .12s; }
+  .io-tab:hover { border-color:#94a3b8; }
+  .io-tab.active { background:#111827; color:#fff; border-color:#111827; }
+  .io-tab.in.active { background:#1d4ed8; border-color:#1d4ed8; }
+  .io-tab.out.active { background:#166534; border-color:#166534; }
+  .io-drawer { margin-top:8px; }
   .addbox { border:1px dashed var(--border-2); border-radius:10px; padding:16px; max-width:960px; margin-top:8px; background:#fafbff; }
   .addbox label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
   .addbox input, .addbox textarea { width:100%; padding:8px 10px; border:1px solid var(--border-2); border-radius:6px; font-size:13px; font-family:inherit; }
@@ -164,6 +172,21 @@ function viewInput(cid, btn){
   getJSON(EB+'/api/modelcompare/input?case_id='+cid).then(function(d){ box.innerHTML=inputSections(d); })
     .catch(function(e){ box.innerHTML='<span style="color:#dc2626">'+esc(e.message||e)+'</span>'; });
 }
+// Accordion for the per-case Inspect toolbar: one panel open at a time; stage-2 loads on demand.
+function ioTab(uid, key, btn){
+  var bar=btn.parentNode, drawer=bar.nextElementSibling, panel=document.getElementById(uid+'-'+key);
+  var wasActive=btn.classList.contains('active');
+  bar.querySelectorAll('.io-tab').forEach(function(t){t.classList.remove('active');});
+  Array.prototype.forEach.call(drawer.children, function(p){p.style.display='none';});
+  if(!wasActive && panel){
+    btn.classList.add('active'); panel.style.display='block';
+    if(key==='s2' && !panel.getAttribute('data-loaded')){
+      panel.setAttribute('data-loaded','1'); panel.innerHTML='<span style="color:#888">loading…</span>';
+      getJSON(EB+'/api/modelcompare/input?case_id='+btn.getAttribute('data-cid')).then(function(d){ panel.innerHTML=inputSections(d); })
+        .catch(function(e){ panel.innerHTML='<span style="color:#dc2626">'+esc(e.message||e)+'</span>'; });
+    }
+  }
+}
 function renderResult(r, cid){
   var checks=(r.checks||[]).map(function(ch){
     var attr = (ch.sources&&ch.sources.length) ? ' <span style="color:#2563eb">— found in: '+esc(ch.sources.join(', '))+'</span>' : '';
@@ -184,7 +207,25 @@ function renderResult(r, cid){
         ? '<b style="color:#166534">cost: free</b> <span style="color:#888">(cached extraction — search ran live)</span>'
         : '<b>cost: $'+(r.cost_usd||0).toFixed(4)+'</b>'+(r.tokens?' <span style="color:#aaa">('+r.tokens.input+' in / '+r.tokens.output+' out tok, extraction LLM)</span>':''))
     + (r.include_google?' <span style="color:#7c3aed">· +Google intel</span>':'');
-  var evId='ev'+id_seq++; var exId='ex'+id_seq++;
+  var uid='io'+id_seq++; var tabs=[], panels=[];
+  if(r.extraction_io){
+    tabs.push('<span class="io-tab in" onclick="ioTab(\''+uid+'\',\'s1in\',this)">Stage 1 · Input</span>');
+    tabs.push('<span class="io-tab out" onclick="ioTab(\''+uid+'\',\'s1out\',this)">Stage 1 · Output</span>');
+    panels.push('<div id="'+uid+'-s1in" class="io-panel" style="display:none">'
+      + '<div class="io-block io-in"><div class="io-head">Input · system prompt</div><pre class="io">'+esc(r.extraction_io.system||'')+'</pre></div>'
+      + '<div class="io-block io-in"><div class="io-head">Input · website text sent to the model</div><pre class="io">'+esc(r.extraction_io.user||'')+'</pre></div></div>');
+    panels.push('<div id="'+uid+'-s1out" class="io-panel" style="display:none">'
+      + '<div class="io-block io-out"><div class="io-head">Output · entities JSON returned</div><pre class="io json">'+hlJson(prettyJson(r.extraction_io.output||''))+'</pre></div></div>');
+  }
+  if(cid){
+    tabs.push('<span class="io-tab" data-cid="'+cid+'" onclick="ioTab(\''+uid+'\',\'s2\',this)">Stage 2 · Analysis input</span>');
+    panels.push('<div id="'+uid+'-s2" class="io-panel" style="display:none"></div>');
+  }
+  if(r.evidence_excerpt){
+    tabs.push('<span class="io-tab" onclick="ioTab(\''+uid+'\',\'ev\',this)">Evidence</span>');
+    panels.push('<div id="'+uid+'-ev" class="io-panel" style="display:none"><pre class="io">'+esc(r.evidence_excerpt)+'</pre></div>');
+  }
+  var toolbar = tabs.length ? '<div class="io-toolbar"><span class="io-lbl">Inspect:</span>'+tabs.join('')+'</div><div class="io-drawer">'+panels.join('')+'</div>' : '';
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
     + cost + ' &middot; '
@@ -192,13 +233,7 @@ function renderResult(r, cid){
     + (r.extracted_names?'extracted: '+esc((r.extracted_names||[]).join(', ')):'')
     + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')
     + (r.known_jurisdiction && (r.known_jurisdiction||'').toLowerCase()!==(r.jurisdiction||'').toLowerCase()?' <span style="color:#a16207">(known parent: '+esc(r.known_jurisdiction)+')</span>':'')+'</div>'
-    + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence excerpt ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'')
-    + (r.extraction_io?'<div class="io-wrap"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+exId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">▾ Stage 1 — extraction LLM (input + output)</span><div id="'+exId+'" style="display:none;margin-top:6px">'
-        + '<div class="io-block io-in"><div class="io-head">▸ Input<span class="io-sub">system prompt</span></div><pre class="io">'+esc(r.extraction_io.system||'')+'</pre></div>'
-        + '<div class="io-block io-in"><div class="io-head">▸ Input<span class="io-sub">website text sent to the model</span></div><pre class="io">'+esc(r.extraction_io.user||'')+'</pre></div>'
-        + '<div class="io-block io-out"><div class="io-head">◂ Output<span class="io-sub">entities JSON returned</span></div><pre class="io json">'+hlJson(prettyJson(r.extraction_io.output||''))+'</pre></div>'
-        + '</div></div>':'')
-    + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input — stage 2 analysis (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
+    + toolbar;
 }
 var id_seq=0;
 function prettyJson(s){ try{ return JSON.stringify(JSON.parse(s), null, 2); }catch(e){ return s; } }
