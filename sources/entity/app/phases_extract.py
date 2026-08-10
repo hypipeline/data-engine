@@ -213,6 +213,10 @@ class ExtractionMixin:
 
         response_text = self.call_llm(self.extraction_prompt, user_msg, 2048, op='extraction')
 
+        # Capture the first-stage (extraction) LLM I/O so tools (e.g. coverage) can display both
+        # the exact input sent (system prompt + website text) and the raw output returned.
+        self.last_extraction = {'system': self.extraction_prompt, 'user': user_msg, 'output': response_text}
+
         self.log('llm', "LLM extraction output:", {
             'expandable': True,
             'sections': [{'label': 'Response JSON', 'content': response_text}],

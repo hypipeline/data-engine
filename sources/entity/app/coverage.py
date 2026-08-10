@@ -124,8 +124,12 @@ def build_evidence(config, url=None, names=None, jurisdiction=None, include_goog
 # and caches the lot per case. Coverage greps `blob`; the model test feeds
 # (system,user) to the models — they can never diverge again.
 # ══════════════════════════════════════════════════════════════════════════
+# Bump when the built-content output shape changes, so cached cases auto-invalidate on deploy
+# (no manual per-case refresh needed).
+_CONTENT_SCHEMA = 2
+
 def _content_key(case) -> str:
-    return json.dumps([case.get('url'), case.get('names'), case.get('jurisdiction'),
+    return json.dumps([_CONTENT_SCHEMA, case.get('url'), case.get('names'), case.get('jurisdiction'),
                        bool(case.get('include_google'))], default=str)
 
 
@@ -230,6 +234,7 @@ def build_content(config, case: dict, refresh: bool = False, progress=None) -> d
     content = {
         'system': system, 'user': user, 'sections': sections,   # sections = expandable chunks for display
         'blob': blob, 'api_calls': api_calls, 'usage': usage, 'info': info,
+        'extraction_io': getattr(agent, 'last_extraction', None),
         'from_cache': False,
         'cost': {'input_tokens': it, 'output_tokens': ot,
                  'cost_usd': round(it * ri / 1_000_000 + ot * ro / 1_000_000, 4)},
@@ -271,6 +276,7 @@ def run_case(config, case: dict, refresh: bool = False) -> dict:
         'jurisdiction': content['meta']['jurisdiction'],
         'known_jurisdiction': content['meta'].get('known_jurisdiction'),
         'usage': content.get('usage'),
+        'extraction_io': content.get('extraction_io'),
         'evidence_excerpt': full[:4000],
     }
 

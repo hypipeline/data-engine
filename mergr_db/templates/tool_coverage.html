@@ -177,7 +177,7 @@ function renderResult(r, cid){
         ? '<b style="color:#166534">cost: free</b> <span style="color:#888">(cached extraction — search ran live)</span>'
         : '<b>cost: $'+(r.cost_usd||0).toFixed(4)+'</b>'+(r.tokens?' <span style="color:#aaa">('+r.tokens.input+' in / '+r.tokens.output+' out tok, extraction LLM)</span>':''))
     + (r.include_google?' <span style="color:#7c3aed">· +Google intel</span>':'');
-  var evId='ev'+id_seq++;
+  var evId='ev'+id_seq++; var exId='ex'+id_seq++;
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
     + cost + ' &middot; '
@@ -186,7 +186,12 @@ function renderResult(r, cid){
     + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')
     + (r.known_jurisdiction && (r.known_jurisdiction||'').toLowerCase()!==(r.jurisdiction||'').toLowerCase()?' <span style="color:#a16207">(known parent: '+esc(r.known_jurisdiction)+')</span>':'')+'</div>'
     + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence excerpt ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'')
-    + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
+    + (r.extraction_io?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+exId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">▾ Stage 1 — extraction LLM (input + output)</span><div id="'+exId+'" style="display:none">'
+        + '<div style="color:#888;margin:6px 0 2px">System prompt (in)</div><pre>'+esc(r.extraction_io.system||'')+'</pre>'
+        + '<div style="color:#888;margin:6px 0 2px">User input — website text sent in</div><pre>'+esc(r.extraction_io.user||'')+'</pre>'
+        + '<div style="color:#888;margin:6px 0 2px">Output — raw entities JSON returned</div><pre>'+esc(r.extraction_io.output||'')+'</pre>'
+        + '</div></div>':'')
+    + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input — stage 2 analysis (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
 }
 var id_seq=0;
 
