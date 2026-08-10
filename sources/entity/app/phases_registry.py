@@ -102,6 +102,7 @@ _EU_JUR = {'germany', 'france', 'netherlands', 'austria', 'switzerland', 'europe
            'finland', 'denmark', 'sweden', 'norway', 'poland', 'czech republic',
            'belgium', 'luxembourg', 'italy', 'spain', 'ireland'}
 _SG_JUR = {'singapore', 'sg'}
+_NZ_JUR = {'new zealand', 'nz', 'aotearoa'}
 
 
 def _co(value, default):
@@ -138,12 +139,13 @@ class RegistrySearchMixin:
         is_uk = jset & _UK_JUR
         is_eu = jset & _EU_JUR
         is_sg = jset & _SG_JUR
+        is_nz = jset & _NZ_JUR
         is_unknown = 'unknown' in jurisdictions
         # A recognised-but-unsupported jurisdiction (e.g. India, Australia) matches none of the
         # buckets and would otherwise fall through to searching ZERO registries. Treat it as a broad
         # search so NorthData (name-based, international) and the others run rather than missing the
         # entity. (Singapore now has its own ACRA bucket below, so it's excluded from this fallback.)
-        if not (is_us or is_uk or is_eu or is_sg or is_unknown):
+        if not (is_us or is_uk or is_eu or is_sg or is_nz or is_unknown):
             self.log('registry', f"Jurisdiction '{jurisdiction}' not in a known bucket — "
                      "falling back to a broad (all-registry) search")
             is_unknown = True
@@ -164,6 +166,8 @@ class RegistrySearchMixin:
             registry_sources.append('North Data')
         if is_sg or is_unknown:
             registry_sources.append('ACRA (Singapore)')
+        if is_nz or is_unknown:
+            registry_sources.append('NZ Companies Office')
         if is_us or is_unknown:
             registry_sources.append('EDGAR Exhibit 21')
 
@@ -370,6 +374,11 @@ class RegistrySearchMixin:
             if is_sg or is_unknown:
                 registries[f"acra:{name}"] = self.tools.search_singapore(name)
                 self.log_registry_result('acra', 'ACRA (Singapore)', name, registries[f"acra:{name}"], name)
+
+            # NZ Companies Office — free public register; gives the company number (registry_id) + NZBN + status
+            if is_nz or is_unknown:
+                registries[f"nzco:{name}"] = self.tools.search_newzealand(name)
+                self.log_registry_result('nzco', 'NZ Companies Office', name, registries[f"nzco:{name}"], name)
 
             # EDGAR Exhibit 21 parent search (US)
             if is_us or is_unknown:
@@ -767,6 +776,8 @@ class RegistrySearchMixin:
             return 'https://www.bizapedia.com/ (trademark search)'
         if key.startswith('acra:'):
             return 'https://data.gov.sg/ (ACRA Singapore registry)'
+        if key.startswith('nzco:'):
+            return 'https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/search (NZ Companies Register)'
         if key.startswith('northdata:'):
             return 'https://www.northdata.com/'
         if key == 'northdata_network':

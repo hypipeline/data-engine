@@ -492,6 +492,14 @@ _SEED = [
     {"name": "scanfil.com → Scanfil Oyj (Finland · NorthData LEI)", "url": "https://www.scanfil.com/",
      "expect": ["Scanfil Oyj", "7437004XD6U0FFDCT507", "2422742-9"],
      "expect_in_source": {"northdata": ["Scanfil Oyj"]}},
+    # New Zealand company via URL → exercises the (key-less) NZ Companies Office registry for the
+    # company number + NZBN, AND the Browserbase single-page ownership fetch (directors +
+    # shareholdings with %). Ground truth: PIONEER CAPITAL MANAGEMENT LIMITED, NZ company 1585146,
+    # NZBN 9429035043362; shareholdings include the related PIONEER CAPITAL INVESTMENTS LIMITED.
+    {"name": "pioneercapital.co.nz → Pioneer Capital Management Ltd (NZ Companies Office + shareholdings)",
+     "url": "https://pioneercapital.co.nz/",
+     "expect": ["PIONEER CAPITAL MANAGEMENT LIMITED", "1585146"],
+     "expect_in_source": {"nzco": ["1585146", "9429035043362", "Directors", "Shareholdings"]}},
 ]
 
 

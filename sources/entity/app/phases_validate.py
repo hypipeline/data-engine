@@ -157,6 +157,20 @@ class ValidationMixin:
             else:
                 self.log('validate', f"ACRA: no result for UEN {registry_id}")
 
+        # New Zealand → Companies Office by company number / NZBN
+        if country == 'NZ' and not registry_name:
+            self.log('validate', f"Looking up NZ Companies Office: {registry_id}...")
+            nz = self.tools.lookup_newzealand_by_number(registry_id)
+            if nz:
+                registry_name = nz.get('name')
+                registry_status = nz.get('status')
+                registry_data = nz
+                source = 'NZ Companies Office'
+                validation_url = 'https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/search'
+                self.log('validate', f"NZ Companies Office returned: \"{registry_name}\" (status: {registry_status})")
+            else:
+                self.log('validate', f"NZ Companies Office: no result for {registry_id}")
+
         # Build validation result
         if not registry_name:
             report['registry_validation'] = {
@@ -275,6 +289,15 @@ class ValidationMixin:
                 registry_status = sg.get('status')
                 source = 'ACRA (Singapore)'
                 validation_url = 'https://www.bizfile.gov.sg/'
+
+        # New Zealand → Companies Office by company number / NZBN
+        if country == 'NZ' and not registry_name:
+            nz = self.tools.lookup_newzealand_by_number(registry_id)
+            if nz:
+                registry_name = nz.get('name')
+                registry_status = nz.get('status')
+                source = 'NZ Companies Office'
+                validation_url = 'https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/search'
 
         if not registry_name:
             return {'status': 'not_found', 'source': source}
