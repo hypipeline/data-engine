@@ -221,10 +221,8 @@ function renderResult(r, cid){
     tabs.push('<span class="io-tab" data-cid="'+cid+'" onclick="ioTab(\''+uid+'\',\'s2\',this)">Stage 2 · Analysis input</span>');
     panels.push('<div id="'+uid+'-s2" class="io-panel" style="display:none"></div>');
   }
-  if(r.evidence_excerpt){
-    tabs.push('<span class="io-tab" onclick="ioTab(\''+uid+'\',\'ev\',this)">Evidence</span>');
-    panels.push('<div id="'+uid+'-ev" class="io-panel" style="display:none"><pre class="io">'+esc(r.evidence_excerpt)+'</pre></div>');
-  }
+  // (Evidence tab removed — it was just the raw registry results, which Stage 2 · Analysis input
+  // already contains in full alongside the prompt/metadata/WHOIS.)
   var toolbar = tabs.length ? '<div class="io-toolbar"><span class="io-lbl">Inspect:</span>'+tabs.join('')+'</div><div class="io-drawer">'+panels.join('')+'</div>' : '';
   return '<div class="checks">'+checks+'</div>'
     + '<div class="case-meta">'+(r.error?'<span style="color:#dc2626">error: '+esc(r.error)+'</span> ':'')
