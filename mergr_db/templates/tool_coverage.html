@@ -33,6 +33,13 @@
   .isec-h { padding:7px 10px; background:#f2f5f9; cursor:pointer; font-size:12.5px; font-weight:600; }
   .isec-h:hover { background:#e8eef5; } .isec-h .tri { color:var(--muted); }
   .isec-pre { margin:0; padding:10px; background:#fff; border-top:1px solid var(--border); font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:420px; overflow:auto; }
+  /* Stage-1 extraction I/O panel: clearly differentiate input (blue) vs output (green) + styled JSON */
+  .io-block { border-radius:8px; overflow:hidden; margin:8px 0; border:1px solid var(--border); }
+  .io-head { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:6px 11px; color:#fff; }
+  .io-in .io-head { background:#1d4ed8; } .io-out .io-head { background:#166534; }
+  .io-sub { font-weight:500; text-transform:none; letter-spacing:0; opacity:.9; margin-left:8px; font-size:10px; }
+  pre.io { margin:0; padding:11px 13px; background:#0b1020; color:#d6e2ff; font-family:var(--mono); font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:380px; overflow:auto; }
+  pre.io.json .j-key{color:#7dd3fc} pre.io.json .j-str{color:#86efac} pre.io.json .j-num{color:#fca5a5} pre.io.json .j-bool{color:#fcd34d} pre.io.json .j-null{color:#c4b5fd}
   .addbox { border:1px dashed var(--border-2); border-radius:10px; padding:16px; max-width:960px; margin-top:8px; background:#fafbff; }
   .addbox label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
   .addbox input, .addbox textarea { width:100%; padding:8px 10px; border:1px solid var(--border-2); border-radius:6px; font-size:13px; font-family:inherit; }
@@ -186,14 +193,23 @@ function renderResult(r, cid){
     + (r.jurisdiction?' &middot; jurisdiction: '+esc(r.jurisdiction):'')
     + (r.known_jurisdiction && (r.known_jurisdiction||'').toLowerCase()!==(r.jurisdiction||'').toLowerCase()?' <span style="color:#a16207">(known parent: '+esc(r.known_jurisdiction)+')</span>':'')+'</div>'
     + (r.evidence_excerpt?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+evId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">evidence excerpt ▾</span><div id="'+evId+'" style="display:none"><pre>'+esc(r.evidence_excerpt)+'</pre></div></div>':'')
-    + (r.extraction_io?'<div class="evidence"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+exId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">▾ Stage 1 — extraction LLM (input + output)</span><div id="'+exId+'" style="display:none">'
-        + '<div style="color:#888;margin:6px 0 2px">System prompt (in)</div><pre>'+esc(r.extraction_io.system||'')+'</pre>'
-        + '<div style="color:#888;margin:6px 0 2px">User input — website text sent in</div><pre>'+esc(r.extraction_io.user||'')+'</pre>'
-        + '<div style="color:#888;margin:6px 0 2px">Output — raw entities JSON returned</div><pre>'+esc(r.extraction_io.output||'')+'</pre>'
+    + (r.extraction_io?'<div class="io-wrap"><span class="btn ghost sm" onclick="var e=document.getElementById(\''+exId+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">▾ Stage 1 — extraction LLM (input + output)</span><div id="'+exId+'" style="display:none;margin-top:6px">'
+        + '<div class="io-block io-in"><div class="io-head">▸ Input<span class="io-sub">system prompt</span></div><pre class="io">'+esc(r.extraction_io.system||'')+'</pre></div>'
+        + '<div class="io-block io-in"><div class="io-head">▸ Input<span class="io-sub">website text sent to the model</span></div><pre class="io">'+esc(r.extraction_io.user||'')+'</pre></div>'
+        + '<div class="io-block io-out"><div class="io-head">◂ Output<span class="io-sub">entities JSON returned</span></div><pre class="io json">'+hlJson(prettyJson(r.extraction_io.output||''))+'</pre></div>'
         + '</div></div>':'')
     + (cid?'<div style="margin-top:6px"><span class="btn ghost sm" onclick="viewInput('+cid+',this)">▾ View full LLM input — stage 2 analysis (chunked into sections)</span><div class="llm-box" style="display:none;margin-top:6px"></div></div>':'');
 }
 var id_seq=0;
+function prettyJson(s){ try{ return JSON.stringify(JSON.parse(s), null, 2); }catch(e){ return s; } }
+function hlJson(raw){
+  var s=(raw||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return s.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g, function(m){
+    var cls='j-num';
+    if(/^"/.test(m)){ cls=/:$/.test(m)?'j-key':'j-str'; } else if(/true|false/.test(m)){ cls='j-bool'; } else if(/^null$/.test(m)){ cls='j-null'; }
+    return '<span class="'+cls+'">'+m+'</span>';
+  });
+}
 
 function refreshOn(){ var e=document.getElementById('refresh-extract'); return !!(e&&e.checked); }
 function runOne(id){
