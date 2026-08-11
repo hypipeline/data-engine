@@ -523,6 +523,13 @@ _SEED = [
      "expect": ["PIONEER CAPITAL MANAGEMENT LIMITED", "1585146"],
      "expect_in_source": {"nzco": ["1585146", "9429035043362", "Directors", "Shareholdings"]},
      "expect_calls": {"nzco": 1, "browserbase": 1}},
+    # US LLC via URL → exercises Bizapedia + Delaware. silfern.com is the brand; the legal entity is
+    # SREP Capital Management, LLC — a Delaware LLC (domestic file 4334492) with a New York foreign
+    # registration (Bizapedia file 3523012, reg. agent 150 East 52nd Street, New York).
+    {"name": "silfern.com → SREP Capital Management, LLC (US · Delaware LLC + NY foreign)",
+     "url": "https://silfern.com/",
+     "expect": ["SREP CAPITAL MANAGEMENT, LLC", "4334492"],
+     "expect_in_source": {"bizapedia": ["SREP CAPITAL MANAGEMENT", "3523012"], "delaware": ["4334492"]}},
 ]
 
 
