@@ -166,7 +166,7 @@ function usageSection(meta){
   var u=(meta&&meta.usage)||null, ac=(meta&&meta.api_calls)||{};
   function kvg(o){ o=o||{}; var ks=Object.keys(o); return ks.length?ks.map(function(k){return svcLabel(k)+' '+o[k];}).join(' · '):null; }
   if(u){
-    var s='<div class="report-section"><h3>Tool usage — '+u.total+' call'+(u.total===1?'':'s')+'</h3>';
+    var s='<div class="report-section" id="tool-usage"><h3>Tool usage — '+u.total+' call'+(u.total===1?'':'s')+'</h3>';
     var srcs=kvg(u.sources), trans=kvg(u.transport), llms=kvg(u.llm), cch=kvg(u.cached);
     if(srcs)  s+=row('Sources', esc(srcs));
     if(trans) s+=row('Transport', esc(trans));
@@ -177,8 +177,13 @@ function usageSection(meta){
   var keys=Object.keys(ac).filter(function(k){return ac[k]>0;});
   if(!keys.length) return '';
   var tot=keys.reduce(function(a,k){return a+ac[k];},0);
-  return '<div class="report-section"><h3>Tool usage — '+tot+' call'+(tot===1?'':'s')+'</h3>'
+  return '<div class="report-section" id="tool-usage"><h3>Tool usage — '+tot+' call'+(tot===1?'':'s')+'</h3>'
        + row('Calls', esc(keys.map(function(k){return svcLabel(k)+' '+ac[k];}).join(' · ')))+'</div>';
+}
+// total tool calls for the compact header summary (meta.usage.total, or sum of api_calls)
+function usageTotal(meta){
+  var u=(meta&&meta.usage)||null; if(u&&typeof u.total==='number') return u.total;
+  var ac=(meta&&meta.api_calls)||{}; return Object.keys(ac).reduce(function(a,k){return a+(ac[k]>0?ac[k]:0);},0);
 }
 // interlink: a "Registry Verified" badge opens the native Registry Validation tool
 // (prefilled + auto-runs), NOT the external register. US entities already carry a
@@ -213,6 +218,9 @@ function renderReport(rep, meta, url){
   metaHtml += '<span class="cost-badge">'+money(cost)+'</span>';
   metaHtml += '<span>'+r1(meta.total_time_s)+'s</span>';
   metaHtml += '<span>'+nf(meta.input_tokens)+' in / '+nf(meta.output_tokens)+' out tokens</span>';
+  // compact tool-usage summary — jumps to the full grouped breakdown at the bottom of the card
+  var uTot = usageTotal(meta);
+  if(uTot) metaHtml += '<a href="#tool-usage" onclick="var e=document.getElementById(\'tool-usage\');if(e){e.scrollIntoView({behavior:\'smooth\',block:\'start\'});return false;}" class="cost-badge" style="text-decoration:none;cursor:pointer;" title="Jump to full breakdown">'+uTot+' tool call'+(uTot===1?'':'s')+' ↓</a>';
   if(meta.model) metaHtml += '<span>'+esc(meta.model)+'</span>';
   metaHtml += '<a href="'+EBASE+'/api/lookup?url='+encodeURIComponent(url||'')+'" target="_blank" class="evidence-link">View API</a>';
 
