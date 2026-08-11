@@ -159,6 +159,27 @@ function rvInfo(st){
   return {cls:cls,label:lab};
 }
 function row(label, valueHtml){ return '<div class="report-row"><span class="report-label">'+label+'</span><span class="report-value">'+valueHtml+'</span></div>'; }
+// friendly names for every tool/source/transport we count, + an always-visible grouped usage block
+var SVC_LABELS={sec:'SEC/EDGAR',nzco:'NZ Companies Office',acra:'Singapore (ACRA)',companies_house:'Companies House',northdata:'NorthData',delaware:'Delaware',bizapedia:'Bizapedia',opencorporates:'OpenCorporates',google:'Google',linkedin:'LinkedIn',yahoo:'Yahoo Finance',brightdata:'Bright Data',browserbase:'Browserbase',scraping_browser:'Scraping Browser',http:'HTTP',whois:'WHOIS',wayback:'Wayback',claude:'Claude',openai:'OpenAI'};
+function svcLabel(k){ return SVC_LABELS[k]||k; }
+function usageSection(meta){
+  var u=(meta&&meta.usage)||null, ac=(meta&&meta.api_calls)||{};
+  function kvg(o){ o=o||{}; var ks=Object.keys(o); return ks.length?ks.map(function(k){return svcLabel(k)+' '+o[k];}).join(' · '):null; }
+  if(u){
+    var s='<div class="report-section"><h3>Tool usage — '+u.total+' call'+(u.total===1?'':'s')+'</h3>';
+    var srcs=kvg(u.sources), trans=kvg(u.transport), llms=kvg(u.llm), cch=kvg(u.cached);
+    if(srcs)  s+=row('Sources', esc(srcs));
+    if(trans) s+=row('Transport', esc(trans));
+    if(llms)  s+=row('LLM', esc(llms));
+    if(cch)   s+=row('Cached', esc(cch));
+    return s+'</div>';
+  }
+  var keys=Object.keys(ac).filter(function(k){return ac[k]>0;});
+  if(!keys.length) return '';
+  var tot=keys.reduce(function(a,k){return a+ac[k];},0);
+  return '<div class="report-section"><h3>Tool usage — '+tot+' call'+(tot===1?'':'s')+'</h3>'
+       + row('Calls', esc(keys.map(function(k){return svcLabel(k)+' '+ac[k];}).join(' · ')))+'</div>';
+}
 // interlink: a "Registry Verified" badge opens the native Registry Validation tool
 // (prefilled + auto-runs), NOT the external register. US entities already carry a
 // /validate.php?... url from the port; for GB/EU we build the tool link from the
@@ -264,13 +285,14 @@ function renderReport(rep, meta, url){
       s += line+'</div>';
     });
     body += s+'</div>'; }
+  body += usageSection(meta);   // always-visible grouped Sources / Transport / LLM breakdown
   var pt = meta.phase_times||{};
   var timing = 'Completed in '+r1(meta.total_time_s)+'s (fetch: '+r1(pt.fetch)+'s, extract: '+r1(pt.extraction)
     + 's, registries: '+r1(pt.registries)+'s, analysis: '+r1(pt.analysis)+'s'
     + (pt.reanalysis?', reanalysis: '+r1(pt.reanalysis)+'s':'')+')'
     + ' | Cost: '+money(cost)+' ('+nf(meta.input_tokens)+' input + '+nf(meta.output_tokens)+' output tokens)';
   var ac = meta.api_calls||{}; var parts=[];
-  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
+  for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svcLabel(svc)); }
   if(parts.length) timing += ' | API calls: '+esc(parts.join(', '));
   body += '<div class="report-timing">'+timing+'</div>';
 
