@@ -67,7 +67,8 @@ run <b>direct</b>; the rest via OpenRouter.</p>
 </div>
 <div class="mc-opts">
   <span>On run:
-    <label><input type="radio" name="rerun-mode" value="failed" checked> retry only <b>failed / missing</b> (keep passes)</label>
+    <label><input type="radio" name="rerun-mode" value="failed" checked> retry <b>failed + missing</b> (keep passes)</label>
+    <label><input type="radio" name="rerun-mode" value="missing"> run only <b>missing</b> (never-run cells)</label>
     <label><input type="radio" name="rerun-mode" value="all"> re-run <b>all</b> models</label>
   </span>
   <label><input type="checkbox" id="refresh-input"> also rebuild Phase-1 input (re-fetch/extract/search)</label>
@@ -119,7 +120,8 @@ function getJSON(url, opts){
   return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
 }
 function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
-function refreshAllModels(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value==='all'; }
+function rerunScope(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value || 'failed'; }
+function refreshAllModels(){ return rerunScope()==='all'; }
 function money2(c){ return c==null?'':'$'+Number(c).toFixed(2); }              // to the nearest cent
 function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }  // cost at 1,000 lookups
 function short(m){ return m.split('/').pop(); }
@@ -181,7 +183,7 @@ function runAll(){
   function nextCase(){
     if(idx>=ids.length){ btn.disabled=false; q('runall-log').textContent='✓ all '+ids.length+' cases done'; return; }
     var cid=ids[idx], cs=caseById(cid), cname=cs?cs.name:cid, doneFlag=false;
-    var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm);
+    var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm+'&scope='+rerunScope());
     function nextOne(){ if(doneFlag) return; doneFlag=true; try{es.close();}catch(_){} idx++; nextCase(); }
     es.addEventListener('phase', function(e){ q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+JSON.parse(e.data).message; });
     es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.meta; renderMatrix(); } });
@@ -296,7 +298,7 @@ function run(){
   var log=function(t){ var e=q('run-log'); if(e) e.textContent=t; };
   var live=[], done=false;
   var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+c.id+'&models='+encodeURIComponent(models.join(','))
-    +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(refreshAllModels()?'true':'false'));
+    +'&refresh_input='+(q('refresh-input').checked?'true':'false')+'&refresh_models='+(refreshAllModels()?'true':'false')+'&scope='+rerunScope());
   function finish(){ done=true; try{es.close();}catch(_){} btn.disabled=false; btn.textContent='▶ Run models'; }
   es.addEventListener('phase', function(e){ log('⏳ '+JSON.parse(e.data).message); });
   es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); c.input_meta=d.meta; renderMeta(d.meta); renderMatrix(); log('✓ input ready — running '+models.length+' models…'); });

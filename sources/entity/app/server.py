@@ -337,10 +337,19 @@ async def api_modelcompare_run(request: Request):
 
 @app.get("/api/modelcompare/run-stream")
 async def api_modelcompare_run_stream(case_id: int, models: str = "",
-                                      refresh_input: bool = False, refresh_models: bool = False):
+                                      refresh_input: bool = False, refresh_models: bool = False,
+                                      scope: str = "failed"):
     """Streaming (SSE) model comparison — emits live progress so the UI isn't a black box during
     the slow Phase-1 build + per-model calls. Events: phase, input_ready, model_start, model_done,
-    done, failed. Each model is isolated, so one failure can't abort the run."""
+    done, failed. Each model is isolated, so one failure can't abort the run.
+
+    scope selects which case×model cells actually run (cached cells stream back instantly):
+      'all'     — run every model (ignores stored results); implied by refresh_models=true.
+      'failed'  — run missing + errored cells; keep any cell that produced a result.
+      'missing' — run ONLY never-run cells; keep every cell that already has a stored result."""
+    scope = (scope or "failed").lower()
+    if refresh_models:
+        scope = "all"
     model_list = [m.strip() for m in models.split(",") if m.strip()] or model_compare.DEFAULT_MODELS
     case = coverage.get_case(int(case_id))
     q: "queue.Queue" = queue.Queue()
@@ -369,9 +378,12 @@ async def api_modelcompare_run_stream(case_id: int, models: str = "",
             n = len(model_list)
             results, to_run = [], []
             for m in model_list:
-                if cid and not refresh_models:
+                if cid and scope != "all":
                     cached = model_compare._result_get(cid, m)
-                    if cached and not cached.get("error"):   # keep successes cached; RETRY failures
+                    # 'missing' keeps ANY stored cell (only never-run cells re-run);
+                    # 'failed' keeps only non-errored cells (missing + errors re-run).
+                    keep = bool(cached) if scope == "missing" else bool(cached and not cached.get("error"))
+                    if keep:
                         results.append(cached)
                         q.put(("model_done", {"result": cached, "done": len(results), "total": n, "cached": True}))
                         continue
