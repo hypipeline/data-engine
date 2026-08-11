@@ -95,6 +95,14 @@ def resolve_route(model_ref: str, config: dict) -> str:
 
 # ── low-level transports ──────────────────────────────────────────────────────
 _TRANSIENT = {429, 500, 502, 503, 529}   # rate-limit / provider-overload / gateway → worth retrying
+# error-message markers that mean "try again" (transient) rather than "give up" (auth/quota/moderation).
+_TRANSIENT_MARKERS = ("provider error", "'choices'", "no 'choices'", "timed out", "timeout",
+                      "overload", "rate", "502", "503", "500", "529", "temporarily", "unavailable")
+def _is_transient_err(msg):
+    m = str(msg or "").lower()
+    if any(w in m for w in ("moderat", "invalid api key", "unauthor", "forbidden", "quota", "insufficient", "401", "403")):
+        return False                         # permanent — don't waste retries
+    return any(w in m for w in _TRANSIENT_MARKERS)
 
 
 def _post(url, headers, body, timeout=240, retries=2):
@@ -135,6 +143,18 @@ def _call_anthropic(model_name, system, user, key):
             "latency_ms": ms, "provider": "anthropic-direct", "truncated": d.get("stop_reason") == "max_tokens"}
 
 
+def _choice_text(d):
+    """Pull the assistant text out of an OpenAI-shaped response, tolerating the case OpenRouter
+    (and occasionally OpenAI) hands back a 200 whose body carries an in-band {"error":..} instead
+    of choices — a pinned upstream provider hiccup. Returns (text, error_message)."""
+    ch = d.get("choices")
+    if not ch:
+        e = d.get("error")
+        msg = (e.get("message") if isinstance(e, dict) else e) or "response had no 'choices'"
+        return None, f"provider error: {msg}"
+    return ((ch[0] or {}).get("message") or {}).get("content") or "", None
+
+
 def _call_openai(model_name, system, user, key):
     status, d, ms, err = _post(
         "https://api.openai.com/v1/chat/completions",
@@ -143,7 +163,9 @@ def _call_openai(model_name, system, user, key):
          "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
     if err or not d:
         return {"error": err or f"HTTP {status}", "latency_ms": ms}
-    txt = d["choices"][0]["message"].get("content") or ""
+    txt, perr = _choice_text(d)
+    if perr:
+        return {"error": perr, "latency_ms": ms, "provider": "openai-direct"}
     u = d.get("usage") or {}
     it, ot = u.get("prompt_tokens", 0), u.get("completion_tokens", 0)
     return {"text": txt, "input_tokens": it, "output_tokens": ot,
@@ -161,7 +183,9 @@ def _call_openrouter(model_ref, system, user, key):
          "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]})
     if err or not d:
         return {"error": err or f"HTTP {status}", "latency_ms": ms}
-    txt = d["choices"][0]["message"].get("content") or ""
+    txt, perr = _choice_text(d)
+    if perr:
+        return {"error": perr, "latency_ms": ms, "provider": d.get("provider") or "openrouter"}
     u = d.get("usage") or {}
     return {"text": txt, "input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0),
             "cost_usd": u.get("cost"), "latency_ms": ms, "provider": d.get("provider") or "openrouter"}
@@ -296,14 +320,18 @@ def run_one_model(config, inp, model, spec, cid=None) -> dict:
     failed model becomes an error row so it can't abort a batch/stream (that was the bug that
     killed a whole run when one model choked)."""
     raw = {}
-    for attempt in range(3):                          # retry a flaky EMPTY response
+    for attempt in range(3):                          # retry a flaky EMPTY or transient-error response
         try:
             raw = call_model(model, inp["system"], inp["user"], config)
         except Exception as e:  # noqa: BLE001
             raw = {"model": model, "error": f"{type(e).__name__}: {e}"}
         # reasoning models (e.g. gemini-2.5-pro) intermittently return only reasoning with an
-        # empty content field — no error, no text. That's transient: retry, it usually lands.
-        if raw.get("error") or (raw.get("text") or "").strip():
+        # empty content field — no error, no text. And a pinned OpenRouter upstream (e.g. deepseek)
+        # occasionally 200s with an in-band {"error":..} instead of choices. Both are transient →
+        # retry. Auth/quota/moderation errors are permanent → stop immediately.
+        if (raw.get("text") or "").strip():
+            break
+        if raw.get("error") and not _is_transient_err(raw["error"]):
             break
         if attempt < 2:
             time.sleep(2)
