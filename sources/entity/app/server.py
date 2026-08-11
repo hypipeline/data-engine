@@ -931,6 +931,21 @@ function renderReport(rep, meta, url){
       s += line+'</div>';
     });
     body += s+'</div>'; }
+  // Tool usage — always-visible, grouped breakdown (the header pill only shows the total on hover).
+  if(usage0){
+    var kvg=function(o){ o=o||{}; var ks=Object.keys(o); return ks.length?ks.map(function(k){return svcLabel(k)+' '+o[k];}).join(' · '):null; };
+    var us='<div class="report-section"><h3>Tool usage — '+usage0.total+' call'+(usage0.total===1?'':'s')+'</h3>';
+    var srcs=kvg(usage0.sources), trans=kvg(usage0.transport), llms=kvg(usage0.llm), cch=kvg(usage0.cached);
+    if(srcs)  us += row('Sources', esc(srcs));
+    if(trans) us += row('Transport', esc(trans));
+    if(llms)  us += row('LLM', esc(llms));
+    if(cch)   us += row('Cached', esc(cch));
+    body += us+'</div>';
+  } else if(Object.keys(ac0).some(function(k){return ac0[k]>0;})){
+    var flat=Object.keys(ac0).filter(function(k){return ac0[k]>0;}).map(function(k){return svcLabel(k)+' '+ac0[k];}).join(' · ');
+    var tot=Object.keys(ac0).reduce(function(a,k){return a+(ac0[k]>0?ac0[k]:0);},0);
+    body += '<div class="report-section"><h3>Tool usage — '+tot+' call'+(tot===1?'':'s')+'</h3>'+row('Calls', esc(flat))+'</div>';
+  }
   // Timing / cost / api-calls footer
   var pt = meta.phase_times||{};
   var timing = 'Completed in '+r1(meta.total_time_s)+'s (fetch: '+r1(pt.fetch)+'s, extract: '+r1(pt.extraction)
