@@ -228,7 +228,7 @@ class NewZealandMixin:
         # Deep ownership (directors + shareholders + allocations) for a confident, exact-name match —
         # one Browserbase render of the single-page view, at most once per lookup run.
         ownership = ""
-        if (top and top[0][0] == 100
+        if (top and top[0][0] >= 80          # exact or strong (substring) name match
                 and not getattr(self, "_nz_ownership_done", False)
                 and self.config.get('browserbase_api_key') and self.config.get('browserbase_project_id')):
             self._nz_ownership_done = True

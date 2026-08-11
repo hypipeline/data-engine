@@ -126,7 +126,7 @@ def build_evidence(config, url=None, names=None, jurisdiction=None, include_goog
 # ══════════════════════════════════════════════════════════════════════════
 # Bump when the built-content output shape changes, so cached cases auto-invalidate on deploy
 # (no manual per-case refresh needed).
-_CONTENT_SCHEMA = 2
+_CONTENT_SCHEMA = 3
 
 def _content_key(case) -> str:
     return json.dumps([_CONTENT_SCHEMA, case.get('url'), case.get('names'), case.get('jurisdiction'),
@@ -521,7 +521,9 @@ _SEED = [
     {"name": "pioneercapital.co.nz → Pioneer Capital Management Ltd (NZ Companies Office + shareholdings)",
      "url": "https://pioneercapital.co.nz/",
      "expect": ["PIONEER CAPITAL MANAGEMENT LIMITED", "1585146"],
-     "expect_in_source": {"nzco": ["1585146", "9429035043362", "Directors", "Shareholdings"]},
+     # nzco source must carry the registry ids AND a real owner surfaced by the Browserbase
+     # shareholdings fetch (PIONEER CAPITAL INVESTMENTS LIMITED is a 25% corporate shareholder).
+     "expect_in_source": {"nzco": ["1585146", "9429035043362", "PIONEER CAPITAL INVESTMENTS LIMITED"]},
      "expect_calls": {"nzco": 1, "browserbase": 1}},
     # US LLC via URL → exercises Bizapedia + Delaware. silfern.com is the brand; the legal entity is
     # SREP Capital Management, LLC — a Delaware LLC (domestic file 4334492) with a New York foreign
