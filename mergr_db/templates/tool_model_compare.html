@@ -67,8 +67,8 @@ run <b>direct</b>; the rest via OpenRouter.</p>
 </div>
 <div class="mc-opts">
   <span>On run:
-    <label><input type="radio" name="rerun-mode" value="failed" checked> retry <b>failed + missing</b> (keep passes)</label>
-    <label><input type="radio" name="rerun-mode" value="missing"> run only <b>missing</b> (never-run cells)</label>
+    <label><input type="radio" name="rerun-mode" value="missing" checked> run only <b>missing</b> (never-run cells)</label>
+    <label><input type="radio" name="rerun-mode" value="failed"> retry <b>failed + missing</b> (keep passes)</label>
     <label><input type="radio" name="rerun-mode" value="all"> re-run <b>all</b> models</label>
   </span>
   <label><input type="checkbox" id="refresh-input"> also rebuild Phase-1 input (re-fetch/extract/search)</label>
@@ -120,8 +120,17 @@ function getJSON(url, opts){
   return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
 }
 function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
-function rerunScope(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value || 'failed'; }
+function rerunScope(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value || 'missing'; }
 function refreshAllModels(){ return rerunScope()==='all'; }
+// does this (case,model) cell actually need to run under the chosen scope? (mirrors the server)
+function cellNeedsRun(cs, model, scope){
+  var r=(cs.results||{})[model];
+  if(scope==='all') return true;
+  if(!r) return true;                 // never run → always
+  if(scope==='missing') return false; // any stored result (pass/fail/error) → skip
+  return !!r.error;                   // 'failed': re-run only errored cells
+}
+function caseNeedsWork(cs, models, scope){ return models.some(function(m){ return cellNeedsRun(cs, m, scope); }); }
 function money2(c){ return c==null?'':'$'+Number(c).toFixed(2); }              // to the nearest cent
 function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }  // cost at 1,000 lookups
 function short(m){ return m.split('/').pop(); }
@@ -173,30 +182,39 @@ function updateMatrixCell(cid, result){
 }
 
 // ── run all cases (sequential; each case streams its models) ────────────────────
+var RUNALL_CONC=4;   // cases pipelined at once (each case already runs its models 10-way parallel)
 function runAll(){
   var models=modelsList(); if(!models.length){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">Add at least one model.</span>'; return; }
-  var ids=(MATRIX.cases||[]).map(function(c){return c.id;});
-  if(!ids.length){ q('runall-log').textContent='No cases.'; return; }
+  var scope=rerunScope();
+  var allIds=(MATRIX.cases||[]).map(function(c){return c.id;});
+  if(!allIds.length){ q('runall-log').textContent='No cases.'; return; }
+  // skip cases with nothing to do under this scope (huge win for the default "missing" over a full matrix)
+  var ids=allIds.filter(function(cid){ var cs=caseById(cid); return cs && caseNeedsWork(cs, models, scope); });
+  var skipped=allIds.length-ids.length;
   var btn=q('runall-btn'); btn.disabled=true;
-  var ri=q('refresh-input').checked?'true':'false', rm=refreshAllModels()?'true':'false';
-  var idx=0;
-  function nextCase(){
-    if(idx>=ids.length){ btn.disabled=false; q('runall-log').textContent='✓ all '+ids.length+' cases done'; return; }
-    var cid=ids[idx], cs=caseById(cid), cname=cs?cs.name:cid, doneFlag=false;
-    var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm+'&scope='+rerunScope());
-    function nextOne(){ if(doneFlag) return; doneFlag=true; try{es.close();}catch(_){} idx++; nextCase(); }
-    es.addEventListener('phase', function(e){ q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+JSON.parse(e.data).message; });
+  if(!ids.length){ btn.disabled=false;
+    q('runall-log').textContent='✓ nothing to run — all '+allIds.length+' cases already have results for this scope'; return; }
+  var ri=q('refresh-input').checked?'true':'false', rm=(scope==='all')?'true':'false';
+  var next=0, done=0, active=0, total=ids.length;
+  function tick(extra){ q('runall-log').textContent='['+done+'/'+total+' done · '+active+' running'+(skipped?(' · '+skipped+' skipped'):'')+'] '+(extra||''); }
+  function finishAll(){ btn.disabled=false;
+    q('runall-log').textContent='✓ '+total+' case(s) done'+(skipped?(' · '+skipped+' skipped (nothing to run)'):''); }
+  function pump(){ while(active<RUNALL_CONC && next<ids.length){ runOne(ids[next++]); active++; } }
+  function oneDone(){ active--; done++; if(done>=total){ finishAll(); return; } pump(); }
+  function runOne(cid){
+    var cs=caseById(cid), cname=cs?cs.name:cid, closed=false;
+    var es=new EventSource(EB+'/api/modelcompare/run-stream?case_id='+cid+'&models='+encodeURIComponent(models.join(','))+'&refresh_input='+ri+'&refresh_models='+rm+'&scope='+scope);
+    function fin(){ if(closed) return; closed=true; try{es.close();}catch(_){} oneDone(); }
+    es.addEventListener('phase', function(e){ tick(cname+' — '+JSON.parse(e.data).message); });
     es.addEventListener('input_ready', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.meta; renderMatrix(); } });
-    es.addEventListener('blocked', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.input_meta; renderMatrix(); }
-      q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — ⛔ coverage failing, skipped'; nextOne(); });
-    es.addEventListener('model_start', function(e){ var d=JSON.parse(e.data); q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+short(d.model)+' ('+(d.i+1)+'/'+d.n+')…'; });
-    es.addEventListener('model_done', function(e){ var d=JSON.parse(e.data); updateMatrixCell(cid, d.result);
-      q('runall-log').textContent='('+(idx+1)+'/'+ids.length+') '+cname+' — '+d.done+'/'+d.total+' models done'; });
-    es.addEventListener('done', nextOne);
-    es.addEventListener('failed', nextOne);
-    es.onerror=function(){ nextOne(); };
+    es.addEventListener('blocked', function(e){ var d=JSON.parse(e.data); if(cs){ cs.input_meta=d.input_meta; renderMatrix(); } fin(); });
+    es.addEventListener('model_done', function(e){ updateMatrixCell(cid, JSON.parse(e.data).result); tick(cname); });
+    es.addEventListener('done', fin);
+    es.addEventListener('failed', fin);
+    es.onerror=function(){ fin(); };
   }
-  nextCase();
+  tick('starting '+total+' case(s), '+RUNALL_CONC+' at a time…');
+  pump();
 }
 
 // ── single-case detail ──────────────────────────────────────────────────────────
