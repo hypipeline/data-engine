@@ -36,6 +36,8 @@ origryxd-*/
 # --- entity-lookup source (self-contained app) ---
 # keep its test fixtures despite the global *.html rule (they're the porting oracle)
 !sources/entity/tests/fixtures/*.html
+# keep the compact SVG-only fixtures the NorthData harness ships in the runtime image
+!sources/entity/app/network_fixtures/*.html
 # but never track its runtime artifacts
 sources/entity/php/cache/
 sources/entity/php/build.json

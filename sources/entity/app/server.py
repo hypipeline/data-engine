@@ -25,6 +25,7 @@ import cache
 import linkedin_cache
 import coverage
 import model_compare
+import northdata_cases
 
 # Countries validated via NorthData (faithful to validate.php).
 NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
@@ -247,6 +248,25 @@ async def api_coverage_update(cid: int, request: Request):
 def api_coverage_delete(cid: int):
     coverage.delete_case(cid)
     return JSONResponse({"ok": True})
+
+
+# ── NorthData ownership-network test harness (deterministic, fixture-based) ──────
+@app.get("/api/northdata/cases")
+def api_northdata_cases():
+    return JSONResponse({"cases": northdata_cases.list_cases()})
+
+
+@app.get("/api/northdata/run")
+def api_northdata_run(slug: str = ""):
+    """Parse one saved NorthData fixture with both extractors and grade vs known truth."""
+    if not slug:
+        return JSONResponse({"error": "slug is required"}, status_code=400)
+    try:
+        return JSONResponse(northdata_cases.run_case(CONFIG, slug))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
 
 
 @app.post("/api/coverage/run")

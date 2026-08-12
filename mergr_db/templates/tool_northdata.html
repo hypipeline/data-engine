@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}NorthData Network Tests — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .nd-intro { color:#555; font-size:13.5px; line-height:1.6; max-width:900px; margin:2px 0 16px; }
+  .nd-intro code { background:#f1f3f6; padding:1px 5px; border-radius:4px; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:12px; font-weight:700; }
+  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
+  .pill.running { background:#e0edff; color:#1e40af; } .pill.idle { background:#f1f3f6; color:#9aa3af; }
+  .pill.error { background:#e5e7eb; color:#374151; }
+  .pill.topco { background:#ede9fe; color:#5b21b6; } .pill.parent { background:#fef3c7; color:#92400e; }
+  .nd-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:12px; max-width:1000px; }
+  .nd-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .nd-name { font-weight:700; font-size:15px; }
+  .nd-meta { color:#888; font-size:12px; }
+  .nd-note { color:#666; font-size:12.5px; margin:6px 0 0; }
+  .nd-checks { margin:10px 0 0; display:flex; flex-direction:column; gap:5px; }
+  .nd-check { font-size:13px; }
+  .nd-check .lab { color:#333; } .nd-check .dt { color:#999; font-size:12px; margin-left:6px; }
+  .nd-btn { padding:5px 14px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:7px; font-size:13px; cursor:pointer; }
+  .nd-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .grow { flex:1; }
+  .nd-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+  .nd-col h4 { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#888; margin:0 0 4px; }
+  pre.nd-mono { background:#0f172a; color:#e2e8f0; font-family:'SF Mono','Fira Code',monospace; font-size:11.5px;
+                line-height:1.55; padding:10px 12px; border-radius:8px; overflow:auto; max-height:420px; white-space:pre; margin:0; }
+  .nd-disagree { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; font-size:12.5px; padding:6px 10px; border-radius:7px; margin-top:8px; }
+  @media(max-width:820px){ .nd-cols{ grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+{% block body %}
+<h2 style="margin:6px 0 2px">🕸️ NorthData network tests</h2>
+<p class="nd-intro">
+  Each case runs a <b>saved</b> NorthData entity page (a fixture — zero network I/O, so it's deterministic)
+  through <b>both</b> ownership extractors and grades them against the entity's <b>known</b> corporate
+  structure: the flat parser <code>_parse_network_svg()</code> (what production actually feeds the LLM) and
+  the direction-aware resolver <code>northdata_structure.resolve()</code>. Where the two disagree — or where a
+  known parent isn't surfaced — is the signal to watch (the same class of gap behind the Quest Global
+  "ultimate parent never reached the LLM" finding).
+</p>
+<div class="nd-row" style="margin-bottom:14px">
+  <button class="nd-btn primary" id="runall" onclick="runAll()">▶ Run all cases</button>
+  <span id="summary" class="nd-meta"></span>
+</div>
+<div id="cases"></div>
+
+<script>
+var EB='/entity-app';
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+function getJSON(url,opts){ return fetch(url,opts).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); }); }
+
+var CASES=[];
+function expectPill(exp){
+  return exp.ultimate_parent
+    ? '<span class="pill parent">expects parent: '+esc(exp.ultimate_parent)+'</span>'
+    : '<span class="pill topco">expects TopCo (no parent)</span>';
+}
+
+function render(){
+  var h='';
+  CASES.forEach(function(c){
+    h+='<div class="nd-card" id="card-'+c.slug+'">'
+     + '<div class="nd-row"><span class="nd-name">'+esc(c.name)+'</span>'
+     +   expectPill(c.expect)
+     +   (c.fixture_exists?'':'<span class="pill error">fixture missing</span>')
+     +   '<span class="grow"></span>'
+     +   '<span class="pill idle" id="badge-'+c.slug+'">not run</span>'
+     +   '<button class="nd-btn" onclick="runCase(\''+c.slug+'\')">Run</button></div>'
+     + '<div class="nd-meta">'+esc(c.fixture)+' · <a href="'+esc(c.url)+'" target="_blank">source page ↗</a></div>'
+     + '<div class="nd-note">'+esc(c.note)+'</div>'
+     + '<div id="body-'+c.slug+'"></div>'
+     + '</div>';
+  });
+  document.getElementById('cases').innerHTML=h;
+}
+
+function badge(slug,cls,txt){ var b=document.getElementById('badge-'+slug); if(b){ b.className='pill '+cls; b.textContent=txt; } }
+
+function renderResult(slug,r){
+  if(r.error){ badge(slug,'error','error'); document.getElementById('body-'+slug).innerHTML='<div class="nd-disagree">'+esc(r.error)+'</div>'; return r; }
+  badge(slug, r.ok?'pass':'fail', r.ok?'PASS':'FAIL');
+  var checks=r.checks.map(function(ch){
+    var dt='';
+    if(ch.detail){
+      if('in_resolver' in ch.detail) dt=' <span class="dt">resolver:'+(ch.detail.in_resolver?'✓':'✗')+' · flat parser:'+(ch.detail.in_flat_owned_by?'✓':'✗')+'</span>';
+      else if('is_top_itself' in ch.detail) dt=' <span class="dt">resolver up='+esc(ch.detail.resolver_ultimate_parent)+'</span>';
+    }
+    return '<div class="nd-check">'+(ch.ok?'✅':'❌')+' <span class="lab">'+esc(ch.label)+'</span>'+dt+'</div>';
+  }).join('');
+  var rs=r.resolver_summary||{};
+  var resVerdict = rs.is_top_itself ? '<span class="pill topco">TopCo</span>'
+                 : (rs.ultimate_parent ? '<span class="pill parent">'+esc(rs.ultimate_parent)+'</span>' : '<span class="pill error">none</span>');
+  // surface the flat-vs-resolver disagreement explicitly
+  var disagree='';
+  var pc=r.checks.filter(function(c){return c.detail && ('in_resolver' in c.detail);})[0];
+  if(pc && pc.detail.in_flat_owned_by && !pc.detail.in_resolver)
+    disagree='<div class="nd-disagree">⚠ Flat parser surfaces the parent, but the resolver returns TopCo — resolver misses this parent.</div>';
+  var html='<div class="nd-checks">'+checks+'</div>'
+    + '<div class="nd-row" style="margin-top:8px"><span class="nd-meta">Resolver verdict:</span> '+resVerdict
+    + (rs.former_parents&&rs.former_parents.length?' <span class="nd-meta">former: '+esc(rs.former_parents.join(', '))+'</span>':'')+'</div>'
+    + disagree
+    + '<div class="nd-cols">'
+    +   '<div class="nd-col"><h4>Flat parser — fed to the LLM</h4><pre class="nd-mono">'+esc(r.flat)+'</pre></div>'
+    +   '<div class="nd-col"><h4>Resolver (direction-aware) JSON</h4><pre class="nd-mono">'+esc(JSON.stringify(r.resolved,null,2))+'</pre></div>'
+    + '</div>';
+  document.getElementById('body-'+slug).innerHTML=html;
+  return r;
+}
+
+function runCase(slug){
+  badge(slug,'running','running…');
+  return getJSON(EB+'/api/northdata/run?slug='+encodeURIComponent(slug))
+    .then(function(r){ return renderResult(slug,r); })
+    .catch(function(e){ badge(slug,'error','error'); document.getElementById('body-'+slug).innerHTML='<div class="nd-disagree">'+esc(e.message)+'</div>'; return {ok:false,error:e.message}; });
+}
+
+function runAll(){
+  var btn=document.getElementById('runall'); btn.disabled=true;
+  document.getElementById('summary').textContent='running…';
+  var pass=0,fail=0,err=0,done=0;
+  Promise.all(CASES.map(function(c){
+    return runCase(c.slug).then(function(r){ if(r.error) err++; else if(r.ok) pass++; else fail++; done++; });
+  })).then(function(){
+    btn.disabled=false;
+    document.getElementById('summary').innerHTML='<span class="pill pass">'+pass+' pass</span> <span class="pill fail">'+fail+' fail</span>'+(err?' <span class="pill error">'+err+' error</span>':'');
+  });
+}
+
+getJSON(EB+'/api/northdata/cases').then(function(d){ CASES=d.cases||[]; render(); })
+  .catch(function(e){ document.getElementById('cases').innerHTML='<div class="nd-disagree">Could not load cases: '+esc(e.message)+'</div>'; });
+</script>
+{% endblock %}

@@ -502,6 +502,11 @@ def tool_model_compare(request: Request):
     return render(request, "tool_model_compare.html", "entity")
 
 
+@app.get("/entity/tools/northdata", response_class=HTMLResponse)
+def tool_northdata(request: Request):
+    return render(request, "tool_northdata.html", "entity")
+
+
 _LKP_GROUP = "COALESCE(NULLIF(domain,''), url)"       # canonical dedup key (blank domain -> url)
 
 
