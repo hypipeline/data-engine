@@ -44,6 +44,19 @@
 </div>
 <div id="cases"></div>
 
+<h2 style="margin:30px 0 2px">🔎 Search → graph target <span style="font-size:13px;color:#888;font-weight:400">(live)</span></h2>
+<p class="nd-intro">
+  Input here is a <b>stage-1 LLM name list</b> — exactly what the pipeline feeds NorthData. This runs the live
+  <b>search → resolve → pick</b> path (not the parser) and checks we'd graph the <b>right</b> entity and reject the
+  fuzzy traps (e.g. <code>adidas America, Inc.</code> → Airbus / Asahi / Geodis America). Live, so NorthData's
+  results drift between runs — the match‑guard should hold regardless.
+</p>
+<div class="nd-row" style="margin-bottom:12px">
+  <button class="nd-btn primary" id="runres" onclick="runAllRes()">▶ Run all (live)</button>
+  <span id="ressum" class="nd-meta"></span>
+</div>
+<div id="rescases"></div>
+
 <script>
 var EB='/entity-app';
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
@@ -126,7 +139,60 @@ function runAll(){
   });
 }
 
+// ── Resolution (live search → target) cases ──────────────────────────────────
+var RESCASES=[];
+function renderRes(){
+  var h='';
+  RESCASES.forEach(function(c){
+    var rej=(c.expect.reject||[]).map(function(r){return '<span class="pill error">reject: '+esc(r)+'</span>';}).join(' ');
+    h+='<div class="nd-card" id="rcard-'+c.slug+'">'
+     + '<div class="nd-row"><span class="nd-name">'+esc(c.name)+'</span>'
+     +   '<span class="pill parent">target: '+esc(c.expect.target)+'</span>'+rej
+     +   '<span class="grow"></span>'
+     +   '<span class="pill idle" id="rbadge-'+c.slug+'">not run</span>'
+     +   '<button class="nd-btn" onclick="runResCase(\''+c.slug+'\')">Run (live)</button></div>'
+     + '<div class="nd-meta">searches: '+c.names.map(function(n){return '<code>'+esc(n)+'</code>';}).join(' · ')+'</div>'
+     + '<div class="nd-note">'+esc(c.note)+'</div>'
+     + '<div id="rbody-'+c.slug+'"></div>'
+     + '</div>';
+  });
+  document.getElementById('rescases').innerHTML=h;
+}
+function rbadge(slug,cls,txt){ var b=document.getElementById('rbadge-'+slug); if(b){ b.className='pill '+cls; b.textContent=txt; } }
+function renderResResult(slug,r){
+  if(r.error){ rbadge(slug,'error','error'); document.getElementById('rbody-'+slug).innerHTML='<div class="nd-disagree">'+esc(r.error)+'</div>'; return r; }
+  rbadge(slug, r.ok?'pass':'fail', r.ok?'PASS':'FAIL');
+  var rows=(r.resolutions||[]).map(function(x){
+    var win=(r.winner&&r.winner.url===x.url&&x.matched);
+    var mtag=x.matched?'<span class="pill pass">matched</span>':'<span class="pill error">no-match</span>';
+    var cp=x.company_page?' <span class="pill topco">company page</span>':'';
+    return '<div class="nd-check">'+(win?'🎯 ':'&nbsp;&nbsp;')+'<code>'+esc(x.search_name)+'</code> → '+esc(x.result_name||'—')+' '+mtag+cp+(win?' <b>← graph target</b>':'')+'</div>';
+  }).join('');
+  var checks=(r.checks||[]).map(function(ch){
+    var dt=ch.detail?' <span class="dt">'+esc(JSON.stringify(ch.detail))+'</span>':'';
+    return '<div class="nd-check">'+(ch.ok?'✅':'❌')+' <span class="lab">'+esc(ch.label)+'</span>'+dt+'</div>';
+  }).join('');
+  document.getElementById('rbody-'+slug).innerHTML=
+      '<div class="nd-checks" style="margin-top:10px">'+rows+'</div>'
+    + '<div class="nd-checks" style="margin-top:8px;border-top:1px solid #eee;padding-top:8px">'+checks+'</div>';
+  return r;
+}
+function runResCase(slug){
+  rbadge(slug,'running','running… (live)');
+  return getJSON(EB+'/api/northdata/resolve?slug='+encodeURIComponent(slug))
+    .then(function(r){ return renderResResult(slug,r); })
+    .catch(function(e){ rbadge(slug,'error','error'); document.getElementById('rbody-'+slug).innerHTML='<div class="nd-disagree">'+esc(e.message)+'</div>'; return {ok:false,error:e.message}; });
+}
+function runAllRes(){
+  var btn=document.getElementById('runres'); btn.disabled=true; document.getElementById('ressum').textContent='running…';
+  var pass=0,fail=0,err=0;
+  Promise.all(RESCASES.map(function(c){ return runResCase(c.slug).then(function(r){ if(r.error) err++; else if(r.ok) pass++; else fail++; }); }))
+    .then(function(){ btn.disabled=false; document.getElementById('ressum').innerHTML='<span class="pill pass">'+pass+' pass</span> <span class="pill fail">'+fail+' fail</span>'+(err?' <span class="pill error">'+err+' error</span>':''); });
+}
+
 getJSON(EB+'/api/northdata/cases').then(function(d){ CASES=d.cases||[]; render(); })
   .catch(function(e){ document.getElementById('cases').innerHTML='<div class="nd-disagree">Could not load cases: '+esc(e.message)+'</div>'; });
+getJSON(EB+'/api/northdata/resolution-cases').then(function(d){ RESCASES=d.cases||[]; renderRes(); })
+  .catch(function(e){ document.getElementById('rescases').innerHTML='<div class="nd-disagree">Could not load resolution cases: '+esc(e.message)+'</div>'; });
 </script>
 {% endblock %}

@@ -45,6 +45,86 @@ CASES = [
 ]
 
 
+import re
+
+# ── Resolution cases: input is a stage-1 LLM NAME LIST (what the pipeline actually searches) ──
+# These exercise the search → resolve → pick-one-target path (where the adidas→Airbus bug lived),
+# NOT the parser. They run LIVE NorthData searches, so results can drift; the grade is on which
+# entity we'd fetch the graph for, and that the fuzzy traps are rejected by the match-guard.
+RESOLUTION_CASES = [
+    {"slug": "adidas_names",
+     "name": "adidas.com — stage-1 name list",
+     "names": ["adidas AG", "adidas America, Inc.", "adidas"],
+     "primary": "adidas AG",
+     "expect": {"target": "adidas AG", "reject": ["adidas America"]},
+     "note": "The LLM proposed 'adidas America, Inc.', which NorthData fuzzy-matches to Airbus/Asahi "
+             "America Inc. — the guard must reject it so we graph adidas AG, not the wrong company."},
+]
+
+
+def _norm(s):
+    return re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+
+def _select_target(targets, primary):
+    """Mirror of the phases_registry B selection: best name-matched entity wins; none → None."""
+    matched = [t for t in targets if t.get('matched') and t.get('url')]
+    if not matched:
+        return None
+    p = _norm(primary)
+
+    def score(t):
+        s = 100 if t.get('company_page') else 0
+        b = _norm(t.get('result_name') or t.get('search_name'))
+        if p and b and (p == b or p.startswith(b) or b.startswith(p)):
+            s += 50
+        elif p and b and (p in b or b in p):
+            s += 20
+        return s
+    return max(matched, key=score)
+
+
+def list_resolution_cases() -> list:
+    return [{"slug": c["slug"], "name": c["name"], "names": c["names"],
+             "primary": c["primary"], "expect": c["expect"], "note": c["note"]}
+            for c in RESOLUTION_CASES]
+
+
+def run_resolution_case(config: dict, slug: str) -> dict:
+    """Run the LIVE search → resolve → pick path for a name list and grade the chosen graph target."""
+    from tools import LookupTools
+    case = next((c for c in RESOLUTION_CASES if c["slug"] == slug), None)
+    if not case:
+        return {"error": f"unknown resolution case '{slug}'"}
+    tools = LookupTools(config)
+    resolutions = []
+    for nm in case["names"]:
+        try:
+            tools.search_northdata(nm)                      # LIVE
+            r = dict(getattr(tools, "_nd_last_resolution", None) or {})
+        except Exception as e:  # noqa: BLE001
+            r = {"error": f"{type(e).__name__}: {e}"}
+        r["search_name"] = nm
+        resolutions.append(r)
+    targets = [r for r in resolutions if r.get("url")]
+    winner = _select_target(targets, case.get("primary") or case["names"][0])
+    win_name = (winner or {}).get("result_name") or (winner or {}).get("search_name")
+
+    exp = case["expect"]
+    checks = []
+    checks.append({"label": f"graph target is {exp['target']}",
+                   "ok": bool(winner) and exp["target"].lower() in (win_name or "").lower(),
+                   "detail": {"picked": win_name, "url": (winner or {}).get("url")}})
+    for rj in exp.get("reject", []):
+        r = next((x for x in resolutions if rj.lower() in (x.get("search_name") or "").lower()), None)
+        checks.append({"label": f"fuzzy search '{rj}' rejected by guard",
+                       "ok": bool(r) and not r.get("matched"),
+                       "detail": {"resolved_to": (r or {}).get("result_name"), "matched": (r or {}).get("matched")}})
+    overall = all(c["ok"] for c in checks)
+    return {"slug": slug, "case": case, "ok": overall, "checks": checks,
+            "resolutions": resolutions, "winner": winner, "win_name": win_name}
+
+
 def _owned_by_block(flat: str) -> str:
     if "OWNED BY" not in flat:
         return ""

@@ -269,6 +269,24 @@ def api_northdata_run(slug: str = ""):
                              "trace": traceback.format_exc()[-1200:]}, status_code=500)
 
 
+@app.get("/api/northdata/resolution-cases")
+def api_northdata_resolution_cases():
+    return JSONResponse({"cases": northdata_cases.list_resolution_cases()})
+
+
+@app.get("/api/northdata/resolve")
+def api_northdata_resolve(slug: str = ""):
+    """Run the LIVE search→resolve→pick path for a stage-1 name list and grade the chosen target."""
+    if not slug:
+        return JSONResponse({"error": "slug is required"}, status_code=400)
+    try:
+        return JSONResponse(northdata_cases.run_resolution_case(CONFIG, slug))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
+
+
 @app.post("/api/coverage/run")
 async def api_coverage_run(request: Request):
     """Run one case (body {id}) or all. Runs the pipeline up to search_registries only —
