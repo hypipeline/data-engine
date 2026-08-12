@@ -53,6 +53,10 @@ def _startup():
         model_compare.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[model_compare] schema init skipped: {e}")
+    try:
+        northdata_cases.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[northdata] schema init skipped: {e}")
 
 
 def _domain(url: str) -> str:
@@ -250,37 +254,43 @@ def api_coverage_delete(cid: int):
     return JSONResponse({"ok": True})
 
 
-# ── NorthData ownership-network test harness (deterministic, fixture-based) ──────
-@app.get("/api/northdata/cases")
-def api_northdata_cases():
-    return JSONResponse({"cases": northdata_cases.list_cases()})
-
-
-@app.get("/api/northdata/run")
-def api_northdata_run(slug: str = ""):
-    """Parse one saved NorthData fixture with both extractors and grade vs known truth."""
-    if not slug:
-        return JSONResponse({"error": "slug is required"}, status_code=400)
-    try:
-        return JSONResponse(northdata_cases.run_case(CONFIG, slug))
-    except Exception as e:  # noqa: BLE001
-        import traceback
-        return JSONResponse({"error": f"{type(e).__name__}: {e}",
-                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
-
-
+# ── NorthData INTEGRATION tests (editable; LIVE search→resolve→pick). Parser/resolver unit
+#    tests live in pytest (tests/test_northdata_cases.py), not here. ──────────────
 @app.get("/api/northdata/resolution-cases")
 def api_northdata_resolution_cases():
     return JSONResponse({"cases": northdata_cases.list_resolution_cases()})
 
 
+@app.post("/api/northdata/resolution-cases")
+async def api_northdata_resolution_add(request: Request):
+    body = await request.json()
+    if not (body.get("names") or []):
+        return JSONResponse({"error": "provide names[] (the stage-1 name list)"}, status_code=400)
+    return JSONResponse({"id": northdata_cases.add_resolution_case(body)})
+
+
+@app.put("/api/northdata/resolution-cases/{cid}")
+async def api_northdata_resolution_update(cid: int, request: Request):
+    body = await request.json()
+    if not (body.get("names") or []):
+        return JSONResponse({"error": "provide names[] (the stage-1 name list)"}, status_code=400)
+    northdata_cases.update_resolution_case(cid, body)
+    return JSONResponse({"ok": True, "id": cid})
+
+
+@app.delete("/api/northdata/resolution-cases/{cid}")
+def api_northdata_resolution_delete(cid: int):
+    northdata_cases.delete_resolution_case(cid)
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/northdata/resolve")
-def api_northdata_resolve(slug: str = ""):
-    """Run the LIVE search→resolve→pick path for a stage-1 name list and grade the chosen target."""
-    if not slug:
-        return JSONResponse({"error": "slug is required"}, status_code=400)
+def api_northdata_resolve(id: int = 0):
+    """Run the LIVE search→resolve→pick path for a stored name list and grade the chosen target."""
+    if not id:
+        return JSONResponse({"error": "id is required"}, status_code=400)
     try:
-        return JSONResponse(northdata_cases.run_resolution_case(CONFIG, slug))
+        return JSONResponse(northdata_cases.run_resolution_case(CONFIG, id))
     except Exception as e:  # noqa: BLE001
         import traceback
         return JSONResponse({"error": f"{type(e).__name__}: {e}",
