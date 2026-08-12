@@ -130,9 +130,26 @@ class NorthDataMixin:
         return result
 
     # ── search_northdata ─────────────────────────────────────────────────────
+    @staticmethod
+    def _nd_name_match(search: str, found: str) -> bool:
+        """Does a NorthData result name actually correspond to the name we searched? Normalised
+        (alphanumerics, lowercased) prefix/containment match — used to guard the ownership-network
+        fetch so a fuzzy search ('adidas America, Inc.' → 'Airbus America Inc.') can't drag in the
+        wrong company's graph."""
+        a = re.sub(r'[^a-z0-9]', '', (search or '').lower())
+        b = re.sub(r'[^a-z0-9]', '', (found or '').lower())
+        if not a or not b:
+            return False
+        return a == b or a.startswith(b) or b.startswith(a) \
+            or (len(a) >= 6 and a in b) or (len(b) >= 6 and b in a)
+
     def search_northdata(self, entity_name: str) -> str:
         # Clean parenthetical content
         clean = re.sub(r'\([^)]*\)', '', entity_name).strip()
+        # A) record where this search resolved, so the network step can target the right entity
+        #    (and skip fetching a graph at all when nothing name-matches). Default: no target.
+        self._nd_last_resolution = {'name': entity_name, 'url': None, 'result_name': None,
+                                    'matched': False, 'company_page': False}
 
         # Strategy 1: Direct URL — NorthData resolves company names to their pages
         direct_url = "https://www.northdata.com/" + urllib.parse.quote_plus(clean)
@@ -152,6 +169,10 @@ class NorthDataMixin:
             if is_company_page:
                 page_text = self._parse_northdata_html(direct_html)
                 result = page_text
+                # strong single match: the canonical page URL IS the network target (its name was
+                # already validated against the title above).
+                self._nd_last_resolution = {'name': entity_name, 'url': direct_url,
+                                            'result_name': clean, 'matched': True, 'company_page': True}
                 self._nd_log({'tool': 'search_northdata', 'input': entity_name,
                               'output': result[:500]})
                 return result
@@ -187,6 +208,12 @@ class NorthDataMixin:
         if page_text:
             result += "\n\n{}".format(page_text)
 
+        # list result: the network target is the top hit — but only flag it matched if its name
+        # actually corresponds to what we searched (guards against fuzzy first-result contamination).
+        self._nd_last_resolution = {'name': entity_name, 'url': best_url,
+                                    'result_name': parsed[0].get('name'),
+                                    'matched': self._nd_name_match(clean, parsed[0].get('name')),
+                                    'company_page': False}
         self._nd_log({'tool': 'search_northdata', 'input': entity_name, 'output': result[:500]})
         return result
 
@@ -956,7 +983,34 @@ class NorthDataMixin:
         if not html:
             return "Error: Could not get rendered page from Browserbase."
 
-        return self._parse_network_svg(html, northdata_url)
+        return self._compose_network_output(html, northdata_url)
+
+    def _compose_network_output(self, html: str, url: str = '') -> str:
+        """C) Direction-aware network summary for the LLM: lead with the resolver's verdict (which
+        way ownership actually points, TopCo vs a real parent), then append the raw edge list so no
+        relationship is lost. The flat parser's OWNED-BY reads arrow direction backwards (it filed
+        adidas's subsidiaries as its 'parents'); the resolver fixes that. Falls back to the flat
+        parser if the resolver can't read the graph."""
+        try:
+            import northdata_structure as ns
+            res = ns.resolve(html)
+            if res.get('has_network'):
+                out = ns.format_for_llm(res)
+                net = ns.parse_network(html) or {}
+                nodes, edges = net.get('nodes') or {}, net.get('edges') or []
+                if edges:
+                    lines = ["", "RAW GRAPH EDGES (as drawn; read ownership direction from the summary above):"]
+                    for e in edges:
+                        s = nodes.get(e['source'], {}).get('name', '?')
+                        t = nodes.get(e['target'], {}).get('name', '?')
+                        tag = " [historical]" if e.get('old') else ""
+                        lines.append("  {} -> {}: {}{}".format(s, t, e.get('label', ''), tag))
+                    out += "\n" + "\n".join(lines)
+                self._nd_log({'tool': 'northdata_network', 'input': url, 'output': out})
+                return out
+        except Exception:  # noqa: BLE001 — never let the resolver break the fetch path
+            pass
+        return self._parse_network_svg(html, url)
 
     def _parse_network_svg(self, html: str, northdata_url: str = '') -> str:
         """Pure parse of a rendered NorthData entity page into a formatted ownership-network

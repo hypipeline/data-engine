@@ -200,7 +200,7 @@ class RegistrySearchMixin:
                      + " names including short names): " + json.dumps(all_search_names))
 
         # ── Search entity by entity ──
-        northdata_network_done = False
+        nd_targets = []          # B) candidate NorthData entities for the single ownership-graph fetch
 
         for idx, name in enumerate(all_search_names):
             num = idx + 1
@@ -325,50 +325,14 @@ class RegistrySearchMixin:
                 registries[f"northdata:{name}"] = self.tools.search_northdata(name)
                 self.log_registry_result('northdata', 'North Data', name, registries[f"northdata:{name}"], name)
 
-                # Follow up on first NorthData result to get ownership graph
-                if not northdata_network_done and 'No North Data results' not in registries[f"northdata:{name}"] \
-                        and not registries[f"northdata:{name}"].startswith('Error:'):
-                    # Pick the NorthData entity page for the ownership graph. Taking the FIRST hit
-                    # blindly can land on a branch registration (/BR …) or a similarly-named company,
-                    # neither of which has a network graph — so skip branches and prefer the result
-                    # whose name best matches the entity we searched for.
-                    nd_url = None
-                    _nn = re.sub(r'[^a-z0-9]', '', name.lower())
-                    _cands = []
-                    for _ln in registries[f"northdata:{name}"].split("\n"):
-                        _m = re.search(r'→ (https://www\.northdata\.com/\S+)', _ln)
-                        if not _m:
-                            continue
-                        _u, _label = _m.group(1), _ln.split("→")[0]
-                        if re.search(r'/BR[%\s]', _u) or 'filial' in _label.lower() or 'branch' in _label.lower():
-                            continue                                    # branch registration → no network
-                        _lbl = re.sub(r'[^a-z0-9]', '', _label.lower())
-                        _cands.append((2 if (_nn and _lbl.startswith(_nn)) else (1 if (_nn and _nn in _lbl) else 0), _u))
-                    if _cands:
-                        _cands.sort(key=lambda c: -c[0])
-                        nd_url = _cands[0][1]
-                    if not nd_url:                                      # all branches/none → old fallback
-                        _m0 = re.search(r'→ (https://www\.northdata\.com/[^\s]+)', registries[f"northdata:{name}"])
-                        if _m0:
-                            nd_url = _m0.group(1)
-                    if not nd_url and '=== NorthData Company Page:' in registries[f"northdata:{name}"]:
-                        nd_url = "https://www.northdata.com/" + quote_plus(name)
-                    if nd_url:
-                        self.log('northdata', "Loading ownership graph via Browserbase...", {'entity_name': name})
-                        network_result = self.tools.northdata_network(nd_url)
-                        registries['northdata_network'] = network_result
-                        northdata_network_done = True
-
-                        nd_summary = "Network graph loaded"
-                        if 'OWNED BY' in network_result:
-                            nd_summary = "Ownership structure found — parent entities identified"
-                        elif 'ultimate parent/TopCo' in network_result:
-                            nd_summary = "Entity appears to be TopCo — no parent above it"
-                        self.log('northdata', f"Network: {nd_summary}", {
-                            'entity_name': name,
-                            'expandable': True,
-                            'sections': [{'label': 'Full Network', 'content': network_result}],
-                        })
+                # B) Record where this search resolved (URL + whether the result actually name-matches).
+                #    The ONE ownership-graph fetch is chosen after all searches (best match wins,
+                #    no match → no fetch) rather than first-URL-wins, so a fuzzy search can't drag in
+                #    the wrong company's graph. search_northdata stashes the resolution per call.
+                _res = dict(getattr(self.tools, '_nd_last_resolution', None) or {})
+                if _res.get('url'):
+                    _res['search_name'] = name
+                    nd_targets.append(_res)
 
             # ACRA (Singapore) — free data.gov.sg open dataset; gives the UEN (registry_id) + status
             if is_sg or is_unknown:
@@ -404,6 +368,43 @@ class RegistrySearchMixin:
                     'expandable': True,
                     'sections': [{'label': 'Full Result', 'content': edgar_result}],
                 })
+
+        # ── B) ONE ownership-graph fetch, aimed at the entity we actually resolved to ──
+        #    Prefer a strong company-page match, then the closest name-match to the primary entity.
+        #    If NOTHING name-matches (all fuzzy hits, e.g. 'adidas America' → 'Airbus America'),
+        #    fetch NO graph — a wrong network is worse than none.
+        _matched = [t for t in nd_targets if t.get('matched') and t.get('url')]
+        if _matched:
+            _primary = re.sub(r'[^a-z0-9]', '', ((unique_names or [''])[0] or '').lower())
+
+            def _nd_score(t):
+                s = 100 if t.get('company_page') else 0
+                b = re.sub(r'[^a-z0-9]', '', ((t.get('result_name') or t.get('search_name')) or '').lower())
+                if _primary and b and (_primary == b or _primary.startswith(b) or b.startswith(_primary)):
+                    s += 50
+                elif _primary and b and (_primary in b or b in _primary):
+                    s += 20
+                return s
+
+            _best = max(_matched, key=_nd_score)
+            self.log('northdata', f"Loading ownership graph for \"{_best.get('result_name') or _best.get('search_name')}\" via Browserbase...",
+                     {'entity_name': _best.get('search_name')})
+            network_result = self.tools.northdata_network(_best['url'])
+            registries['northdata_network'] = network_result
+            nd_summary = "Network graph loaded"
+            if 'appears to be the ultimate parent' in network_result or 'TopCo' in network_result:
+                nd_summary = "Entity appears to be the ultimate parent (TopCo)"
+            elif 'ULTIMATE PARENT (current)' in network_result or 'OWNED BY' in network_result:
+                nd_summary = "Parent/ownership structure identified"
+            self.log('northdata', f"Network: {nd_summary}", {
+                'entity_name': _best.get('search_name'),
+                'expandable': True,
+                'sections': [{'label': 'Full Network', 'content': network_result}],
+            })
+        elif nd_targets:
+            # we had NorthData hits but none name-matched → guard fired, no graph fetched
+            self.log('northdata', "No name-matched NorthData entity — skipping ownership graph "
+                                  "(avoids pulling the wrong company's network).")
 
         # ── Trademark search for short_names (US only, additional to registry searches) ──
         if (is_us or is_unknown) and short_names:
