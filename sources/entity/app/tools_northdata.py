@@ -928,24 +928,41 @@ class NorthDataMixin:
         except requests.RequestException:
             pass
 
-        # Wait for JS to render the network graph
-        time.sleep(10)
-
-        # Get rendered page source
-        try:
-            resp = requests.get(
-                selenium_base + "/session/{}/source".format(wd_session_id),
-                headers={'x-bb-api-key': api_key, 'session-id': bb_session_id},
-                timeout=30)
-            data = resp.json()
-        except (requests.RequestException, ValueError):
-            data = None
-        html = (data or {}).get('value', '') if isinstance(data, dict) else ''
+        # Wait for JS to render the network graph, then poll the rendered source. The graph is
+        # drawn asynchronously, so a single fixed sleep occasionally returns before the SVG exists
+        # (observed: the pipeline getting an empty "No network graph found" while a direct fetch of
+        # the same entity page renders the full graph). Re-fetch a few times before giving up —
+        # each wait is bounded so the whole poll can't exceed ~35s.
+        html = ''
+        svg_match = None
+        waits = (10, 9, 9, 7)  # bounded: total sleep ≤ 35s across at most 4 attempts
+        for attempt, wait_s in enumerate(waits):
+            time.sleep(wait_s)
+            try:
+                resp = requests.get(
+                    selenium_base + "/session/{}/source".format(wd_session_id),
+                    headers={'x-bb-api-key': api_key, 'session-id': bb_session_id},
+                    timeout=(10, 30))
+                data = resp.json()
+            except (requests.RequestException, ValueError):
+                data = None
+            html = (data or {}).get('value', '') if isinstance(data, dict) else ''
+            if not html:
+                continue
+            svg_match = re.search(r'<svg[^>]*aria-label="Network"[^>]*>(.*?)</svg>', html, re.S)
+            if svg_match:
+                break
 
         if not html:
             return "Error: Could not get rendered page from Browserbase."
 
-        # Extract the network SVG
+        return self._parse_network_svg(html, northdata_url)
+
+    def _parse_network_svg(self, html: str, northdata_url: str = '') -> str:
+        """Pure parse of a rendered NorthData entity page into a formatted ownership-network
+        summary. Split out from the Browserbase fetch so it can be tested deterministically
+        against a saved-page fixture with zero network I/O — the fetch is flaky, the parse is not.
+        (northdata_network = fetch + this parse; tests exercise this directly.)"""
         svg_match = re.search(r'<svg[^>]*aria-label="Network"[^>]*>(.*?)</svg>', html, re.S)
         if not svg_match:
             self._nd_log({'tool': 'northdata_network', 'input': northdata_url,
