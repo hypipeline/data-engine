@@ -300,14 +300,19 @@ def run_resolution_case(config: dict, cid: int) -> dict:
                        "ok": bool(r) and not r.get("matched"),
                        "detail": {"resolved_to": (r or {}).get("result_name"), "matched": (r or {}).get("matched")}})
     overall = all(c["ok"] for c in checks)
+    result = {"id": cid, "case": case, "ok": overall, "checks": checks,
+              "resolutions": resolutions, "winner": winner, "win_name": win_name,
+              "network_output": network_output, "network_summary": network_summary}
     try:
         with closing(_conn()) as c:
             with c.cursor() as cur:
+                # Persist the FULL last run (input resolutions + raw NorthData output), so the page
+                # shows the last input/output on load — not just a pass/fail badge.
+                saved = {k: result[k] for k in ("ok", "checks", "win_name", "resolutions",
+                                                "winner", "network_output", "network_summary")}
                 cur.execute("UPDATE entity.northdata_resolution_cases SET last_result=%s, last_run_at=now() WHERE id=%s",
-                            (json.dumps({"ok": overall, "checks": checks, "win_name": win_name}, default=str), cid))
+                            (json.dumps(saved, default=str), cid))
             c.commit()
     except Exception:  # noqa: BLE001
         pass
-    return {"id": cid, "case": case, "ok": overall, "checks": checks,
-            "resolutions": resolutions, "winner": winner, "win_name": win_name,
-            "network_output": network_output, "network_summary": network_summary}
+    return result

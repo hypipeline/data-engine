@@ -138,6 +138,8 @@ function render(){
      + '</div>';
   });
   document.getElementById('cases').innerHTML=h;
+  // show the last run's input/output on load (persisted), so you don't have to Run live to see it
+  CASES.forEach(function(c){ if(c.last_result && c.last_result.resolutions){ try{ renderResult(c.id, c.last_result); }catch(e){} } });
 }
 function badge(id,cls,txt){ var b=document.getElementById('badge-'+id); if(b){ b.className='pill '+cls; b.textContent=txt; } }
 function renderResult(id,r){
