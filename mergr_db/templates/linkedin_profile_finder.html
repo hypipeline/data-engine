@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}LinkedIn Profile Finder — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .back-link { display:inline-block; font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .back-link:hover { color:var(--text); }
+  .lpf-form { display:flex; gap:10px; max-width:900px; margin:6px 0; flex-wrap:wrap; align-items:center; }
+  .lpf-input { flex:1; min-width:320px; padding:11px 14px; font-size:15px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); color:var(--text); }
+  .lpf-input:focus { border-color:var(--accent); outline:none; }
+  .lpf-sel { padding:10px 12px; font-size:14px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); color:var(--text); }
+  .btn { padding:11px 22px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:15px; font-weight:600; cursor:pointer; }
+  .btn:hover { background:var(--accent-2); } .btn:disabled { opacity:.5; cursor:default; }
+  .btn.ghost { background:var(--bg-3); color:var(--text); border:1px solid var(--border-2); font-size:13px; padding:8px 14px; }
+  .btn.pay { background:#b45309; } .btn.pay:hover { background:#92400e; }
+  .warn { background:#fffbeb; border:1px solid #fde68a; color:#92400e; border-radius:8px; padding:10px 14px; margin:10px 0; max-width:900px; font-size:13.5px; }
+  .err { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:12px 14px; margin:8px 0; max-width:900px; }
+  /* stages */
+  .stage { max-width:900px; border:1px solid var(--border-2); border-radius:10px; background:var(--panel); margin:12px 0; overflow:hidden; }
+  .stage-h { display:flex; align-items:center; gap:10px; padding:11px 16px; background:var(--bg-2); border-bottom:1px solid var(--border); font-weight:700; font-size:14px; }
+  .stage-h .n { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; font-weight:800; }
+  .stage-h .st { margin-left:auto; font-size:12px; font-weight:600; color:var(--muted); }
+  .stage-b { padding:14px 16px; font-size:14px; }
+  .kv { display:flex; flex-wrap:wrap; gap:6px 26px; margin:2px 0; }
+  .kv div b { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; margin-right:6px; }
+  .big { font-size:26px; font-weight:800; color:var(--accent); }
+  .inspect { margin-top:10px; }
+  .inspect summary { cursor:pointer; font-size:12px; color:var(--muted); }
+  .inspect pre { background:#0f172a; color:#cbd5e1; font-size:11.5px; padding:12px; border-radius:8px; overflow:auto; max-height:280px; margin-top:6px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--border-2); border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  /* results */
+  .lpf-toolbar { display:flex; gap:10px; align-items:center; margin:6px 0 10px; flex-wrap:wrap; }
+  .lpf-t { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .lpf-t th { text-align:left; padding:7px 10px; border-bottom:2px solid var(--border-2); color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; }
+  .lpf-t td { padding:7px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .lpf-t tr.dm { background:color-mix(in srgb, var(--accent) 6%, transparent); }
+  .lvl { display:inline-block; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; border-radius:5px; padding:1px 7px; }
+  .lvl.exec { background:#dcfce7; color:#166534; } .lvl.vp { background:#dbeafe; color:#1e40af; }
+  .lvl.director { background:#ede9fe; color:#5b21b6; } .lvl.manager { background:#f1f5f9; color:#475569; }
+  .lvl.ic { background:#f8fafc; color:#94a3b8; } .lvl.unknown { background:#f8fafc; color:#cbd5e1; }
+  /* title-net chips + settings */
+  .tset { border:1px solid var(--border-2); border-radius:8px; padding:10px 14px; background:var(--panel); }
+  .tset summary { cursor:pointer; font-size:13px; color:var(--muted); font-weight:600; }
+  .tnet-row { margin:12px 0; }
+  .tchip { display:inline-flex; align-items:center; gap:5px; background:var(--bg-3); border:1px solid var(--border-2); color:var(--text); font-size:12px; border-radius:6px; padding:2px 4px 2px 8px; margin:3px 4px 3px 0; }
+  .tchip .x { cursor:pointer; color:var(--muted); font-weight:700; border-radius:4px; padding:0 4px; }
+  .tchip .x:hover { background:#fee2e2; color:#b91c1c; }
+  .tchip.ro { padding:2px 8px; }   /* read-only (in step 2) */
+  .tadd { padding:5px 9px; font-size:12px; border:1px solid var(--border-2); border-radius:6px; background:var(--panel); color:var(--text); width:180px; }
+  .tsaved { font-size:12px; color:#166534; margin-left:8px; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="back-link" href="/">← Data Engine</a>
+<h1 style="margin:0 0 4px">LinkedIn Profile Finder</h1>
+<p style="color:var(--muted); margin:0 0 14px; max-width:820px">Give a LinkedIn <b>company</b> URL → find its people (name · title · seniority · profile URL), stage by stage. Filters Bright Data's pre-collected people dataset by company; you see the count &amp; estimated cost <b>before</b> any paid pull.</p>
+
+{% if not token_set %}<div class="warn">⚠ <b>BRIGHTDATA_TOKEN</b> is not set in this environment — the paid pull will fail until it's configured. (Local: set it in <code>docker-compose.override.yml</code>.)</div>{% endif %}
+
+<div class="lpf-form">
+  <input id="url" class="lpf-input" placeholder="https://www.linkedin.com/company/nexphase-capital-lp" autofocus>
+  <button class="btn" id="go" onclick="startFind()">Find</button>
+</div>
+<div style="font-size:12px;color:var(--faint);max-width:900px">Est. rate used for cost display: <b>${{ '%.4f'|format(est_rate) }}/record</b> (stated marketplace price, unverified).</div>
+
+<div id="title-settings" style="max-width:900px;margin:12px 0"></div>
+
+<div id="err"></div>
+<div id="stages"></div>
+<div id="results"></div>
+
+<script>
+var EST_RATE = {{ est_rate }};
+var MAX_ALL_COST = 1.00;   // "All employees" is blocked when the estimated cost exceeds this
+var CAP_RECORDS = Math.floor(MAX_ALL_COST / EST_RATE);   // hard records_limit on EVERY pull (≈ $1 worth)
+var pollTimer=null, curSid=null, curUrl=null, lastFilter=null, lastScope='all', curHeadcount=null, curCompanyId=null, curAudience='', curMinF=0;
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function err(m){ document.getElementById('err').innerHTML = m?'<div class="err">'+esc(m)+'</div>':''; }
+function stageEl(id){ return document.getElementById('stage-'+id); }
+function setStage(id, n, title, status, bodyHtml){
+  var el=stageEl(id);
+  if(!el){ el=document.createElement('div'); el.className='stage'; el.id='stage-'+id; document.getElementById('stages').appendChild(el); }
+  el.innerHTML='<div class="stage-h"><span class="n">'+n+'</span>'+esc(title)+'<span class="st">'+status+'</span></div><div class="stage-b">'+bodyHtml+'</div>';
+}
+function inspect(label, obj){ return '<details class="inspect"><summary>'+esc(label)+'</summary><pre>'+esc(JSON.stringify(obj,null,2))+'</pre></details>'; }
+
+// ── title nets (editable settings + step-2 preview) ──
+var NETS = {pe:[], corporate:[]};
+var NET_LABEL = {pe:'PE / investor', corporate:'Corporate'};
+async function loadNets(){
+  try{ var r=await fetch('/lpf/title-nets'); var d=await r.json(); NETS={pe:d.pe||[], corporate:d.corporate||[]}; }
+  catch(e){}
+  renderTitleSettings();
+  if(stageEl('scope')) showScope();     // refresh step-2 chips if it's on screen
+}
+function netChips(aud, readonly){
+  return (NETS[aud]||[]).map(function(t,i){
+    return readonly
+      ? '<span class="tchip ro">'+esc(t)+'</span>'
+      : '<span class="tchip">'+esc(t)+'<span class="x" title="remove" onclick="netRemove(\''+aud+'\','+i+')">✕</span></span>';
+  }).join('') || '<span style="color:var(--faint);font-size:12px">none</span>';
+}
+function renderTitleSettings(){
+  var el=document.getElementById('title-settings'); if(!el) return;
+  var body='';
+  ['pe','corporate'].forEach(function(aud){
+    body+='<div class="tnet-row"><b>'+esc(NET_LABEL[aud])+'</b> <span id="tsaved-'+aud+'" class="tsaved"></span>'
+      +'<div id="tchips-'+aud+'" style="margin:6px 0">'+netChips(aud,false)+'</div>'
+      +'<input class="tadd" id="tadd-'+aud+'" placeholder="add a title…" onkeydown="if(event.key===\'Enter\'){netAdd(\''+aud+'\');event.preventDefault();}"> '
+      +'<button class="btn ghost" onclick="netAdd(\''+aud+'\')">Add</button> '
+      +'<button class="btn ghost" onclick="netSave(\''+aud+'\')">Save '+esc(NET_LABEL[aud])+'</button></div>';
+  });
+  el.innerHTML='<details class="tset"><summary>▸ Title filters (settings) — positions that feed the PE / Corporate searches · <b>editable</b></summary>'
+    +body
+    +'<div style="font-size:11.5px;color:var(--faint);margin-top:6px">These are the <b>pre-pull</b> filters (substring match on <code>position</code>) — they decide <b>who to pull</b>. Seniority (exec/vp/director…) is classified <b>after</b> the pull. Changes are saved to the DB and apply to future searches.</div></details>';
+}
+function netRemove(aud,i){ NETS[aud].splice(i,1); document.getElementById('tchips-'+aud).innerHTML=netChips(aud,false); }
+function netAdd(aud){
+  var inp=document.getElementById('tadd-'+aud); var v=(inp.value||'').trim(); if(!v) return;
+  if(!NETS[aud].some(function(t){return t.toLowerCase()===v.toLowerCase();})) NETS[aud].push(v);
+  inp.value=''; document.getElementById('tchips-'+aud).innerHTML=netChips(aud,false);
+}
+async function netSave(aud){
+  try{
+    var r=await fetch('/lpf/title-nets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({audience:aud,titles:NETS[aud]})});
+    var d=await r.json();
+    if(d.error){ document.getElementById('tsaved-'+aud).textContent='⚠ '+d.error; return; }
+    NETS[aud]=d.titles||NETS[aud];
+    document.getElementById('tchips-'+aud).innerHTML=netChips(aud,false);
+    var s=document.getElementById('tsaved-'+aud); s.textContent='✓ saved ('+NETS[aud].length+')'; setTimeout(function(){s.textContent='';},2500);
+    if(stageEl('scope')) showScope();
+  }catch(e){ document.getElementById('tsaved-'+aud).textContent='⚠ '+String(e); }
+}
+
+async function startFind(){
+  err(''); document.getElementById('stages').innerHTML=''; document.getElementById('results').innerHTML='';
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  var url=document.getElementById('url').value.trim(); if(!url){ err('Enter a LinkedIn company URL'); return; }
+  curUrl=url;
+  document.getElementById('go').disabled=true;
+  await companyHeadcount(url);       // Stage 1 — the count, FIRST
+  showScope();                       // Stage 2 — only now offer how to pull
+  document.getElementById('go').disabled=false;
+}
+
+async function companyHeadcount(url){
+  curHeadcount=null;
+  setStage('company',1,'Company headcount','<span class="spin"></span> checking cache…','Reuses the LinkedIn Finder caches — free/instant on a hit.');
+  var empBlock=function(emp,name,srcline,raw){
+    return '<div class="kv"><div><span class="big">'+(emp!=null?Number(emp).toLocaleString():'—')+'</span> <b style="margin-left:6px">employees on LinkedIn</b></div></div>'
+      +'<div class="kv" style="margin-top:6px"><div><b>Company</b> '+esc(name||'—')+'</div><div><b>Source</b> '+srcline+'</div></div>'+inspect('data', raw);
+  };
+  try{
+    var r=await fetch('/lpf/company',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
+    var d=await r.json();
+    if(d.error){ setStage('company',1,'Company headcount','error', esc(d.error)); return; }
+    if(d.cached){
+      curHeadcount=d.employees;
+      setStage('company',1,'Company headcount','cached ✓', empBlock(d.employees,d.name||d.slug,'cache · '+esc(d.source)+(d.cached_at?' · '+esc(d.cached_at.slice(0,10)):''),d));
+      return;
+    }
+    // cache miss → live fetch of the EXACT url (no Google mis-match), which also caches it
+    setStage('company',1,'Company headcount','<span class="spin"></span> not cached — fetching this exact page…','');
+    try{
+      var lr=await fetch('/entity-app/api/linkedin/by-url?url='+encodeURIComponent(url)); var ld=await lr.json();
+      curHeadcount=ld.employees;
+      setStage('company',1,'Company headcount', ld.employees!=null?'live ✓':'not found',
+        empBlock(ld.employees, ld.name||d.slug, 'live · fetched this URL (now cached)', ld));
+    }catch(e){ setStage('company',1,'Company headcount','unavailable','Cache miss + live fetch failed — the dataset count below still works. ('+esc(String(e))+')'); }
+  }catch(e){ setStage('company',1,'Company headcount','error', esc(String(e))); }
+}
+
+function showScope(){
+  var hc=curHeadcount;
+  var allEstNum = (hc!=null) ? hc*EST_RATE : null;
+  var blocked = (allEstNum!=null && allEstNum > MAX_ALL_COST);
+  var allBtn = blocked
+    ? '<button class="btn" disabled title="Estimated $'+allEstNum.toFixed(2)+' exceeds the $'+MAX_ALL_COST.toFixed(2)+' cap">All employees · blocked (≈$'+allEstNum.toFixed(2)+')</button>'
+    : '<button class="btn" onclick="runFilter(\'all\',null)">All employees'+(allEstNum!=null?' <span style="opacity:.85;font-weight:400">≈ up to $'+allEstNum.toFixed(2)+'</span>':'')+'</button>';
+  var note = blocked
+    ? '<div style="font-size:12px;color:#92400e;margin-top:8px">⚠ <b>"All employees" is disabled</b> — the estimate (≈$'+allEstNum.toFixed(2)+', from headcount '+Number(hc).toLocaleString()+') exceeds the $'+MAX_ALL_COST.toFixed(2)+' cap. Use a decision-maker filter (far fewer people, typically pennies).</div>'
+    : (hc!=null
+        ? '<div style="font-size:12px;color:var(--faint);margin-top:8px">"All" estimate = headcount ('+Number(hc).toLocaleString()+') × $'+EST_RATE.toFixed(4)+' — an <b>upper bound</b> (the dataset usually holds fewer than the full headcount). The exact pullable count &amp; cost are confirmed at the next step. Decision-maker scopes pull far fewer.</div>'
+        : '<div style="font-size:12px;color:var(--faint);margin-top:8px">Headcount unknown, so no pre-estimate — the exact pullable count &amp; cost show at the next step.</div>');
+  var dmPreview =
+      '<div style="margin-top:14px;font-size:12.5px">'
+      + '<div style="margin:2px 0"><b>PE titles</b> <span style="color:var(--faint)">— this search pulls positions matching:</span><div style="margin-top:4px">'+netChips('pe',true)+'</div></div>'
+      + '<div style="margin:8px 0 2px"><b>Corporate titles</b> <span style="color:var(--faint)">— this search pulls positions matching:</span><div style="margin-top:4px">'+netChips('corporate',true)+'</div></div>'
+      + '<div style="font-size:11.5px;color:var(--faint);margin-top:6px">Edit these lists in the "Title filters (settings)" panel above.</div></div>';
+  var floor =
+      '<div style="margin-top:14px;padding:10px 12px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px">'
+      + '<label style="font-size:13px"><b>Quality floor</b> — min followers at ingest '
+      + '<input type="number" id="minf-ingest" value="'+curMinF+'" min="0" step="100" style="width:88px;font-size:13px;padding:2px 4px;margin-left:4px"></label>'
+      + '<div style="font-size:11.5px;color:var(--faint);margin-top:5px">Bright Data can\'t sort, so with the '+CAP_RECORDS+'-record cap a big company returns an <i>arbitrary</i> slice. '
+      + 'A floor filters low-signal/fake profiles out <b>before</b> the pull — so the capped slice is drawn from real, established people (and often costs less). 0 = pull everyone. Try 500–1000 for large rosters.</div></div>';
+  setStage('scope',2,'How many to pull?','choose one',
+    '<p style="margin-bottom:10px">Now that you can see the headcount, pick who to pull from the dataset:</p>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + allBtn
+    +'<button class="btn ghost" onclick="runFilter(\'decision-makers\',\'pe\')">Decision-makers · PE titles</button>'
+    +'<button class="btn ghost" onclick="runFilter(\'decision-makers\',\'corporate\')">Decision-makers · Corporate titles</button>'
+    +'</div>'+floor+note+dmPreview);
+}
+
+async function runFilter(scope, audience, refresh){
+  err('');
+  var mfEl=document.getElementById('minf-ingest'); if(mfEl){ curMinF=parseInt(mfEl.value,10)||0; }
+  ['count','pull'].forEach(function(id){ var e=stageEl(id); if(e) e.remove(); });
+  document.getElementById('results').innerHTML='';
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  lastScope=scope; curAudience=(scope==='decision-makers'?(audience||'pe'):'');
+  setStage('scope',2,'How many to pull?','chosen: '+esc(scope)+(audience?' · '+esc(audience):'')+(curMinF>0?' · followers ≥'+curMinF:''),
+    '<button class="btn ghost" onclick="showScope()">change</button>');
+  setStage('count',3,'Filter &amp; dataset count','<span class="spin"></span> checking cache / submitting…','');
+  try{
+    var r=await fetch('/lpf/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:curUrl,scope:scope,audience:audience||'pe',records_limit:CAP_RECORDS,min_followers:curMinF,refresh:!!refresh})});
+    var d=await r.json();
+    if(d.error){ err(d.error); setStage('count',3,'Filter &amp; dataset count','failed', d.company_id?('company_id: <b>'+esc(d.company_id)+'</b>'):''); return; }
+    curCompanyId=d.company_id;
+    if(d.cached){                 // free re-run from the local cache
+      var repull="runFilter('"+scope+"',"+(audience?"'"+audience+"'":"null")+",true)";
+      setStage('count',3,'Filter &amp; dataset count','cached ✓ · free',
+        '<div class="kv"><div><span class="big">'+(d.count||0)+'</span> <b style="margin-left:6px">people (cached)</b></div><div><b>Decision-makers</b> '+(d.decision_makers||0)+'</div></div>'
+        +'<div style="font-size:12px;color:var(--faint);margin-top:6px">From a previous pull'+(d.cached_at?' on '+esc(d.cached_at.slice(0,10)):'')+' — no charge. <button class="btn ghost" onclick="'+repull+'">Re-pull fresh (paid)</button></div>');
+      renderResults(d.rows||[]);
+      return;
+    }
+    curSid=d.snapshot_id; lastFilter=d.filter;
+    setStage('count',3,'Filter &amp; dataset count','<span class="spin"></span> building snapshot…',
+      '<div class="kv"><div><b>company_id</b> '+esc(d.company_id)+'</div><div><b>scope</b> '+esc(d.scope)+(d.titles?' ('+d.titles.length+' titles)':'')+'</div></div>'
+      +inspect('filter sent to Bright Data', d.filter)+'<div style="margin-top:6px;color:var(--muted)">Reading how many are pullable (free)…</div>');
+    pollStatus();
+  }catch(e){ err(String(e)); }
+}
+
+function pollStatus(){
+  pollTimer=setInterval(async function(){
+    try{
+      var r=await fetch('/lpf/status/'+curSid); var d=await r.json();
+      if(d.error){ clearInterval(pollTimer); err(d.error); return; }
+      if(d.status==='failed'){ clearInterval(pollTimer); setStage('count',3,'Filter &amp; dataset count','failed', inspect('status', d)); document.getElementById('go').disabled=false; return; }
+      if(d.status!=='ready'){ setStage('count',3,'Filter &amp; dataset count','<span class="spin"></span> '+esc(d.status||'building'), 'Waiting for Bright Data to build the filtered snapshot…'); return; }
+      clearInterval(pollTimer);
+      var capped = (d.count||0) >= CAP_RECORDS;
+      var body=(lastFilter?inspect('filter sent to Bright Data', lastFilter):'')
+        +'<div class="kv"><div><span class="big">'+(d.count||0)+'</span> <b style="margin-left:6px">pullable from dataset</b></div></div>'
+        + (capped?'<div style="font-size:12px;color:#92400e;margin-top:6px">⚠ Capped at <b>'+CAP_RECORDS+'</b> records (the $'+MAX_ALL_COST.toFixed(2)+' ceiling) — more match than we can pull, and Bright Data won\'t sort, so this slice is arbitrary. <b>Raise the Quality floor</b> (min followers) back in step 2 to bias the '+CAP_RECORDS+' toward real, established people'+(curMinF>0?' (currently ≥'+curMinF+')':'')+', or narrow the title filter.</div>':'')
+        +'<div class="kv" style="margin-top:8px"><div><b>Est. cost to pull</b> $'+(d.est_cost||0).toFixed(2)+' <span style="color:var(--faint)">('+(d.count||0)+' × $'+EST_RATE.toFixed(4)+', unverified)</span></div><div><b>Reported cost so far</b> $'+(d.reported_cost||0)+'</div></div>'
+        + inspect('status metadata', d);
+      setStage('count',3,'Filter &amp; dataset count','ready', body);
+      showPayGate(d.count||0);
+      document.getElementById('go').disabled=false;
+    }catch(e){ clearInterval(pollTimer); err(String(e)); }
+  }, 5000);
+}
+
+function showPayGate(count){
+  var scope=lastScope;
+  var est=count*EST_RATE;
+  if(scope==='all' && est > MAX_ALL_COST){          // hard cap on the exact count
+    setStage('pull',4,'Download &amp; classify','blocked',
+      '<p style="color:#92400e">⚠ "All employees" would pull <b>'+count+'</b> records (<b>$'+est.toFixed(2)+'</b>) — over the $'+MAX_ALL_COST.toFixed(2)+' cap, so it\'s blocked. Narrow to decision-makers instead.</p>'
+      +'<button class="btn ghost" onclick="narrowToDM()">Narrow to decision-makers</button>');
+    return;
+  }
+  var big = count>200;
+  var narrow = (big && scope==='all')
+    ? '<button class="btn ghost" onclick="narrowToDM()">Large roster — narrow to decision-makers &amp; re-count</button> ' : '';
+  setStage('pull',4,'Download &amp; classify','awaiting confirm',
+    '<p>'+(count?('Pull these <b>'+count+'</b> records (est. <b>$'+est.toFixed(2)+'</b>) and classify seniority locally?'):'No records matched — nothing to pull.')+'</p>'
+    + (count?('<div style="margin-top:8px">'+narrow+'<button class="btn pay" onclick="doDownload()">▶ Download &amp; classify · est $'+est.toFixed(2)+'</button></div>'):''));
+}
+
+function narrowToDM(){ runFilter('decision-makers','pe'); }
+
+async function doDownload(){
+  setStage('pull',4,'Download &amp; classify','<span class="spin"></span> pulling (paid)…','Downloading records from Bright Data, then classifying titles…');
+  async function attempt(tries){
+    var r=await fetch('/lpf/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snapshot_id:curSid,company_id:curCompanyId,scope:lastScope,audience:curAudience,records_limit:CAP_RECORDS,min_followers:curMinF})});
+    var d=await r.json();
+    if(d.building){ if(tries<20){ setStage('pull',4,'Download &amp; classify','<span class="spin"></span> delivery building… ('+tries+')',''); return setTimeout(function(){attempt(tries+1);},4000); } err('Download still building — try again'); return; }
+    if(d.error){ setStage('pull',4,'Download &amp; classify','failed', esc(d.error)); return; }
+    setStage('pull',4,'Download &amp; classify','done',
+      '<div class="kv"><div><b>Pulled</b> '+d.count+'</div><div><b>Decision-makers</b> '+d.decision_makers+'</div></div>'+inspect('raw record sample (first person)', d.raw_sample));
+    renderResults(d.rows);
+  }
+  attempt(1);
+}
+
+var allRows=[];
+var LVLORD={exec:0,vp:1,director:2,manager:3,ic:4,unknown:5};
+function nf(n){ return (n==null)?'':Number(n).toLocaleString(); }
+// Sorters. 'quality' (default) buries "pretend CEO of Google" profiles — they have ~0 followers.
+var SORTS={
+  quality:    function(a,b){ return (b.quality||0)-(a.quality||0); },
+  seniority:  function(a,b){ return (LVLORD[a.level]-LVLORD[b.level]) || ((b.quality||0)-(a.quality||0)); },
+  followers:  function(a,b){ return (b.followers||0)-(a.followers||0); },
+  connections:function(a,b){ return (b.connections||0)-(a.connections||0); },
+  name:       function(a,b){ return (a.name||'').toLowerCase().localeCompare((b.name||'').toLowerCase()); }
+};
+function sortedRows(){
+  var dmonly=document.getElementById('dmonly').checked;
+  var minf=parseInt(document.getElementById('minf').value,10)||0;
+  var by=document.getElementById('sortby').value;
+  var rows=allRows.filter(function(r){ return (!dmonly||r.decision_maker) && (r.followers||0)>=minf; });
+  return rows.slice().sort(SORTS[by]||SORTS.quality);
+}
+function renderResults(rows){
+  allRows=rows;
+  var lv={}; rows.forEach(function(r){ lv[r.level]=(lv[r.level]||0)+1; });
+  var chips=['exec','vp','director','manager','ic','unknown'].filter(function(k){return lv[k];})
+    .map(function(k){ return '<span class="lvl '+k+'">'+k+' '+lv[k]+'</span>'; }).join(' ');
+  document.getElementById('results').innerHTML=
+    '<h3 style="margin:20px 0 4px">People ('+rows.length+')</h3>'
+    +'<div class="lpf-toolbar">'
+    +'<label style="font-size:13px"><input type="checkbox" id="dmonly" onchange="paint()"> Decision-makers only</label> '
+    +'<label style="font-size:13px">Sort '
+      +'<select id="sortby" onchange="paint()" style="font-size:13px;padding:2px 4px">'
+      +'<option value="quality">Quality (credibility)</option>'
+      +'<option value="seniority">Seniority</option>'
+      +'<option value="followers">Followers</option>'
+      +'<option value="connections">Connections</option>'
+      +'<option value="name">Name</option></select></label> '
+    +'<label style="font-size:13px" title="Hide profiles below this follower count — a quick way to drop low-signal/fake accounts">Min followers '
+      +'<input type="number" id="minf" value="0" min="0" step="50" onchange="paint()" oninput="paint()" style="width:72px;font-size:13px;padding:2px 4px"></label> '
+    +chips
+    +' <button class="btn ghost" style="margin-left:auto" onclick="dlCsv()">Download CSV</button></div>'
+    +'<div id="tbl"></div>';
+  paint();
+}
+function paint(){
+  var rows=sortedRows();
+  var body=rows.map(function(r){
+    return '<tr class="'+(r.decision_maker?'dm':'')+'"><td><b>'+esc(r.name||'—')+'</b></td>'
+      +'<td><span class="lvl '+r.level+'">'+r.level+'</span></td>'
+      +'<td>'+esc(r.position||'')+'</td><td>'+esc(r.location||'')+'</td>'
+      +'<td style="text-align:right;white-space:nowrap">'+nf(r.followers)+'</td>'
+      +'<td style="text-align:right;white-space:nowrap;color:var(--muted)">'+nf(r.connections)+'</td>'
+      +'<td>'+(r.url?'<a href="'+esc(r.url)+'" target="_blank" rel="noopener">profile ↗</a>':'')+'</td></tr>';
+  }).join('');
+  document.getElementById('tbl').innerHTML='<table class="lpf-t"><thead><tr><th>Name</th><th>Level</th><th>Position</th><th>Location</th><th style="text-align:right">Followers</th><th style="text-align:right">Conns</th><th>URL</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+function dlCsv(){
+  var rows=sortedRows();
+  var esc2=function(s){ s=(s==null?'':String(s)); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  var lines=[['name','level','decision_maker','position','location','followers','connections','quality','url']].concat(
+    rows.map(function(r){ return [r.name,r.level,r.decision_maker,r.position,r.location,r.followers,r.connections,r.quality,r.url].map(esc2); }));
+  var blob=new Blob([lines.map(function(l){return l.join(',');}).join('\n')],{type:'text/csv'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='linkedin_profiles.csv'; a.click();
+}
+document.getElementById('url').addEventListener('keydown',function(e){ if(e.key==='Enter') startFind(); });
+loadNets();   // fetch the editable title nets for the settings panel + step-2 preview
+</script>
+{% endblock %}

@@ -490,10 +490,16 @@ def delete_case(cid: int) -> None:
 _SEED = [
     {"name": "herculite → Aberdeen (DBA owner + call budget)", "url": "https://herculite.com",
      "expect": ["ABERDEEN ROAD COMPANY", "2887899"], "max_calls": {"bizapedia": 20}},
+    # questglobal also exercises the NorthData ownership GRAPH (Browserbase graph-follow via
+    # northdata_network) — distinct from the inline direct-page network. The branch-skip fix
+    # (phases_registry) must land us on the real entity (_c5070753268498432), not the branch
+    # BR 999506259, and the render must surface the parent graph. Ground truth confirmed on box:
+    # "Quest Global Services PTE. Ltd. [ROOT] … OWNED BY: … Quest Global Engineering Services Ltd."
     {"name": "questglobal → Quest Global Services Pte. Ltd. (Singapore UEN from ACRA)",
      "url": "https://questglobal.com",
      "expect": ["200904830K", "QUEST GLOBAL SERVICES PTE. LTD."],
-     "expect_in_source": {"acra": ["200904830K"]}},
+     "expect_in_source": {"acra": ["200904830K"],
+                          "northdata_network": ["OWNED BY", "Quest Global Engineering"]}},
     {"name": "Alianza LLC → Delaware parent (branch triangulation)", "names": ["Alianza, LLC"],
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
     {"name": "NexPhase Capital → Delaware LPs (Bizapedia)", "names": ["NexPhase Capital"],
@@ -501,15 +507,21 @@ _SEED = [
     # UK private company — exercises Companies House + the deep PSC ownership-chain traversal all
     # the way to the ULTIMATE parent (a listed company would lean on Yahoo Finance and not really
     # test Companies House). Entity #06294877 → … → Vulcan1 TopCo #16483240 (7 levels).
+    # NOTE: this is also the NorthData-network CONTROL case — ABCA has NO NorthData network, so
+    # ownership must resolve via the Companies House PSC chain (asserted below), not a graph.
     {"name": "ABCA Systems → Companies House + ownership chain to ultimate parent (UK private)",
      "names": ["ABCA Systems Ltd"], "jurisdiction": "uk",
      "expect": ["ABCA SYSTEMS LIMITED", "06294877", "VULCAN1 TOPCO", "16483240"],
      "expect_in_source": {"companies_house": ["06294877"], "ownership_chain": ["16483240"]}},
     # German listed company via URL → exercises NorthData; the LEI is a stable anchor. Note the
     # site classifies as US (adidas America), yet the broad search still surfaces adidas AG from NorthData.
+    # adidas exercises the INLINE NorthData network (_extract_northdata_network on the direct
+    # company page) — a different code path from questglobal's Browserbase graph-follow. Ground
+    # truth confirmed on box: the northdata block carries "### Subsidiaries & Relationships"
+    # (Adidas Sverige AB, adidas sport GmbH, Goldman Sachs shareholding).
     {"name": "adidas.com → adidas AG (Germany · NorthData LEI)", "url": "http://www.adidas.com/",
      "expect": ["adidas AG", "549300JSX0Z4CW0V5023"],
-     "expect_in_source": {"northdata": ["adidas AG"]}},
+     "expect_in_source": {"northdata": ["adidas AG", "Subsidiaries & Relationships"]}},
     # Finnish listed company (Oyj) via URL → exercises NorthData; LEI + Business ID as stable anchors.
     {"name": "scanfil.com → Scanfil Oyj (Finland · NorthData LEI)", "url": "https://www.scanfil.com/",
      "expect": ["Scanfil Oyj", "7437004XD6U0FFDCT507", "2422742-9"],

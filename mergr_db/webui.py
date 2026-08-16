@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import entity_client
+import li_profile_finder as lpf
 
 DSN = os.environ["DATABASE_URL"]
 POOL = pgpool.ThreadedConnectionPool(1, 8, DSN)
@@ -129,6 +130,8 @@ def _tool_for(active):
         return "buyer-match"
     if active == "linkedin":
         return "linkedin"
+    if active == "linkedin-profiles":
+        return "linkedin-profiles"
     return None            # hub / home — no tool chrome
 
 
@@ -635,6 +638,228 @@ def linkedin_page(request: Request):
     """LinkedIn Finder — company domain/name → LinkedIn page + employee count.
     Backend lives in the entity app (Bright Data); page calls /entity-app/api/linkedin."""
     return render(request, "linkedin.html", "linkedin")
+
+
+# ── LinkedIn Profile Finder (local tool) — company URL → people, stage by stage ──
+class _LpfSubmitReq(BaseModel):
+    url: str
+    scope: str = "all"            # "all" | "decision-makers"
+    audience: str = "pe"          # "pe" | "corporate" (title net for decision-makers scope)
+    records_limit: int = 0        # hard cap on records pulled/billed (0 = no cap)
+    min_followers: int = 0        # quality floor at ingest — biases the capped pull toward real profiles
+    refresh: bool = False         # bypass the local cache and re-pull
+
+
+class _LpfDownloadReq(BaseModel):
+    snapshot_id: str
+    company_id: str = ""          # cache key (echoed from /lpf/submit)
+    scope: str = ""
+    audience: str = ""
+    records_limit: int = 0
+    min_followers: int = 0
+
+
+class _LpfTitleNetReq(BaseModel):
+    audience: str                 # "pe" | "corporate"
+    titles: list = []
+
+
+# ── LinkedIn Profile Finder — local result cache (free re-runs) ──
+def _lpf_ensure_cache():
+    try:
+        execute("""CREATE SCHEMA IF NOT EXISTS linkedin;
+                   CREATE TABLE IF NOT EXISTS linkedin.profiles (
+                     company_id    text NOT NULL,
+                     scope         text NOT NULL,
+                     audience      text NOT NULL DEFAULT '',
+                     records_limit int,
+                     count         int,
+                     decision_makers int,
+                     rows          jsonb NOT NULL,
+                     created_at    timestamptz NOT NULL DEFAULT now(),
+                     PRIMARY KEY (company_id, scope, audience));
+                   ALTER TABLE linkedin.profiles ADD COLUMN IF NOT EXISTS min_followers int DEFAULT 0;""")
+    except Exception as e:                                # noqa: BLE001
+        print(f"[lpf cache] ensure failed: {e}")
+
+
+def _lpf_cache_get(company_id, scope, audience):
+    try:
+        return query("SELECT count, decision_makers, rows, records_limit, min_followers, created_at "
+                     "FROM linkedin.profiles WHERE company_id=%s AND scope=%s AND audience=%s",
+                     (company_id, scope, audience or ""), one=True)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
+def _lpf_cache_put(company_id, scope, audience, records_limit, count, dm, rows, min_followers=0):
+    try:
+        execute("INSERT INTO linkedin.profiles "
+                "(company_id,scope,audience,records_limit,count,decision_makers,rows,min_followers) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT (company_id,scope,audience) DO UPDATE SET "
+                "records_limit=EXCLUDED.records_limit, count=EXCLUDED.count, "
+                "decision_makers=EXCLUDED.decision_makers, rows=EXCLUDED.rows, "
+                "min_followers=EXCLUDED.min_followers, created_at=now()",
+                (company_id, scope, audience or "", records_limit, count, dm, json.dumps(rows),
+                 int(min_followers or 0)))
+    except Exception as e:                                # noqa: BLE001
+        print(f"[lpf cache] put failed: {e}")
+
+
+# ── LinkedIn Profile Finder — editable title nets (the positions feeding each search) ──
+def _lpf_ensure_title_nets():
+    try:
+        execute("""CREATE SCHEMA IF NOT EXISTS linkedin;
+                   CREATE TABLE IF NOT EXISTS linkedin.title_nets (
+                     audience   text PRIMARY KEY,
+                     titles     jsonb NOT NULL,
+                     updated_at timestamptz NOT NULL DEFAULT now());""")
+        for aud, titles in lpf.TITLE_NETS.items():        # seed defaults once (no overwrite)
+            execute("INSERT INTO linkedin.title_nets (audience,titles) VALUES (%s,%s) "
+                    "ON CONFLICT (audience) DO NOTHING", (aud, json.dumps(titles)))
+    except Exception as e:                                # noqa: BLE001
+        print(f"[lpf title_nets] ensure failed: {e}")
+
+
+def _lpf_get_title_nets():
+    nets = {}
+    try:
+        _lpf_ensure_title_nets()
+        for r in query("SELECT audience, titles FROM linkedin.title_nets"):
+            nets[r["audience"]] = r["titles"]
+    except Exception:                                     # noqa: BLE001
+        pass
+    for aud, titles in lpf.TITLE_NETS.items():            # fall back to code defaults
+        nets.setdefault(aud, titles)
+    return nets
+
+
+def _lpf_save_title_net(audience, titles):
+    _lpf_ensure_title_nets()
+    execute("INSERT INTO linkedin.title_nets (audience,titles,updated_at) VALUES (%s,%s,now()) "
+            "ON CONFLICT (audience) DO UPDATE SET titles=EXCLUDED.titles, updated_at=now()",
+            (audience, json.dumps(titles)))
+
+
+@app.get("/linkedin-profiles", response_class=HTMLResponse)
+def linkedin_profiles_page(request: Request):
+    return render(request, "linkedin_profile_finder.html", "linkedin-profiles",
+                  token_set=bool(os.environ.get("BRIGHTDATA_TOKEN")),
+                  est_rate=lpf.EST_RATE)
+
+
+@app.get("/lpf/title-nets")
+def lpf_title_nets_get():
+    return JSONResponse(_lpf_get_title_nets())
+
+
+@app.post("/lpf/title-nets")
+def lpf_title_nets_save(req: _LpfTitleNetReq):
+    aud = (req.audience or "").strip()
+    if aud not in ("pe", "corporate"):
+        return JSONResponse({"error": "audience must be 'pe' or 'corporate'"}, status_code=400)
+    titles, seen = [], set()
+    for t in (req.titles or []):                          # trim, drop blanks + dups (case-insensitive)
+        t = str(t).strip()
+        if t and t.lower() not in seen:
+            seen.add(t.lower()); titles.append(t)
+    _lpf_save_title_net(aud, titles)
+    return JSONResponse({"ok": True, "audience": aud, "titles": titles})
+
+
+@app.post("/lpf/company")
+def lpf_company(req: _LpfSubmitReq):
+    """Stage 1: company headcount — CACHE-FIRST (reuses the LinkedIn Finder's caches:
+    linkedin.companies + buyer_match.buyer_linkedin). Free/instant on a hit; on a miss the
+    frontend falls back to the existing LinkedIn Finder endpoint (/entity-app/api/linkedin)."""
+    slug = lpf.parse_company_id(req.url)
+    if not slug:
+        return JSONResponse({"error": "could not parse a company id"}, status_code=400)
+    _slug_expr = "lower(regexp_replace(rtrim(linkedin_url,'/'), '.*/company/', ''))"
+    hit, src = None, None
+    try:
+        hit = query(f"SELECT name, employees, linkedin_url, created_at FROM linkedin.companies "
+                    f"WHERE {_slug_expr}=%s AND employees IS NOT NULL "
+                    f"ORDER BY created_at DESC LIMIT 1", (slug,), one=True)
+        src = "linkedin.companies"
+    except Exception:                                     # noqa: BLE001
+        pass
+    if not hit:
+        try:
+            hit = query(f"SELECT name, employees, linkedin_url FROM buyer_match.buyer_linkedin "
+                        f"WHERE {_slug_expr}=%s AND employees IS NOT NULL LIMIT 1", (slug,), one=True)
+            src = "buyer_match.buyer_linkedin"
+        except Exception:                                 # noqa: BLE001
+            pass
+    if hit:
+        ca = hit.get("created_at")
+        return JSONResponse({"cached": True, "source": src, "slug": slug,
+                             "name": hit.get("name"), "employees": hit.get("employees"),
+                             "linkedin_url": hit.get("linkedin_url"),
+                             "cached_at": ca.isoformat() if ca else None})
+    return JSONResponse({"cached": False, "slug": slug})
+
+
+@app.post("/lpf/submit")
+def lpf_submit(req: _LpfSubmitReq):
+    """Stage 2-3: parse the company URL, build + submit the filter (free — builds a snapshot)."""
+    cid = lpf.parse_company_id(req.url)
+    if not cid:
+        return JSONResponse({"error": "could not parse a company id from that URL"}, status_code=400)
+    _lpf_ensure_cache()
+    scope = req.scope
+    audience = req.audience if scope == "decision-makers" else ""
+    if not req.refresh:                                   # free re-run from the local cache
+        c = _lpf_cache_get(cid, scope, audience)
+        if c:
+            return JSONResponse({"cached": True, "company_id": cid, "scope": scope, "audience": audience,
+                                 "count": c["count"], "decision_makers": c["decision_makers"],
+                                 "rows": c["rows"], "records_limit": c["records_limit"],
+                                 "min_followers": c.get("min_followers") or 0,
+                                 "cached_at": c["created_at"].isoformat() if c["created_at"] else None})
+    titles = _lpf_get_title_nets().get(req.audience) if scope == "decision-makers" else None
+    rl = req.records_limit if req.records_limit and req.records_limit > 0 else None
+    mf = req.min_followers if req.min_followers and req.min_followers > 0 else 0
+    try:
+        r = lpf.submit_filter(cid, titles=titles, records_limit=rl, min_followers=mf)
+    except Exception as e:                                # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)
+    if r.get("error") or not r.get("snapshot_id"):
+        return JSONResponse({"error": r.get("error") or "no snapshot id returned", "company_id": cid}, status_code=502)
+    return JSONResponse({"company_id": cid, "snapshot_id": r["snapshot_id"], "scope": scope,
+                         "audience": audience, "titles": titles, "records_limit": rl,
+                         "min_followers": mf, "filter": r["filter"]})
+
+
+@app.get("/lpf/status/{sid}")
+def lpf_status(sid: str):
+    """Stage 2: FREE metadata read → status + record count + estimated cost."""
+    try:
+        return JSONResponse(lpf.snapshot_status(sid))
+    except Exception as e:                                # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/lpf/download")
+def lpf_download(req: _LpfDownloadReq):
+    """Stage 3 (PAID): download the snapshot records, then classify seniority locally."""
+    try:
+        st = lpf.snapshot_status(req.snapshot_id)          # never download a still-building snapshot
+        if st.get("status") != "ready":
+            return JSONResponse({"building": True, "status": st.get("status")})
+        recs = lpf.download(req.snapshot_id)
+    except Exception as e:                                # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)
+    if recs is None:
+        return JSONResponse({"building": True})           # delivery job not ready — retry
+    rows = lpf.classify_people(recs)
+    dm = sum(1 for r in rows if r["decision_maker"])
+    if req.company_id:                                    # cache so re-runs are free
+        _lpf_cache_put(req.company_id, req.scope, req.audience,
+                       req.records_limit or None, len(rows), dm, rows, req.min_followers)
+    return JSONResponse({"count": len(rows), "decision_makers": dm, "rows": rows,
+                         "raw_sample": recs[0] if recs else None})
 
 
 @app.get("/buyer-match/mandates")

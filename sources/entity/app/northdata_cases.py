@@ -256,8 +256,9 @@ def run_resolution_case(config: dict, cid: int) -> dict:
     resolutions = []
     for nm in case["names"]:
         try:
-            tools.search_northdata(nm)                      # LIVE
+            raw = tools.search_northdata(nm)                # LIVE — capture the raw NorthData output
             r = dict(getattr(tools, "_nd_last_resolution", None) or {})
+            r["raw_search"] = raw
         except Exception as e:  # noqa: BLE001
             r = {"error": f"{type(e).__name__}: {e}"}
         r["search_name"] = nm
@@ -265,6 +266,22 @@ def run_resolution_case(config: dict, cid: int) -> dict:
     targets = [r for r in resolutions if r.get("url")]
     winner = _select_target(targets, case.get("primary") or (case["names"][0] if case["names"] else ""))
     win_name = (winner or {}).get("result_name") or (winner or {}).get("search_name")
+
+    # Fetch the SAME ownership-graph output the live workflow feeds the LLM for the graph target
+    # (phases_registry: one graph, best name-matched winner). Mirrors that logging exactly.
+    network_output = None
+    network_summary = None
+    if winner and winner.get("url"):
+        try:
+            network_output = tools.northdata_network(winner["url"])
+            network_summary = "Network graph loaded"
+            if 'appears to be the ultimate parent' in network_output or 'TopCo' in network_output:
+                network_summary = "Entity appears to be the ultimate parent (TopCo)"
+            elif 'ULTIMATE PARENT (current)' in network_output or 'OWNED BY' in network_output:
+                network_summary = "Parent/ownership structure identified"
+        except Exception as e:  # noqa: BLE001 — live fetch; never break the grading path
+            network_output = f"[network fetch failed: {type(e).__name__}: {e}]"
+            network_summary = "Network fetch failed"
 
     exp = case["expect"]
     checks = []
@@ -290,4 +307,5 @@ def run_resolution_case(config: dict, cid: int) -> dict:
     except Exception:  # noqa: BLE001
         pass
     return {"id": cid, "case": case, "ok": overall, "checks": checks,
-            "resolutions": resolutions, "winner": winner, "win_name": win_name}
+            "resolutions": resolutions, "winner": winner, "win_name": win_name,
+            "network_output": network_output, "network_summary": network_summary}

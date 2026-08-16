@@ -47,6 +47,8 @@
   .hist-tbl .emp { font-weight:700; color:#0a3d91; text-align:right; white-space:nowrap; }
   .hist-tbl .nm { font-weight:600; color:var(--text); }
   .hist-tbl .q { color:var(--muted); }
+  .hist-tbl .li a { color:var(--link); text-decoration:none; font-size:12px; }
+  .hist-tbl .li a:hover { text-decoration:underline; }
 </style>
 {% endblock %}
 {% block body %}
@@ -70,7 +72,7 @@
 <div id="hist-wrap" style="display:none">
   <div class="hist-h">Recent lookups</div>
   <table class="hist-tbl"><thead>
-    <tr><th>Company</th><th>Query</th><th style="text-align:right">Employees</th></tr>
+    <tr><th>Company</th><th>Query</th><th>LinkedIn</th><th style="text-align:right">Employees</th></tr>
   </thead><tbody id="hist"></tbody></table>
 </div>
 
@@ -129,6 +131,10 @@ function loadHistory(){
         return '<tr onclick="runSearch(\''+esc(String(r.query).replace(/\\/g,"\\\\").replace(/'/g,"\\'"))+'\', false, false)">'
           + '<td class="nm">'+esc(r.name || '—')+'</td>'
           + '<td class="q">'+esc(r.query)+'</td>'
+          + '<td class="li">'+(r.linkedin_url
+              ? '<a href="'+esc(r.linkedin_url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'
+                + esc(String(r.linkedin_url).replace(/^https?:\/\/(www\.)?linkedin\.com\//i,'').replace(/\/$/,'')) + ' ↗</a>'
+              : '<span class="muted">—</span>')+'</td>'
           + '<td class="emp">'+(r.employees==null?'—':nfmt(r.employees))+'</td>'
           + '</tr>';
       }).join('');

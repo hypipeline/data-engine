@@ -28,6 +28,13 @@
   .nd-form textarea { font-family:'SF Mono','Fira Code',monospace; }
   .nd-form .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .fh { font-size:11.5px; color:#9aa3af; font-weight:400; }
+  .nd-net { margin-top:10px; border-top:1px solid #eee; padding-top:10px; }
+  .nd-net-h { font-size:12.5px; font-weight:600; color:#1a1a2e; margin-bottom:6px; }
+  .nd-phase { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; color:#be185d; margin-right:6px; }
+  .nd-log-json { background:#1e1e2e; color:#a6e3a1; padding:12px 14px; border-radius:6px; font-size:11.5px; line-height:1.55; margin:5px 0 0; white-space:pre-wrap; word-break:break-word; font-family:'SF Mono','Fira Code',monospace; max-height:460px; overflow:auto; }
+  .nd-exp { margin:4px 0; }
+  .nd-exp summary { cursor:pointer; font-size:12.5px; color:#2563eb; font-weight:600; font-family:'SF Mono','Fira Code',monospace; }
+  .nd-cc { color:#9aa3af; font-weight:400; }
 </style>
 {% endblock %}
 {% block body %}
@@ -146,9 +153,22 @@ function renderResult(id,r){
     var dt=ch.detail?' <span class="dt">'+esc(JSON.stringify(ch.detail))+'</span>':'';
     return '<div class="nd-check">'+(ch.ok?'✅':'❌')+' <span class="lab">'+esc(ch.label)+'</span>'+dt+'</div>';
   }).join('');
+  var outs=[];
+  (r.resolutions||[]).forEach(function(x){
+    if(x.raw_search){ outs.push({label:'northdata:'+(x.search_name||''), body:x.raw_search}); }
+  });
+  if(r.network_output){ outs.push({label:'northdata_network'+(r.network_summary?' — '+r.network_summary:''), body:r.network_output}); }
+  var net='';
+  if(outs.length){
+    net='<div class="nd-net"><div class="nd-net-h"><span class="nd-phase">NorthData</span>Raw output'
+      + ' <span class="fh">— the exact NorthData data the live run logs (click to expand)</span></div>'
+      + outs.map(function(o){ return '<details class="nd-exp"><summary>&#9656; '+esc(o.label)+' <span class="nd-cc">('+o.body.length.toLocaleString()+' chars)</span></summary><pre class="nd-log-json">'+esc(o.body)+'</pre></details>'; }).join('')
+      + '</div>';
+  }
   document.getElementById('body-'+id).innerHTML=
       '<div class="nd-checks" style="margin-top:10px">'+rows+'</div>'
-    + '<div class="nd-checks" style="margin-top:8px;border-top:1px solid #eee;padding-top:8px">'+checks+'</div>';
+    + '<div class="nd-checks" style="margin-top:8px;border-top:1px solid #eee;padding-top:8px">'+checks+'</div>'
+    + net;
   return r;
 }
 function runCase(id){
