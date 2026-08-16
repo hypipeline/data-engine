@@ -51,6 +51,13 @@ CASES = [
      "fixture": "nestle_de.svg.html",
      "expect": {"root": "Nestlé Deutschland AG", "ultimate_parent": "Nestlé S"},
      "note": "Known parent Nestlé S.A. — appears only as a sibling's parent, not the root's."},
+    {"slug": "abca", "name": "ABCA Systems Ltd. (UK)",
+     "url": "https://www.northdata.com/ABCA+Systems+Limited",
+     "fixture": "abca.svg.html",
+     "expect": {"root": "Abca Systems Ltd.", "ultimate_parent": "Abca Systems Group Ltd."},
+     "note": "Parent given as a CONTROLLING SHAREHOLDING, not an 'Ultimate parent' pointer: Abca "
+             "Systems Group Ltd. owns Abca Systems Ltd. at >=75%. is_top_itself must walk the "
+             "ownership chain, not just look for a pointer edge, or it wrongly calls the root the TopCo."},
 ]
 
 
