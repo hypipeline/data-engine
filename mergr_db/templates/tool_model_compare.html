@@ -222,6 +222,8 @@ function openCase(cid){
   SELECTED=cid; var cs=caseById(cid); if(!cs) return;
   q('detail').style.display='block';
   q('detail-title').textContent='Detail: '+cs.name;
+  // reset the LLM-input panel — it belongs to the previously-viewed case; re-open to fetch this one
+  var ib=q('llm-input'); if(ib){ ib.style.display='none'; ib.innerHTML=''; }
   q('expect-saved').textContent=''; q('summary').innerHTML='';
   loadExpect(cs.spec);
   renderMeta(cs.input_meta);
