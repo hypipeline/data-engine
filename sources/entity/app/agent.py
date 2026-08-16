@@ -166,10 +166,13 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             self.log('phase', "Phase 7: Registry Validation", {'phase_num': 7})
             report = self.validate_entity_in_registry(report)
 
-        # Phase 8: Re-analysis
+        # Phase 8: Re-analysis — OFF by default. The second LLM pass proved net-negative in practice
+        # (it timed out on the heaviest inputs and over-abstained, discarding good Phase-6 answers
+        # more often than it improved them). We now KEEP the Phase-6 recommendation and just flag the
+        # validation outcome. Re-enable the second pass by setting config 'reanalysis_enabled'.
         rv_status = (report.get('registry_validation') or {}).get('status')
         needs_reanalysis = (rv_status and rv_status != 'verified') or (entity and not has_registry_id)
-        if needs_reanalysis:
+        if needs_reanalysis and self.config.get('reanalysis_enabled'):
             reason = f"validation failed: {rv_status}" if rv_status else "no registry_id on recommended entity"
             self.log('phase', f"Phase 8: Re-analysis ({reason})", {'phase_num': 8})
             t8 = time.time()
@@ -177,12 +180,13 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
                 report, url, domain, website_data, entity_info, registries)
             self.timings['reanalysis'] = time.time() - t8
 
-        # Auto-downgrade confidence if re-validation also failed
+        # Flag a non-verified registry validation on the KEPT recommendation (no second LLM pass).
         rv_status = (report.get('registry_validation') or {}).get('status')
-        if needs_reanalysis and rv_status and rv_status != 'verified':
+        if rv_status and rv_status != 'verified':
             report['confidence'] = 'low'
-            report['validation_warning'] = 'Registry validation failed after re-analysis — confidence auto-downgraded'
-            self.log('warning', f"Confidence downgraded to 'low': re-validation status is '{rv_status}'")
+            report['validation_warning'] = (f"Registry validation not verified (status: {rv_status}) — "
+                                            "confidence downgraded; recommendation kept without a second LLM pass.")
+            self.log('warning', f"Confidence downgraded to 'low': registry validation status is '{rv_status}'")
 
         # Validate contractable affiliates
         affiliates = report.get('contractable_affiliates') or []
