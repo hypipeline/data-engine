@@ -67,3 +67,6 @@ mergr_*.json
 
 # local-only compose override (docs mount, etc.)
 mergr_db/docker-compose.override.yml
+
+# keep the compact network parser fixtures despite the global *.html rule
+!sources/entity/app/network_fixtures/*.html
