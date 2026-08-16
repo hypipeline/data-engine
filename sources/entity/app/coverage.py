@@ -398,9 +398,16 @@ def content_cache_get(cid):
         return None
     with closing(_conn()) as c:
         with c.cursor() as cur:
-            cur.execute("SELECT content FROM entity.phase1_content WHERE case_id=%s", (cid,))
+            cur.execute("SELECT content, built_at FROM entity.phase1_content WHERE case_id=%s", (cid,))
             r = cur.fetchone()
-            return r[0] if r else None
+            if not r:
+                return None
+            content, built_at = r[0], r[1]
+            # surface WHEN this evidence was actually gathered (distinct from the coverage-run time),
+            # so a stale cached input (e.g. old NorthData) is visible instead of silently reused.
+            if isinstance(content, dict) and isinstance(content.get("meta"), dict) and built_at:
+                content["meta"]["built_at"] = built_at.isoformat()
+            return content
 
 
 def _row(r):

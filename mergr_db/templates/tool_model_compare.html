@@ -274,6 +274,18 @@ function toggleInput(){
     box.innerHTML='<div class="muted" style="margin:6px 0">Exact input every model receives — click a section to expand.</div>'+inputSections(d);
   }).catch(function(e){ box.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
 }
+function evidenceAge(iso){
+  // When the fetch/extract/registry evidence (NorthData etc.) was actually gathered — NOT the
+  // coverage-run time. Old evidence = the models are being fed stale data; flag it loudly.
+  if(!iso) return '';
+  var t=new Date(iso), ms=Date.now()-t.getTime();
+  var mins=Math.floor(ms/6e4), hrs=Math.floor(mins/60), days=Math.floor(hrs/24);
+  var rel = days>0?(days+'d ago'):(hrs>0?(hrs+'h ago'):(mins+'m ago'));
+  var stale = ms > 864e5;   // > 1 day
+  var st = stale ? 'background:#fef3c7;color:#92400e;border:1px solid #fde68a'
+                 : 'background:#dcfce7;color:#166534';
+  return ' · <span class="pill" style="'+st+'" title="When this case&#39;s evidence was fetched/extracted (incl. NorthData). Tick &quot;rebuild Phase-1 input&quot; and Run to refresh it.">evidence built '+esc(t.toLocaleString())+' ('+rel+(stale?' — STALE, rebuild to refresh':'')+')</span>';
+}
 function renderMeta(m){
   if(!m){ q('detail-meta').innerHTML=''; return; }
   var cov=m.coverage||{}, covHtml='';
@@ -281,7 +293,7 @@ function renderMeta(m){
   else if(cov.status==='pass') covHtml=' <span class="pill pass">coverage ✓</span>';
   q('detail-meta').innerHTML='Input: <b>'+esc(m.mode)+'</b> mode · '
     +((m.extracted_names&&m.extracted_names.length)?('extracted: '+esc(m.extracted_names.join(', '))+' · '):'<b style="color:#991b1b">extracted: none</b> · ')
-    +'registries: '+esc((m.registries||[]).join(', '))+' · '+(m.user_chars||0).toLocaleString()+' input chars'+covHtml;
+    +'registries: '+esc((m.registries||[]).join(', '))+' · '+(m.user_chars||0).toLocaleString()+' input chars'+evidenceAge(m.built_at)+covHtml;
 }
 var CURRENT=[];
 function cell(r){
