@@ -280,77 +280,122 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         return self.call_claude(system_prompt, user_message, max_tokens, op=op)
 
     def call_claude(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        # Streaming request: the read timeout below is applied PER CHUNK (the gap between SSE
+        # events), not to the whole response. Anthropic streams tokens continuously, so a long
+        # generation never trips it — this replaces the old single 120s blocking read that timed
+        # out on heavy analyses (large input + 16k output, e.g. silfern/questglobal).
         self.tools.count('claude', op=op)
         input_chars = len(system_prompt) + len(user_message)
-        self.log('llm', f"Calling Claude ({self.config['model']}) — input: {input_chars:,} chars, max_tokens: {max_tokens}")
+        self.log('llm', f"Calling Claude ({self.config['model']}) — input: {input_chars:,} chars, max_tokens: {max_tokens} [streaming]")
+        parts: list[str] = []
+        it, ot, stop = 0, 0, 'unknown'
         try:
-            r = requests.post('https://api.anthropic.com/v1/messages',
-                              headers={'Content-Type': 'application/json',
-                                       'x-api-key': self.config['anthropic_api_key'],
-                                       'anthropic-version': '2023-06-01'},
-                              json={'model': self.config['model'], 'max_tokens': max_tokens,
-                                    'system': system_prompt,
-                                    'messages': [{'role': 'user', 'content': user_message}]},
-                              timeout=120)
+            with requests.post('https://api.anthropic.com/v1/messages',
+                               headers={'Content-Type': 'application/json',
+                                        'x-api-key': self.config['anthropic_api_key'],
+                                        'anthropic-version': '2023-06-01'},
+                               json={'model': self.config['model'], 'max_tokens': max_tokens,
+                                     'system': system_prompt,
+                                     'messages': [{'role': 'user', 'content': user_message}],
+                                     'stream': True},
+                               stream=True, timeout=(15, 120)) as r:
+                if r.status_code != 200:
+                    try:
+                        err = (r.json().get('error') or {}).get('message')
+                    except Exception:
+                        err = 'No response body'
+                    self.log('llm', f"ERROR: Claude API returned HTTP {r.status_code} — {err}")
+                    return json.dumps({'error': f"Claude API returned HTTP {r.status_code}"})
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith('data:'):
+                        continue
+                    try:
+                        ev = json.loads(line[5:].strip())
+                    except Exception:
+                        continue
+                    et = ev.get('type')
+                    if et == 'message_start':
+                        it = ((ev.get('message') or {}).get('usage') or {}).get('input_tokens', 0)
+                    elif et == 'content_block_delta' and (ev.get('delta') or {}).get('type') == 'text_delta':
+                        parts.append(ev['delta'].get('text', ''))
+                    elif et == 'message_delta':
+                        ot = (ev.get('usage') or {}).get('output_tokens', ot)
+                        stop = (ev.get('delta') or {}).get('stop_reason', stop)
+                    elif et == 'error':
+                        err = (ev.get('error') or {}).get('message', 'stream error')
+                        self.log('llm', f"ERROR: Claude stream error — {err}")
+                        return json.dumps({'error': f"Claude stream error: {err}"})
         except requests.RequestException as e:
             self.log('llm', f"ERROR: Claude API request failed — {e}")
             return json.dumps({'error': 'Claude API request failed'})
-        if r.status_code != 200 or not r.text:
-            try:
-                err = (r.json().get('error') or {}).get('message')
-            except Exception:
-                err = r.text or 'No response body'
-            self.log('llm', f"ERROR: Claude API returned HTTP {r.status_code} — {err}")
-            return json.dumps({'error': f"Claude API returned HTTP {r.status_code}"})
-        data = r.json()
-        usage = data.get('usage') or {}
-        it = usage.get('input_tokens', 0)
-        ot = usage.get('output_tokens', 0)
+        text = ''.join(parts)
         self.total_input_tokens += it
         self.total_output_tokens += ot
-        text = ''.join(b.get('text', '') for b in (data.get('content') or []) if b.get('type') == 'text')
-        stop = data.get('stop_reason', 'unknown')
         call_cost = (it * 3.0 / 1_000_000) + (ot * 15.0 / 1_000_000)
         self.log('llm', f"Response: {it:,} input / {ot:,} output tokens — ${call_cost:.4f}")
         if stop == 'max_tokens':
             self.log('llm', f"WARNING: Response truncated (hit max_tokens={max_tokens}). Output may be incomplete.")
+        if not text:
+            return json.dumps({'error': 'Claude API returned empty response'})
         return text
 
     def call_openai(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        # Streaming (see call_claude): per-chunk read timeout instead of one 120s blocking read.
         self.tools.count('openai', op=op)
         input_chars = len(system_prompt) + len(user_message)
         model = self.config['model']
-        self.log('llm', f"Calling OpenAI ({model}) — input: {input_chars:,} chars, max_tokens: {max_tokens}")
+        self.log('llm', f"Calling OpenAI ({model}) — input: {input_chars:,} chars, max_tokens: {max_tokens} [streaming]")
+        parts: list[str] = []
+        it, ot, finish = 0, 0, 'unknown'
         try:
-            r = requests.post('https://api.openai.com/v1/chat/completions',
-                              headers={'Content-Type': 'application/json',
-                                       'Authorization': f"Bearer {self.config['openai_api_key']}"},
-                              json={'model': model, 'max_completion_tokens': max_tokens,
-                                    'messages': [{'role': 'system', 'content': system_prompt},
-                                                 {'role': 'user', 'content': user_message}]},
-                              timeout=120)
+            with requests.post('https://api.openai.com/v1/chat/completions',
+                               headers={'Content-Type': 'application/json',
+                                        'Authorization': f"Bearer {self.config['openai_api_key']}"},
+                               json={'model': model, 'max_completion_tokens': max_tokens,
+                                     'messages': [{'role': 'system', 'content': system_prompt},
+                                                  {'role': 'user', 'content': user_message}],
+                                     'stream': True, 'stream_options': {'include_usage': True}},
+                               stream=True, timeout=(15, 120)) as r:
+                if r.status_code != 200:
+                    try:
+                        err = (r.json().get('error') or {}).get('message')
+                    except Exception:
+                        err = 'No response body'
+                    self.log('llm', f"ERROR: OpenAI API returned HTTP {r.status_code} — {err}")
+                    return json.dumps({'error': f"OpenAI API returned HTTP {r.status_code}"})
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith('data:'):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == '[DONE]':
+                        break
+                    try:
+                        ev = json.loads(payload)
+                    except Exception:
+                        continue
+                    ch = ev.get('choices') or []
+                    if ch:
+                        delta = (ch[0].get('delta') or {}).get('content')
+                        if delta:
+                            parts.append(delta)
+                        if ch[0].get('finish_reason'):
+                            finish = ch[0]['finish_reason']
+                    u = ev.get('usage')
+                    if u:
+                        it = u.get('prompt_tokens', it)
+                        ot = u.get('completion_tokens', ot)
         except requests.RequestException as e:
             self.log('llm', f"ERROR: OpenAI API request failed — {e}")
             return json.dumps({'error': 'OpenAI API request failed'})
-        if r.status_code != 200 or not r.text:
-            try:
-                err = (r.json().get('error') or {}).get('message')
-            except Exception:
-                err = r.text or 'No response body'
-            self.log('llm', f"ERROR: OpenAI API returned HTTP {r.status_code} — {err}")
-            return json.dumps({'error': f"OpenAI API returned HTTP {r.status_code}"})
-        data = r.json()
-        usage = data.get('usage') or {}
-        it = usage.get('prompt_tokens', 0)
-        ot = usage.get('completion_tokens', 0)
+        text = ''.join(parts)
         self.total_input_tokens += it
         self.total_output_tokens += ot
-        text = (((data.get('choices') or [{}])[0].get('message') or {}).get('content')) or ''
-        finish = (data.get('choices') or [{}])[0].get('finish_reason', 'unknown')
         call_cost = (it * 2.5 / 1_000_000) + (ot * 10.0 / 1_000_000)
         self.log('llm', f"Response: {it:,} input / {ot:,} output tokens — ${call_cost:.4f}")
         if finish == 'length':
             self.log('llm', f"WARNING: Response truncated (hit max_tokens={max_tokens}). Output may be incomplete.")
+        if not text:
+            return json.dumps({'error': 'OpenAI API returned empty response'})
         return text
 
     def parse_json_response(self, text: str, fallback: dict) -> dict:
