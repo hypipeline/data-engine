@@ -97,24 +97,26 @@ def resolve(html: str) -> dict:
     root_id = next((i for i, n in nodes.items() if n['root']), None)
     root_name = name(root_id) if root_id else None
 
-    # 1. Root's ultimate-parent POINTER edges (a distinct arrow type). Split current vs former.
-    ult_pointers = []
-    for e in edges:
-        if e['source'] == root_id and 'ultimate parent' in e['label'].lower():
-            ult_pointers.append({'id': e['target'], 'name': name(e['target']),
-                                 'label': e['label'], 'old': e['old']})
-
-    # 2. CURRENT shareholding/parent edges (exclude historical + undirected), resolved to owner→owned.
+    # 1+2. Resolve EVERY ownership edge by its arrowhead (the owned/child end) — including the
+    #      root's "Ultimate parent" edges. These are NOT a special "always points up" arrow: the
+    #      arrowhead gives the direction just like any other edge. A target is a genuine parent
+    #      ABOVE the root only when the arrowhead sits on the ROOT (target owns root). When the
+    #      arrowhead sits on the target, the ROOT owns the target — i.e. the root IS that entity's
+    #      ultimate parent (a downward holding), so it must not be counted as a parent overhead.
+    #      [Quest Global fix: every 'Ultimate parent' arrow points DOWN from Services PTE, so
+    #      Services is the TopCo — not owned by Engineering Solutions.]
+    ult_pointers = []            # genuine parents ABOVE the root (target owns root)
     current_owned_by = {}        # owned_id -> set(owner_id)
     current_owns = {}            # owner_id -> set(owned_id)
     stakes = []
     for e in edges:
-        if e['source'] == root_id and 'ultimate parent' in e['label'].lower():
-            continue             # handled as pointers above
         oo = _owner_owned(e)
         if not oo:
-            continue             # Address / Merger → not ownership
+            continue             # Address / Merger → not directed ownership
         owner, owned = oo
+        if e['source'] == root_id and 'ultimate parent' in e['label'].lower() and owned == root_id:
+            ult_pointers.append({'id': e['target'], 'name': name(e['target']),
+                                 'label': e['label'], 'old': e['old']})
         rec = {'owner': name(owner), 'owned': name(owned), 'label': e['label'], 'old': e['old']}
         stakes.append(rec)
         if not e['old']:

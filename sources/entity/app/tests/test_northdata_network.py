@@ -103,27 +103,31 @@ def resolved(network_html):
     return ns.resolve(network_html)
 
 
-def test_resolver_finds_single_ultimate_parent(resolved):
-    # KNOWN TRUTH: Quest Global Services PTE. Ltd. → Quest Global Engineering Solutions PTE. Ltd.
+def test_resolver_root_is_the_topco(resolved):
+    # GROUND TRUTH (northdata.com): every 'Ultimate parent' arrow points DOWN from Services PTE
+    # (arrowhead on the child), so Services PTE is ITSELF the ultimate parent / TopCo — the
+    # Engineering Solutions page lists Services PTE as its ultimate parent. (The resolver used to
+    # read these arrows backwards and wrongly named Engineering Solutions the parent.)
     assert resolved['has_network'] is True
-    assert resolved['ultimate_parent'] is not None
-    assert "Quest Global Engineering Solutions" in resolved['ultimate_parent']
-    assert resolved['is_top_itself'] is False
+    assert resolved['is_top_itself'] is True
+    assert resolved['ultimate_parent'] is None
 
 
-def test_resolver_excludes_former_parents(resolved):
-    # Services-NA and Agreeya are data-old / "prev." → must be FORMER, never current ultimate.
-    formers = " | ".join(resolved['former_parents'])
-    assert "Quest Global Services-NA Inc." in formers
-    assert "Agreeya Mobility India Ltd." in formers
-    assert "Quest Global Services-NA" not in (resolved['ultimate_parent'] or "")
+def test_resolver_former_edges_are_subsidiaries_not_parents(resolved):
+    # The historical 'Ultimate parent' arrows (Services-NA, Agreeya) point DOWN from Services too →
+    # they are FORMER SUBSIDIARIES, not former parents. Services PTE stays the TopCo.
+    assert resolved['former_parents'] == []
+    olds = [(s['owner'], s['owned']) for s in resolved['stakes'] if s['old']]
+    assert any("Services PTE" in o and "Services-NA" in wd for o, wd in olds)
+    assert any("Services PTE" in o and "Agreeya" in wd for o, wd in olds)
 
 
-def test_resolver_demotes_node_with_owner_above_it(resolved):
-    # Synapse is a *current* pointer but is itself owned by Services-NA → not ultimate.
-    excluded = {c['name']: c['owned_by'] for c in resolved['excluded_not_top']}
-    assert any("Synapse" in n for n in excluded)
-    assert any("Services-NA" in o for owners in excluded.values() for o in owners)
+def test_resolver_synapse_is_a_subsidiary_not_a_parent(resolved):
+    # With arrowheads read correctly Synapse is a CURRENT subsidiary of Services PTE (Services is
+    # its ultimate parent), never a parent-candidate above the root.
+    cur = [(s['owner'], s['owned']) for s in resolved['stakes'] if not s['old']]
+    assert any("Services PTE" in o and "Synapse" in wd for o, wd in cur)
+    assert not any("Synapse" in c['name'] for c in resolved['ultimate_candidates'])
 
 
 def test_resolver_direction_owner_owns_subsidiary(resolved):

@@ -36,8 +36,11 @@ CASES = [
     {"slug": "questglobal", "name": "Quest Global Services PTE. Ltd. (Singapore)",
      "url": "https://www.northdata.com/_c5070753268498432",
      "fixture": "questglobal.svg.html",
-     "expect": {"root": "Quest Global Services PTE. Ltd.", "ultimate_parent": "Quest Global Engineering Solutions"},
-     "note": "Five 'ultimate parent' labels on the page; resolver must land on the one current parent."},
+     "expect": {"root": "Quest Global Services PTE. Ltd.", "ultimate_parent": None},
+     "note": "All five 'Ultimate parent' arrows point DOWN from Services PTE (arrowhead on the child), "
+             "so Services PTE is itself the TopCo — the resolver must read the arrowhead, not assume "
+             "the label points up. Confirmed against northdata.com: the Engineering Solutions page lists "
+             "Services PTE as its ultimate parent."},
     {"slug": "audi", "name": "AUDI AG",
      "url": "https://www.northdata.com/Audi+AG",
      "fixture": "audi.svg.html",
