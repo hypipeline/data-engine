@@ -97,16 +97,12 @@ def resolve(html: str) -> dict:
     root_id = next((i for i, n in nodes.items() if n['root']), None)
     root_name = name(root_id) if root_id else None
 
-    # 1+2. Resolve EVERY ownership edge by its arrowhead (the owned/child end) — including the
-    #      root's "Ultimate parent" edges. These are NOT a special "always points up" arrow: the
-    #      arrowhead gives the direction just like any other edge. A target is a genuine parent
-    #      ABOVE the root only when the arrowhead sits on the ROOT (target owns root). When the
-    #      arrowhead sits on the target, the ROOT owns the target — i.e. the root IS that entity's
-    #      ultimate parent (a downward holding), so it must not be counted as a parent overhead.
-    #      [Quest Global fix: every 'Ultimate parent' arrow points DOWN from Services PTE, so
-    #      Services is the TopCo — not owned by Engineering Solutions.]
-    ult_pointers = []            # genuine parents ABOVE the root (target owns root)
-    current_owned_by = {}        # owned_id -> set(owner_id)
+    # 1+2. Resolve EVERY ownership edge by its arrowhead (the owned/child end) into a current
+    #      ownership graph. The arrowhead gives direction for every edge alike — an explicit
+    #      "Ultimate parent" arrow AND a controlling shareholding (">=75%", "Direct parent", ...).
+    #      So a parent expressed either way lands in current_owned_by. [Quest Global: the
+    #      "Ultimate parent" arrows point DOWN from Services PTE, so it owns them, not the reverse.]
+    current_owned_by = {}        # owned_id -> set(owner_id)   (current edges only)
     current_owns = {}            # owner_id -> set(owned_id)
     stakes = []
     for e in edges:
@@ -114,32 +110,48 @@ def resolve(html: str) -> dict:
         if not oo:
             continue             # Address / Merger → not directed ownership
         owner, owned = oo
-        if e['source'] == root_id and 'ultimate parent' in e['label'].lower() and owned == root_id:
-            ult_pointers.append({'id': e['target'], 'name': name(e['target']),
-                                 'label': e['label'], 'old': e['old']})
-        rec = {'owner': name(owner), 'owned': name(owned), 'label': e['label'], 'old': e['old']}
-        stakes.append(rec)
+        stakes.append({'owner': name(owner), 'owned': name(owned), 'label': e['label'], 'old': e['old']})
         if not e['old']:
             current_owned_by.setdefault(owned, set()).add(owner)
             current_owns.setdefault(owner, set()).add(owned)
 
-    # 3. Resolve the current ultimate parent.
-    current_candidates = [p for p in ult_pointers if not p['old']]
-    former_parents = [p for p in ult_pointers if p['old']]
-
-    tops, not_top = [], []
-    for c in current_candidates:
-        above = current_owned_by.get(c['id'])
-        if above:
-            not_top.append({**c, 'owned_by': sorted(name(a) for a in above)})
+    # 3. Walk UP the current ownership chain from the root to its topmost owner(s). The root is the
+    #    TopCo only if NOTHING currently owns it. This catches a parent given as a controlling
+    #    shareholding, not just as an explicit "Ultimate parent" pointer. [ABCA: Abca Systems Group
+    #    Ltd. owns Abca Systems Ltd. at >=75%, so Group is the ultimate parent — not the root.]
+    root_owners = current_owned_by.get(root_id, set())
+    tops_ids, intermediates, seen, frontier = set(), set(), {root_id}, set(root_owners)
+    while frontier:
+        nid = frontier.pop()
+        if nid in seen:
+            continue
+        seen.add(nid)
+        ups = current_owned_by.get(nid, set()) - seen          # who owns this owner (excl. cycles)
+        if ups:
+            intermediates.add(nid)
+            frontier |= ups
         else:
-            controls = sorted(name(k) for k in current_owns.get(c['id'], ()))
-            tops.append({**c, 'controls': controls})
+            tops_ids.add(nid)                                  # nobody owns it → a current top
 
-    # Tie-breaker: prefer a top that anchors a live downward chain.
+    tops = [{'id': t, 'name': name(t),
+             'controls': sorted(name(k) for k in current_owns.get(t, ()))} for t in tops_ids]
+    not_top = [{'name': name(i), 'owned_by': sorted(name(a) for a in current_owned_by.get(i, ()))}
+               for i in intermediates]
+
+    # Tie-breaker: prefer a top that anchors a live downward chain (most current holdings).
     anchored = [t for t in tops if t['controls']]
     ranked = sorted(tops, key=lambda t: -len(t['controls']))
     ultimate = (anchored[0] if len(anchored) == 1 else (ranked[0] if ranked else None))
+
+    # Former parents: entities that owned the root in a HISTORICAL edge and don't own it now.
+    former_ids = set()
+    for e in edges:
+        if not e['old']:
+            continue
+        oo = _owner_owned(e)
+        if oo and oo[1] == root_id and oo[0] not in root_owners:
+            former_ids.add(oo[0])
+    former_parents = [name(i) for i in former_ids]
 
     dissolved = [n['name'] for n in nodes.values() if n['warning']]
 
@@ -147,10 +159,10 @@ def resolve(html: str) -> dict:
         'has_network': True,
         'target': root_name,
         'ultimate_parent': ultimate['name'] if ultimate else None,
-        'is_top_itself': (not current_candidates),     # root has no current parent pointer → TopCo
+        'is_top_itself': (not root_owners),              # nothing currently owns the root → TopCo
         'ultimate_candidates': tops,                     # current tops (may be >1 before tie-break)
-        'excluded_not_top': not_top,                     # current pointers that are themselves owned
-        'former_parents': [p['name'] for p in former_parents],
+        'excluded_not_top': not_top,                     # intermediate owners (themselves owned)
+        'former_parents': former_parents,
         'stakes': stakes,
         'dissolved': dissolved,
     }
