@@ -45,11 +45,12 @@
   .stage-lbl { font-weight:700; min-width:230px; }
   .btn.primary:disabled { opacity:.45; cursor:not-allowed; }
   .ent-name { font-weight:700; }
-  .llm-pre { background:#fff; border:1px solid var(--border); border-radius:6px; padding:10px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:440px; overflow:auto; }
-  .isec { border:1px solid var(--border); border-radius:6px; margin:5px 0; overflow:hidden; }
-  .isec-h { padding:7px 10px; background:#f2f5f9; cursor:pointer; font-size:12.5px; font-weight:600; }
-  .isec-h:hover { background:#e8eef5; } .isec-h .tri { color:var(--muted); }
-  .isec .llm-pre { border:none; border-top:1px solid var(--border); border-radius:0; margin:0; }
+  /* input sections rendered like the live entity search: blue expandable + dark code block */
+  .llm-pre { margin:4px 0 10px; padding:10px 12px; background:#1a1a2e; color:#c9d1d9; border-radius:6px; font-family:var(--mono); font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:440px; overflow:auto; }
+  .isec { margin:4px 0; border-bottom:1px solid #f0f0f5; }
+  .isec > summary { cursor:pointer; font-size:12.5px; color:#4a90d9; font-weight:600; padding:6px 0; }
+  .isec > summary:hover { text-decoration:underline; }
+  .isec[open] > summary { color:#1a1a2e; }
   .raw { display:none; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:320px; overflow:auto; }
 </style>
 {% endblock %}
@@ -259,10 +260,9 @@ function inputSections(d){
   var secs=(d.sections && d.sections.length) ? d.sections
     : [{label:'System Prompt', content:d.system||''},{label:'User message (evidence)', content:d.user||''}];
   return secs.map(function(s){
-    var id='sec_'+Math.random().toString(36).slice(2,8), len=(s.content||'').length;
-    return '<div class="isec"><div class="isec-h" onclick="var e=document.getElementById(\''+id+'\');var o=e.style.display!=\'block\';e.style.display=o?\'block\':\'none\';this.querySelector(\'.tri\').textContent=o?\'▾\':\'▸\'">'
-      +'<span class="tri">▸</span> '+esc(s.label)+' <span class="muted">('+len.toLocaleString()+' chars)</span></div>'
-      +'<pre class="llm-pre" id="'+id+'" style="display:none">'+esc(s.content||'')+'</pre></div>';
+    var len=(s.content||'').length;
+    return '<details class="isec"><summary>'+esc(s.label)+' <span class="muted">('+len.toLocaleString()+' chars)</span></summary>'
+      +'<pre class="llm-pre">'+esc(s.content||'')+'</pre></details>';
   }).join('');
 }
 function toggleInput(){
