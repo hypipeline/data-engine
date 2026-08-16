@@ -317,6 +317,8 @@ async def api_coverage_run(request: Request):
         r = coverage.run_case(CONFIG, c, refresh=refresh)
         if c.get("id"):                        # persist so the page shows last result + when
             coverage.save_last_result(c["id"], r)
+            if refresh:                        # rebuilt Phase-1 input → old model verdicts are now
+                model_compare._clear_results(c["id"])   # stale; drop them so nothing sits on old input
         results.append(r)
     summary = {"total": len(results),
                "pass": sum(1 for r in results if r["status"] == "pass"),

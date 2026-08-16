@@ -246,7 +246,9 @@ function runCoverage(){
   getJSON(EB+'/api/coverage/run',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({id:c.id, refresh:q('refresh-input').checked})})
   .then(function(){ return getJSON(EB+'/api/modelcompare/results?case_id='+c.id); })
-  .then(function(mc){ c.input_meta=mc.input_meta; renderMeta(c.input_meta); updateStages((c.input_meta||{}).coverage); renderMatrix();
+  .then(function(mc){ c.input_meta=mc.input_meta;
+    c.results={}; (mc.results||[]).forEach(function(r){ if(r&&r.model) c.results[r.model]=r; });  // a refresh clears these → reflect it
+    renderMeta(c.input_meta); updateStages((c.input_meta||{}).coverage); renderMatrix();
     btn.disabled=false; btn.textContent='▶ Run coverage test'; })
   .catch(function(e){ btn.disabled=false; btn.textContent='▶ Run coverage test';
     q('cov-status').innerHTML='<span class="pill fail">error</span> <span class="muted">'+esc(e.message||e)+'</span>'; });
