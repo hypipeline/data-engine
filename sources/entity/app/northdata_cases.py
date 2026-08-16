@@ -301,6 +301,18 @@ def run_resolution_case(config: dict, cid: int) -> dict:
         checks.append({"label": f"graph target is {exp['target']}",
                        "ok": bool(winner) and exp["target"].lower() in (win_name or "").lower(),
                        "detail": {"picked": win_name, "url": (winner or {}).get("url")}})
+        # Name-match is not enough: a company and its BRANCH share the name, but only the company
+        # record carries the ownership graph. Assert a real graph actually loaded for the pick — this
+        # is what catches "picked the Singapore branch (BR …), which has no graph" for Quest Global.
+        _out = network_output or ""
+        graph_ok = bool(_out) and 'No network graph' not in _out \
+            and 'No NorthData ownership network' not in _out and 'fetch failed' not in _out
+        _url = (winner or {}).get("url") or ""
+        checks.append({"label": "ownership graph actually loaded for the graph target",
+                       "ok": graph_ok,
+                       "detail": {"network_summary": network_summary,
+                                  "picked_branch_record": ('/BR ' in _url or '%20BR%20' in _url or '/BR%20' in _url),
+                                  "url": _url}})
     else:
         checks.append({"label": "no graph fetched (guard should fire)", "ok": winner is None,
                        "detail": {"picked": win_name}})

@@ -197,8 +197,16 @@ class NorthDataMixin:
             match_list.append("{} → {}".format(r['name'], r['url']))
         header = "=== NorthData Search Results ===\n" + "\n".join(match_list)
 
-        # Fetch full company page for the best (first) match
-        best_url = parsed[0]['url']
+        # Pick the best match to graph. A company and its BRANCH ("Zweigniederlassung", URL segment
+        # "/BR <id>") share the name, but only the COMPANY record carries the ownership graph — so
+        # among name-matching hits, prefer a non-branch record; fall back to the top hit if every
+        # match is a branch. [Quest Global: the top hit is the Singapore branch (BR 999506259) with
+        # no graph; the company record (_c…) has the 5-parent graph.]
+        def _is_branch(u):
+            return bool(re.search(r'/BR(?:%20|\s|\+)\d', u or ''))
+        _matched = [r for r in parsed if self._nd_name_match(clean, r.get('name'))] or parsed
+        best = next((r for r in _matched if not _is_branch(r.get('url'))), _matched[0])
+        best_url = best['url']
         page_html = self._northdata_get(best_url)
         page_text = ''
         if page_html:
@@ -208,11 +216,11 @@ class NorthDataMixin:
         if page_text:
             result += "\n\n{}".format(page_text)
 
-        # list result: the network target is the top hit — but only flag it matched if its name
-        # actually corresponds to what we searched (guards against fuzzy first-result contamination).
+        # list result: only flag it matched if its name actually corresponds to what we searched
+        # (guards against fuzzy first-result contamination).
         self._nd_last_resolution = {'name': entity_name, 'url': best_url,
-                                    'result_name': parsed[0].get('name'),
-                                    'matched': self._nd_name_match(clean, parsed[0].get('name')),
+                                    'result_name': best.get('name'),
+                                    'matched': self._nd_name_match(clean, best.get('name')),
                                     'company_page': False}
         self._nd_log({'tool': 'search_northdata', 'input': entity_name, 'output': result[:500]})
         return result
