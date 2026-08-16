@@ -275,7 +275,9 @@ def run_resolution_case(config: dict, cid: int) -> dict:
         try:
             network_output = tools.northdata_network(winner["url"])
             network_summary = "Network graph loaded"
-            if 'appears to be the ultimate parent' in network_output or 'TopCo' in network_output:
+            if 'No network graph' in network_output or 'No NorthData ownership network' in network_output:
+                network_summary = "No ownership graph on this page (branch/plain record)"
+            elif 'appears to be the ultimate parent' in network_output or 'TopCo' in network_output:
                 network_summary = "Entity appears to be the ultimate parent (TopCo)"
             elif 'ULTIMATE PARENT (current)' in network_output or 'OWNED BY' in network_output:
                 network_summary = "Parent/ownership structure identified"
