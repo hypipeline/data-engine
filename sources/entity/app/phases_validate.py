@@ -39,58 +39,66 @@ class ValidationMixin:
         source = None
         validation_url = None
 
-        # US → Bizapedia by file number + state
+        # US → Delaware first (authoritative for DE file numbers), then Bizapedia by file number.
         if country == 'US' and state:
-            self.log('validate', f"Looking up Bizapedia: file number {registry_id} in {state}...")
-            biz = self.tools.lookup_bizapedia_by_file_number(registry_id, state)
-            if biz:
-                registry_name = biz.get('EntityName')
-                registry_status = biz.get('FilingStatus')
-                registry_data = biz
-                source = 'Bizapedia'
-                validation_url = '/validate.php?' + urlencode({
-                    'entity_name': llm_name, 'registry_id': registry_id, 'country': 'US', 'state': state})
-                entity_type = (biz.get('EntityType') or '').upper()
-                domestic_state = biz.get('DomesticJurisdictionPostalAbbreviation')
-                # Check for branch (Foreign) registration
-                if 'FOREIGN' in entity_type or 'OUT OF STATE' in entity_type:
-                    registry_status = f"Branch ({state}) — home: {domestic_state}"
-                # Check for fictitious name (trade name, not a legal entity)
-                if 'FICTITIOUS' in entity_type:
-                    fictitious_owner = None
-                    for p in (biz.get('Principals') or []):
-                        if (p.get('Titles') or '').lower() == 'owner' and p.get('PrincipalName'):
-                            fictitious_owner = p['PrincipalName']
-                            break
-                    owner_note = f" (owner: {fictitious_owner})" if fictitious_owner else ''
-                    registry_status = f"Fictitious name{owner_note}"
-                self.log('validate', f"Bizapedia returned: \"{registry_name}\" (status: {registry_status})", {
-                    'expandable': True,
-                    'sections': [{'label': 'Full Bizapedia Record',
-                                  'content': json.dumps(biz, indent=4)}],
-                })
-            else:
-                self.log('validate', f"Bizapedia: no result for file number {registry_id} in {state}")
+            # For a Delaware entity the Delaware Division of Corporations ISSUED the file number,
+            # so it is the source of truth — check it FIRST. This stops a stale/wrong Bizapedia
+            # record from shadowing it: Bizapedia maps DE file #4334492 to "SDA CAPITAL MANAGEMENT,
+            # LLC" while Delaware correctly says "SREP CAPITAL MANAGEMENT, LLC", which previously
+            # forced a false name_mismatch on a valid, active entity.
+            if state == 'DE':
+                self.log('validate', f"Looking up Delaware Div. of Corps: file number {registry_id}...")
+                de = self.tools.lookup_delaware_by_file_number(registry_id)
+                if isinstance(de, dict) and de.get('blocked'):
+                    self.log('validate', f"Delaware Div. of Corps: request BLOCKED for file #{registry_id} "
+                             f"(not a confirmed absence) — falling back to Bizapedia")
+                elif de:
+                    registry_name = de['name']
+                    de_status = (de.get('status') or '').lower()
+                    registry_status = 'Active' if 'good standing' in de_status else (de.get('status') or 'unknown')
+                    registry_data = de
+                    source = 'Delaware Div. of Corps.'
+                    validation_url = 'https://icis.corp.delaware.gov/ecorp/entitysearch/namesearch.aspx'
+                    self.log('validate', f"Delaware returned: \"{registry_name}\" (status: {registry_status})", {
+                        'expandable': True,
+                        'sections': [{'label': 'Delaware Record', 'content': json.dumps(de, indent=4)}],
+                    })
+                else:
+                    self.log('validate', f"Delaware: no result for file number {registry_id}")
 
-                # Fallback: Delaware Division of Corporations for DE entities
-                if state == 'DE':
-                    self.log('validate', f"Trying Delaware Div. of Corps: file number {registry_id}...")
-                    de = self.tools.lookup_delaware_by_file_number(registry_id)
-                    if de:
-                        registry_name = de['name']
-                        de_status = (de.get('status') or '').lower()
-                        # Map Delaware statuses to our status format
-                        registry_status = 'Active' if 'good standing' in de_status else (de.get('status') or 'unknown')
-                        registry_data = de
-                        source = 'Delaware Div. of Corps.'
-                        validation_url = 'https://icis.corp.delaware.gov/ecorp/entitysearch/namesearch.aspx'
-                        self.log('validate', f"Delaware returned: \"{registry_name}\" (status: {registry_status})", {
-                            'expandable': True,
-                            'sections': [{'label': 'Delaware Record',
-                                          'content': json.dumps(de, indent=4)}],
-                        })
-                    else:
-                        self.log('validate', f"Delaware: no result for file number {registry_id}")
+            # Bizapedia by file number — primary for non-DE US states; for DE it is only a fallback
+            # used when the authoritative Delaware lookup was blocked or found nothing.
+            if not registry_name:
+                self.log('validate', f"Looking up Bizapedia: file number {registry_id} in {state}...")
+                biz = self.tools.lookup_bizapedia_by_file_number(registry_id, state)
+                if biz:
+                    registry_name = biz.get('EntityName')
+                    registry_status = biz.get('FilingStatus')
+                    registry_data = biz
+                    source = 'Bizapedia'
+                    validation_url = '/validate.php?' + urlencode({
+                        'entity_name': llm_name, 'registry_id': registry_id, 'country': 'US', 'state': state})
+                    entity_type = (biz.get('EntityType') or '').upper()
+                    domestic_state = biz.get('DomesticJurisdictionPostalAbbreviation')
+                    # Check for branch (Foreign) registration
+                    if 'FOREIGN' in entity_type or 'OUT OF STATE' in entity_type:
+                        registry_status = f"Branch ({state}) — home: {domestic_state}"
+                    # Check for fictitious name (trade name, not a legal entity)
+                    if 'FICTITIOUS' in entity_type:
+                        fictitious_owner = None
+                        for p in (biz.get('Principals') or []):
+                            if (p.get('Titles') or '').lower() == 'owner' and p.get('PrincipalName'):
+                                fictitious_owner = p['PrincipalName']
+                                break
+                        owner_note = f" (owner: {fictitious_owner})" if fictitious_owner else ''
+                        registry_status = f"Fictitious name{owner_note}"
+                    self.log('validate', f"Bizapedia returned: \"{registry_name}\" (status: {registry_status})", {
+                        'expandable': True,
+                        'sections': [{'label': 'Full Bizapedia Record',
+                                      'content': json.dumps(biz, indent=4)}],
+                    })
+                else:
+                    self.log('validate', f"Bizapedia: no result for file number {registry_id} in {state}")
 
         # UK → Companies House by company number
         if country == 'GB':
