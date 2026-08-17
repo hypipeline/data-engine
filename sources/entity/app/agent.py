@@ -68,6 +68,14 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
     def run(self, url: str) -> dict:
         self.start_time = time.time()
         t0 = self.start_time
+        # The UI (/entity/<domain>) and API pass a bare host ("silfern.com") with no scheme.
+        # urlparse() then returns hostname=None (schemeless input is parsed as a path), so the
+        # domain comes out empty AND every fetch URL built from it is schemeless — which both
+        # requests.get and playwright's page.goto reject, yielding 0 fetched pages. Prepend
+        # https:// when the caller omitted a scheme so the whole pipeline gets a usable URL.
+        url = (url or '').strip()
+        if url and not re.match(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://', url):
+            url = 'https://' + url
         host = (urlparse(url).hostname or '')
         domain = re.sub(r'^www\.', '', host)
 
