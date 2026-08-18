@@ -20,6 +20,7 @@ import re
 from urllib.parse import quote_plus
 
 import requests
+from urllib.parse import urlparse
 
 
 def _php_number_format(number, decimals: int = 0) -> str:
@@ -52,7 +53,7 @@ class GoogleMixin:
     # ── Google Intelligence (Bright Data SERP batch) ──────────────────────────
     def google_intelligence(self, domain: str) -> dict:
         api_key = self.config.get('brightdata_api_key') or ''
-        result = {'google_results': '', 'yahoo_ticker': None, 'linkedin_url': None}
+        result = {'google_results': '', 'yahoo_ticker': None, 'linkedin_url': None, 'site_url': None}
 
         if not api_key:
             self._progress('google', "Google Intelligence: Bright Data not configured")
@@ -118,10 +119,17 @@ class GoogleMixin:
                 # General Google results — format top results as markdown
                 google_md.append(f"### Google Search Results for {domain}")
                 google_md.append('')
+                dom = (domain or '').lower()
                 for rr in organic[:10]:
                     title = rr.get('title') or ''
                     link = rr.get('link') or ''
                     desc = rr.get('description') or ''
+                    # First organic result whose host is our own domain = Google's canonical
+                    # URL for the site (right scheme + www/apex). Used as the fetch target.
+                    if result['site_url'] is None and link:
+                        h = (urlparse(link).hostname or '').lower()
+                        if h == dom or h.endswith('.' + dom):
+                            result['site_url'] = link
                     google_md.append(f"- **{title}**")
                     google_md.append(f"  {link}")
                     if desc:

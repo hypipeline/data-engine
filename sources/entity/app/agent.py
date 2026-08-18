@@ -27,6 +27,9 @@ from phases_validate import ValidationMixin
 
 _PROMPTS = Path(__file__).parent / "prompts"
 
+_RESOLVE_UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+               '(KHTML, like Gecko) Chrome/124.0 Safari/537.36')
+
 
 class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
                    EvidenceAnalysisMixin, ValidationMixin):
@@ -63,6 +66,54 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         self.progress_log.append(entry)
         if self.progress_callback:
             self.progress_callback(entry)
+
+    def resolve_fetch_url(self, domain: str, typed_url: str, google_intel: dict) -> str:
+        """Decide which URL to actually fetch — never blindly off the typed input, whose
+        www/apex + http/https form decides success (e.g. bluepeakpc.com apex doesn't serve, www
+        does). Ladder, pure upside / no regression:
+          Tier 1 — the canonical URL Google returned for this domain (already the right scheme +
+                   www/apex, resolved authoritatively; free, since Phase 1 already ran it);
+          Tier 2 — probe www/apex x https/http, follow redirects, take the first that serves
+                   real content (its post-redirect URL);
+          Tier 3 — fall back to exactly what we were fed (today's behaviour).
+        The registrable-domain guard stops a redirect / stray Google hit hijacking us to an
+        unrelated host (parking pages, ad domains)."""
+        dom = (domain or '').lower()
+        if not dom:
+            return typed_url
+
+        def host_ok(u: str) -> bool:
+            h = (urlparse(u).hostname or '').lower()
+            return bool(h) and (h == dom or h.endswith('.' + dom))
+
+        # Tier 1 — Google's canonical URL for the domain.
+        site_url = (google_intel or {}).get('site_url')
+        if site_url and host_ok(site_url):
+            self.log('fetch', f"Fetch target from Google: {site_url}  (input: {typed_url})")
+            return site_url
+
+        # Tier 2 — probe the common host/scheme variants; adopt the first that serves.
+        live_any = None
+        for cand in (f"https://www.{dom}", f"https://{dom}", f"http://www.{dom}", f"http://{dom}"):
+            try:
+                r = requests.get(cand, timeout=(5, 8), allow_redirects=True,
+                                 headers={'User-Agent': _RESOLVE_UA})
+            except requests.RequestException:
+                continue
+            final = r.url or cand
+            if not host_ok(final):
+                continue  # redirected off our domain (parking/unrelated) — ignore
+            if r.status_code < 400:
+                self.log('fetch', f"Fetch target resolved by probe: {final}  (input: {typed_url})")
+                return final
+            if live_any is None:
+                live_any = final  # live host but blocked (e.g. 403) — Bright Data can fetch it later
+        if live_any:
+            self.log('fetch', f"Fetch target resolved by probe (live but blocked): {live_any}  (input: {typed_url})")
+            return live_any
+
+        # Tier 3 — go with what we were fed.
+        return typed_url
 
     # ── the 8-phase pipeline (PHP run()) ────────────────────────────────────
     def run(self, url: str) -> dict:
@@ -118,7 +169,10 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
 
         # Phase 2: Fetch website
         self.log('phase', "Phase 2: Fetch Website Data", {'phase_num': 2})
-        website_data = self.fetch_website_data(url, domain)
+        # Resolve the actual fetch target (Google's canonical URL → probe → typed input) so a
+        # www/apex or http/https mismatch on the typed URL can't sink the whole lookup.
+        fetch_url = self.resolve_fetch_url(domain, url, google_intel)
+        website_data = self.fetch_website_data(fetch_url, domain)
         self.timings['fetch'] = time.time() - t0
         self.log('fetch', f"Website fetched in {round(self.timings['fetch'], 1)}s — pages: "
                  + ", ".join(website_data['pages'].keys()))
