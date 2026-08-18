@@ -154,8 +154,8 @@ function nf(n){ n = Number(n||0); return n.toLocaleString('en-US'); }
 function r1(n){ return (Math.round((Number(n)||0)*10)/10).toFixed(1); }
 function money(n){ return '$'+(Number(n)||0).toFixed(2); }
 function rvInfo(st){
-  var cls = st==='verified'?'badge-high':st==='name_verified'?'badge-medium':st==='name_match_bad_status'?'badge-low':'badge-insufficient';
-  var lab = {verified:'Registry Verified',name_verified:'Name Verified — No Registry ID',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
+  var cls = st==='verified'?'badge-high':st==='name_match_bad_status'?'badge-low':'badge-insufficient';
+  var lab = {verified:'Registry Verified',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
              fictitious_name:'Fictitious Name',branch_registration:'Branch Registration'}[st]||'Not Found in Registry';
   return {cls:cls,label:lab};
 }
