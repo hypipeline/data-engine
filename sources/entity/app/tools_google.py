@@ -14,13 +14,14 @@ stdlib + requests only.
 """
 from __future__ import annotations
 
+import html as _htmllib
 import json
 import math
 import re
-from urllib.parse import quote_plus
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import quote_plus, urlparse
 
 import requests
-from urllib.parse import urlparse
 
 
 def _php_number_format(number, decimals: int = 0) -> str:
@@ -52,116 +53,113 @@ def _extract_ld_org(html: str):
 class GoogleMixin:
     # ── Google Intelligence (Bright Data SERP batch) ──────────────────────────
     def google_intelligence(self, domain: str) -> dict:
-        api_key = self.config.get('brightdata_api_key') or ''
+        """Google 3 queries about the domain through the Bright Data Web Unlocker (SYNCHRONOUS)
+        and return {google_results blob, yahoo_ticker, linkedin_url, site_url}. Uses the Web
+        Unlocker (api.brightdata.com/request) — NOT the SERP dataset API, which is now async
+        (202 + snapshot polling) and so silently returned empty on every lookup. Mirrors the
+        pattern already proven in find_linkedin_url()."""
         result = {'google_results': '', 'yahoo_ticker': None, 'linkedin_url': None, 'site_url': None}
-
+        api_key = self.config.get('brightdata_api_key') or ''
         if not api_key:
             self._progress('google', "Google Intelligence: Bright Data not configured")
             return result
 
+        dom = (domain or '').lower()
         self._progress('google', f"Google Intelligence: searching 3 queries for {domain}...")
-        self.count('brightdata'); self.count('google', op='intelligence')
+        self.count('google', op='intelligence')
 
-        payload = {
-            'input': [
-                {'url': 'https://www.google.com/', 'keyword': domain},
-                {'url': 'https://www.google.com/', 'keyword': f"site:finance.yahoo.com {domain}"},
-                {'url': 'https://www.google.com/', 'keyword': f"{domain} linkedin"},
-            ],
-            'limit_per_input': 10,
+        queries = {
+            'main': domain,
+            'yahoo': f"site:finance.yahoo.com {domain}",
+            'linkedin': f"{domain} linkedin",
         }
-        try:
-            r = requests.post(
-                'https://api.brightdata.com/datasets/v3/scrape'
-                '?dataset_id=gd_mfz5x93lmsjjjylob&notify=false&include_errors=true',
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {api_key}',
-                },
-                data=json.dumps(payload),
-                timeout=90,
-                allow_redirects=False,
-            )
-            http_code = r.status_code
-            resp = r.text
-        except requests.RequestException:
-            http_code = 0
-            resp = None
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            htmls = dict(zip(queries.keys(),
+                             ex.map(lambda q: self._google_serp_html(q), queries.values())))
 
-        if http_code != 200 or not resp:
-            self._progress('google', f"Google Intelligence: SERP failed (HTTP {http_code})")
-            self.log.append({'tool': 'google_intelligence', 'input': domain, 'output': f"HTTP {http_code}"})
-            return result
+        # Main query → organic results markdown + canonical site_url (Google's own answer to
+        # http/https + www/apex, consumed by resolve_fetch_url Tier 1).
+        main_html = htmls.get('main') or ''
+        organic = self._parse_serp_organic(main_html)
+        self._progress('google', f"Google Intelligence: {len(organic)} organic result(s)")
+        if organic:
+            google_md = [f"### Google Search Results for {domain}", '']
+            for title, link in organic[:10]:
+                if result['site_url'] is None:
+                    h = (urlparse(link).hostname or '').lower()
+                    if h == dom or h.endswith('.' + dom):
+                        result['site_url'] = link
+                google_md.append(f"- **{title}**")
+                google_md.append(f"  {link}")
+            result['google_results'] = "\n".join(google_md)
 
-        # Response is NDJSON (one JSON object per line)
-        lines = resp.strip().split("\n")
-        serp_results = []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                parsed = json.loads(line)
-            except (ValueError, TypeError):
-                parsed = None
-            if parsed:
-                serp_results.append(parsed)
+        # Yahoo Finance ticker
+        m = re.search(r'finance\.yahoo\.com/quote/([A-Z0-9a-z.\-]+)', htmls.get('yahoo') or '')
+        if m:
+            result['yahoo_ticker'] = m.group(1)
+            self._progress('google', f"Found Yahoo Finance ticker: {m.group(1)}")
 
-        self._progress('google', f"Google Intelligence: got {len(serp_results)} SERP results")
+        # LinkedIn company page — dedicated query, fall back to the main results
+        for src in (htmls.get('linkedin') or '', main_html):
+            m = re.search(r'linkedin\.com/company/[A-Za-z0-9_\-.%]+', src, re.I)
+            if m:
+                result['linkedin_url'] = 'https://www.' + m.group(0).rstrip('.')
+                self._progress('google', f"Found LinkedIn: {result['linkedin_url']}")
+                break
 
-        # Process each result by keyword
-        google_md = []
-        for serp in serp_results:
-            keyword = serp.get('keyword') or ''
-            organic = serp.get('organic') or []
-
-            if keyword == domain:
-                # General Google results — format top results as markdown
-                google_md.append(f"### Google Search Results for {domain}")
-                google_md.append('')
-                dom = (domain or '').lower()
-                for rr in organic[:10]:
-                    title = rr.get('title') or ''
-                    link = rr.get('link') or ''
-                    desc = rr.get('description') or ''
-                    # First organic result whose host is our own domain = Google's canonical
-                    # URL for the site (right scheme + www/apex). Used as the fetch target.
-                    if result['site_url'] is None and link:
-                        h = (urlparse(link).hostname or '').lower()
-                        if h == dom or h.endswith('.' + dom):
-                            result['site_url'] = link
-                    google_md.append(f"- **{title}**")
-                    google_md.append(f"  {link}")
-                    if desc:
-                        google_md.append(f"  {desc}")
-            elif keyword.startswith('site:finance.yahoo.com'):
-                # Yahoo Finance ticker extraction
-                for rr in organic:
-                    link = rr.get('link') or ''
-                    m = re.search(r'finance\.yahoo\.com/quote/([A-Z0-9a-z.\-]+)', link)
-                    if m:
-                        result['yahoo_ticker'] = m.group(1)
-                        self._progress('google', f"Found Yahoo Finance ticker: {m.group(1)}")
-                        break
-            elif 'linkedin' in keyword:
-                # LinkedIn URL extraction — find company page
-                for rr in organic:
-                    link = rr.get('link') or ''
-                    if re.search(r'linkedin\.com/company/[a-z0-9\-]+', link, re.I):
-                        result['linkedin_url'] = link
-                        self._progress('google', f"Found LinkedIn: {link}")
-                        break
-
-        result['google_results'] = "\n".join(google_md)
         self.log.append({
             'tool': 'google_intelligence',
             'input': domain,
             'output':
                 "google:" + str(len(result['google_results'])) + " chars, " +
                 "yahoo:" + (result['yahoo_ticker'] or 'none') + ", " +
-                "linkedin:" + (result['linkedin_url'] or 'none'),
+                "linkedin:" + (result['linkedin_url'] or 'none') + ", " +
+                "site:" + (result['site_url'] or 'none'),
         })
         return result
+
+    def _google_serp_html(self, query: str):
+        """Fetch a Google results page for `query` via the Bright Data Web Unlocker (synchronous).
+        Returns raw HTML or None."""
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key:
+            return None
+        self.count('brightdata')
+        search_url = 'https://www.google.com/search?q=' + quote_plus(query) + '&num=20'
+        payload = {
+            'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
+            'url': search_url,
+            'format': 'raw',
+        }
+        try:
+            r = requests.post(
+                'https://api.brightdata.com/request',
+                headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                data=json.dumps(payload), timeout=90, allow_redirects=False,
+            )
+            return r.text if r.status_code == 200 else None
+        except requests.RequestException:
+            return None
+
+    @staticmethod
+    def _parse_serp_organic(html: str):
+        """Extract (title, url) organic results from a Google SERP HTML page. Each result is an
+        <a href="URL"> … <h3>Title</h3>; Google/gstatic-owned links are dropped. The tempered
+        dot `(?:(?!</a>).)*?` can't cross an </a>, so there's no catastrophic backtracking."""
+        if not html:
+            return []
+        out, seen = [], set()
+        for url, title in re.findall(
+                r'<a[^>]*href="(https?://[^"]+)"[^>]*>(?:(?!</a>).)*?<h3[^>]*>(.*?)</h3>',
+                html, re.I | re.S):
+            if any(bad in url for bad in ('google.', 'gstatic', 'googleusercontent', '/aclk?', 'youtube.com/redirect')):
+                continue
+            title = _htmllib.unescape(re.sub(r'<[^>]+>', '', title)).strip()
+            if not title or url in seen:
+                continue
+            seen.add(url)
+            out.append((title, url))
+        return out
 
     # ── LinkedIn company page (Bright Data Web Unlocker, raw html) ─────────────
     def fetch_linkedin_company(self, linkedin_url: str) -> str:
