@@ -229,6 +229,20 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         if has_registry_id:
             self.log('phase', "Phase 7: Registry Validation", {'phase_num': 7})
             report = self.validate_entity_in_registry(report)
+        elif entity:
+            # No registry ID to anchor an ID lookup, but we have a recommended entity — offer a
+            # "name verified only (no registry ID)" tier rather than leaving it unvalidated. Cap
+            # confidence at medium (an unanchored name can't be 'high') and DON'T flag it as a
+            # validation failure.
+            report['registry_validation'] = {
+                'status': 'name_verified',
+                'message': f"Name verified only — no registry ID (source: {entity.get('source') or 'analysis'}).",
+                'registry_name': entity.get('legal_entity_name'),
+                'source': entity.get('source'),
+            }
+            if (report.get('confidence') or '') == 'high':
+                report['confidence'] = 'medium'
+            self.log('validate', "Registry validation: name-verified only (no registry ID) — confidence capped at medium")
 
         # Phase 8: Re-analysis — OFF by default. The second LLM pass proved net-negative in practice
         # (it timed out on the heaviest inputs and over-abstained, discarding good Phase-6 answers
@@ -246,7 +260,7 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
 
         # Flag a non-verified registry validation on the KEPT recommendation (no second LLM pass).
         rv_status = (report.get('registry_validation') or {}).get('status')
-        if rv_status and rv_status != 'verified':
+        if rv_status and rv_status not in ('verified', 'name_verified'):
             report['confidence'] = 'low'
             report['validation_warning'] = (f"Registry validation not verified (status: {rv_status}) — "
                                             "confidence downgraded; recommendation kept without a second LLM pass.")
