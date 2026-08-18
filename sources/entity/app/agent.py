@@ -80,6 +80,7 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         unrelated host (parking pages, ad domains)."""
         dom = (domain or '').lower()
         if not dom:
+            self.log('fetch', f"Fetch URL via input (no domain) → {typed_url}", {'url_resolution': 'input'})
             return typed_url
 
         def host_ok(u: str) -> bool:
@@ -89,7 +90,7 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         # Tier 1 — Google's canonical URL for the domain.
         site_url = (google_intel or {}).get('site_url')
         if site_url and host_ok(site_url):
-            self.log('fetch', f"Fetch target from Google: {site_url}  (input: {typed_url})")
+            self.log('fetch', f"Fetch URL via Google → {site_url}  (input: {typed_url})", {'url_resolution': 'google'})
             return site_url
 
         # Tier 2 — probe the common host/scheme variants; adopt the first that serves.
@@ -104,15 +105,16 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             if not host_ok(final):
                 continue  # redirected off our domain (parking/unrelated) — ignore
             if r.status_code < 400:
-                self.log('fetch', f"Fetch target resolved by probe: {final}  (input: {typed_url})")
+                self.log('fetch', f"Fetch URL via probe → {final}  (input: {typed_url})", {'url_resolution': 'probe'})
                 return final
             if live_any is None:
                 live_any = final  # live host but blocked (e.g. 403) — Bright Data can fetch it later
         if live_any:
-            self.log('fetch', f"Fetch target resolved by probe (live but blocked): {live_any}  (input: {typed_url})")
+            self.log('fetch', f"Fetch URL via probe (live but blocked) → {live_any}  (input: {typed_url})", {'url_resolution': 'probe_blocked'})
             return live_any
 
-        # Tier 3 — go with what we were fed.
+        # Tier 3 — go with what we were fed (Google + probe found nothing better).
+        self.log('fetch', f"Fetch URL via input (unchanged) → {typed_url}", {'url_resolution': 'input'})
         return typed_url
 
     # ── the 8-phase pipeline (PHP run()) ────────────────────────────────────
