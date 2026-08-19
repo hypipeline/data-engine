@@ -25,6 +25,7 @@ import cache
 import linkedin_cache
 import coverage
 import model_compare
+import extract_compare
 import northdata_cases
 import validation_cases
 
@@ -54,6 +55,10 @@ def _startup():
         model_compare.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[model_compare] schema init skipped: {e}")
+    try:
+        extract_compare.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[extract_compare] schema init skipped: {e}")
     try:
         northdata_cases.ensure_schema()
     except Exception as e:  # noqa: BLE001
@@ -434,6 +439,62 @@ async def api_modelcompare_run(request: Request):
         out = model_compare.run_case(CONFIG, c, models,
                                      refresh_input=bool(body.get("refresh_input")),
                                      refresh_models=bool(body.get("refresh_models")))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
+    return JSONResponse(out)
+
+
+# ── STAGE 1 (name-extraction) model comparison — sibling of /api/modelcompare/* ────────────────
+@app.get("/api/extractcompare/matrix")
+def api_extractcompare_matrix():
+    return JSONResponse(extract_compare.matrix())
+
+
+@app.get("/api/extractcompare/results")
+def api_extractcompare_results(case_id: int):
+    return JSONResponse(extract_compare.get_cached(int(case_id)))
+
+
+@app.get("/api/extractcompare/input")
+def api_extractcompare_input(case_id: int):
+    """The exact Stage-1 extraction input (system prompt + website text) fed to every model."""
+    c = coverage.content_cache_get(int(case_id))
+    if not c:
+        return JSONResponse({"error": "No content built yet — run Search coverage first."},
+                            status_code=404)
+    eio = c.get("extraction_io") or {}
+    if not eio.get("user"):
+        return JSONResponse({"error": "This case has no extraction stage (names-mode case)."},
+                            status_code=404)
+    return JSONResponse({"system": eio.get("system"), "user": eio.get("user"), "meta": c.get("meta")})
+
+
+@app.get("/api/extractcompare/result")
+def api_extractcompare_result(case_id: int, model: str = ""):
+    r = extract_compare.result_for(int(case_id), model)
+    return JSONResponse(r or {"error": "no stored result for this case/model"})
+
+
+@app.post("/api/extractcompare/run")
+async def api_extractcompare_run(request: Request):
+    """Run one coverage case's STAGE-1 extraction input across models. Body: {id | case, models[],
+    refresh_input, refresh_models}. Reuses the cached Phase-1 content (extraction_io)."""
+    body = await request.json() if await request.body() else {}
+    models = body.get("models") or extract_compare.DEFAULT_MODELS
+    if body.get("id"):
+        c = coverage.get_case(int(body["id"]))
+        if not c:
+            return JSONResponse({"error": "case not found"}, status_code=404)
+    elif body.get("case"):
+        c = body["case"]
+    else:
+        return JSONResponse({"error": "provide an id or a case"}, status_code=400)
+    try:
+        out = extract_compare.run_case(CONFIG, c, models,
+                                       refresh_input=bool(body.get("refresh_input")),
+                                       refresh_models=bool(body.get("refresh_models")))
     except Exception as e:  # noqa: BLE001
         import traceback
         return JSONResponse({"error": f"{type(e).__name__}: {e}",

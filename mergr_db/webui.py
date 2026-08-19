@@ -505,6 +505,11 @@ def tool_model_compare(request: Request):
     return render(request, "tool_model_compare.html", "entity")
 
 
+@app.get("/entity/tools/extract-compare", response_class=HTMLResponse)
+def tool_extract_compare(request: Request):
+    return render(request, "tool_extract_compare.html", "entity")
+
+
 @app.get("/entity/tools/model-compare/result", response_class=HTMLResponse)
 def tool_model_compare_result(request: Request):
     # Test-only full-result view: reuses entity.html; empty initials so its

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Model Comparison — Data Engine{% endblock %}
+{% block title %}Model Comparison · Stage 2 (Analysis) — Data Engine{% endblock %}
 {% block head %}
 <style>
   .tool-back { font-size:13px; color:var(--link); display:inline-block; margin-bottom:14px; }
@@ -56,7 +56,7 @@
 {% endblock %}
 {% block body %}
 <a class="tool-back" href="/entity">← Back to Entity Lookup</a>
-<h1 class="page">Model Comparison</h1>
+<h1 class="page">Model Comparison · <span style="color:#166534">Stage 2 — Final Analysis</span></h1>
 <p class="sub">The step <b>after</b> search coverage. For each case it caches the exact analysis input production builds
 (fetch + extract + registries → the Phase-6 prompt), then feeds that <b>same input to different models</b> and scores each
 ✓/✗ against the case's expected recommendation. Baseline <code>claude-sonnet-4-6</code> and other OpenAI/Anthropic models
