@@ -209,16 +209,24 @@ function openCase(cid){
   renderOut(cs);
   q('detail').scrollIntoView({behavior:'smooth', block:'start'});
 }
-// chips for one dimension: green=recovered a target, red=missed target, blue=extra (extracted but not a target)
-function dimChips(targets, got){
-  targets=targets||[]; got=got||[];
+// Validation mark for a SUGGESTED item: ✅ if it can be matched in the website input (not
+// hallucinated), ❓ if not. gmark[itemText] is computed server-side (regex-style presence check).
+// Display-only — never affects the recall score.
+function vmark(ok){ return ok ? ' <span title="matched in the website input — validated, not hallucinated">✅</span>'
+                             : ' <span title="NOT found in the input — suspected hallucination">❓</span>'; }
+function gm(gmark, item){ return (gmark && Object.prototype.hasOwnProperty.call(gmark, item)) ? gmark[item] : null; }
+// chips for one dimension: green=recovered a target, red=missed target, blue=extra (extracted but not a target).
+// Every chip the model SUGGESTED (green + blue) carries a ✅/❓ validation mark; red (not suggested) has none.
+function dimChips(targets, got, gmark){
+  targets=targets||[]; got=got||[]; gmark=gmark||{};
   var out=targets.map(function(t){
-    var hit=got.some(function(g){ return soft(t,g); });
-    return '<span class="chip '+(hit?'hit':'miss')+'">'+esc(t)+'</span>';
+    var g=null; for(var i=0;i<got.length;i++){ if(soft(t,got[i])){ g=got[i]; break; } }
+    if(g!==null){ var ok=gm(gmark,g); return '<span class="chip hit">'+esc(t)+vmark(ok===null?true:ok)+'</span>'; }
+    return '<span class="chip miss">'+esc(t)+'</span>';   // a target the model did NOT suggest — no mark
   });
   got.forEach(function(g){
     var isTarget=targets.some(function(t){ return soft(t,g); });
-    if(!isTarget) out.push('<span class="chip extra" title="extracted but not a grounded target">'+esc(g)+'</span>');
+    if(!isTarget){ var ok=gm(gmark,g); out.push('<span class="chip extra" title="extracted but not a grounded target">'+esc(g)+vmark(ok===null?false:ok)+'</span>'); }
   });
   return out.length?out.join(''):'<span class="muted">—</span>';
 }
@@ -235,7 +243,7 @@ function outCard(r, targets){
     body=DIMS.map(function(d){
       var dm=dims[d[0]];
       var lbl=d[1]+(dm?(' <span class="muted">'+dm.hit+'/'+dm.total+'</span>'):'');
-      return '<div class="tgt-row"><span class="tgt-lbl" style="min-width:105px">'+lbl+'</span>'+dimChips((targets||{})[d[0]], got[d[0]])+'</div>';
+      return '<div class="tgt-row"><span class="tgt-lbl" style="min-width:105px">'+lbl+'</span>'+dimChips((targets||{})[d[0]], got[d[0]], (r.gmark||{})[d[0]])+'</div>';
     }).join('');
     if(r.jurisdiction) body+='<div class="dimline">jurisdiction: '+esc(r.jurisdiction)+'</div>';
   }
@@ -255,7 +263,7 @@ function renderOut(cs){
   var avgr=scored.length?Math.round(scored.reduce(function(a,r){return a+(r.score.recall||0);},0)/scored.length*100):0;
   var cost=rows.reduce(function(a,r){return a+(r.cost_usd||0);},0);
   q('summary').innerHTML='<b>'+pass+'/'+scored.length+'</b> models passed · avg recall <b>'+avgr+'%</b> · total run cost '+money2(cost)
-    +' <span class="muted">— green = recovered a target · red = missed a target · blue = extra data not in the reference set</span>';
+    +' <span class="muted">— green = recovered a target · red = missed a target · blue = extra data not in the reference set · ✅ matched in the website input · ❓ not found (suspected hallucination)</span>';
   q('out').innerHTML='<div class="out-grid">'+rows.map(function(r){return outCard(r, cs.targets);}).join('')+'</div>';
 }
 function run(){

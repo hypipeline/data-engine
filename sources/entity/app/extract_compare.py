@@ -239,11 +239,36 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
             results.extend(ex.map(lambda m: run_one_model(config, inp, m, targets, cid), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
     scored = [r for r in results if r["score"].get("scored")]
+    _mark_grounding(results, eio.get("user") or "")
     return {"case_id": cid, "input_meta": meta, "targets": targets,
             "summary": {"models": len(results), "scored": len(scored),
                         "pass": sum(1 for r in scored if r["score"].get("ok")),
                         "cost_usd": total_cost},
             "results": results}
+
+
+# ── validation marks: is each SUGGESTED item actually in the input, or a hallucination? ─────────
+# Display-only (does NOT affect scoring). For every name/person/address a model produced, we mark
+# whether it can be matched against the input website text (alphanumeric-normalised substring — a
+# robust regex-style presence check). True → ✅ grounded; False → ❓ suspected hallucination.
+def _grounded_map(items, hay_norm, minlen) -> dict:
+    out = {}
+    for it in (items or []):
+        n = _norm(it)
+        out[str(it)] = bool(len(n) >= minlen and n in hay_norm)
+    return out
+
+
+def _mark_grounding(results, user_text) -> None:
+    hay = _norm(user_text or "")
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        r["gmark"] = {
+            "entity_names": _grounded_map(r.get("names"), hay, 4),
+            "key_people": _grounded_map(r.get("people"), hay, 4),
+            "addresses": _grounded_map(r.get("addresses"), hay, 6),
+        }
 
 
 # ── overview + cached reads ────────────────────────────────────────────────────────────────────
@@ -269,6 +294,7 @@ def get_cached(cid):
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT result FROM entity.extract_compare_results WHERE case_id=%s ORDER BY model", (cid,))
             rows = [r["result"] for r in cur.fetchall()]
+    _mark_grounding(rows, ((content or {}).get("extraction_io") or {}).get("user") or "")
     return {"case_id": cid, "input_meta": meta, "targets": targets, "results": rows}
 
 
