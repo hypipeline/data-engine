@@ -155,8 +155,11 @@ function nf(n){ n = Number(n||0); return n.toLocaleString('en-US'); }
 function r1(n){ return (Math.round((Number(n)||0)*10)/10).toFixed(1); }
 function money(n){ return '$'+(Number(n)||0).toFixed(2); }
 function rvInfo(st){
-  var cls = st==='verified'?'badge-high':st==='name_match_bad_status'?'badge-low':'badge-insufficient';
-  var lab = {verified:'Registry Verified',name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
+  // green=verified, grey=can't check (verify manually), red=everything bad incl. inactive/
+  // dissolved/struck-off (a dead entity is a hard stop for contracting, not a mild warning).
+  var cls = st==='verified'?'badge-high':st==='no_registry_access'?'badge-neutral':'badge-insufficient';
+  var lab = {verified:'Registry Verified',no_registry_access:'Registry Not Available — Verify Manually',
+             name_match_bad_status:'Inactive in Registry',name_mismatch:'Registry Mismatch',
              fictitious_name:'Fictitious Name',branch_registration:'Branch Registration'}[st]||'Not Found in Registry';
   return {cls:cls,label:lab};
 }

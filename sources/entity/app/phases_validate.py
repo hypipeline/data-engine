@@ -21,9 +21,28 @@ from urllib.parse import quote_plus, urlencode
 
 class ValidationMixin:
     # ── Phase 7: validateEntityInRegistry (~1956) ───────────────────────────
+    # Jurisdictions we have a registry integration for (ID or name lookups possible).
+    _COVERED_COUNTRIES = {'US', 'GB', 'SG', 'NZ',
+                          'DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
+                          'SE', 'NO', 'FI', 'PL', 'CZ', 'IE'}
+
     def validate_entity_in_registry(self, report: dict) -> dict:
         entity = report.get('recommended_entity') or None
-        if not entity or not entity.get('registry_id'):
+        if not entity:
+            return report
+        if not entity.get('registry_id'):
+            # No registry ID to anchor an ID lookup. If we have NO registry for this jurisdiction
+            # (e.g. Oman), we literally cannot check the entity — flag it for MANUAL review and
+            # never imply a verification we didn't perform. (A covered jurisdiction with no ID is
+            # left unvalidated pending the name-search verifier — we must not claim "name verified"
+            # without actually matching an active registry record.)
+            country = (entity.get('jurisdiction_country') or '').upper()
+            if country and country not in self._COVERED_COUNTRIES:
+                report['registry_validation'] = {
+                    'status': 'no_registry_access',
+                    'message': f"No registry integrated for jurisdiction {country} — manual verification required.",
+                }
+                self.log('validate', f"No registry for {country} — manual verification required (no_registry_access)")
             return report
 
         registry_id = entity['registry_id']

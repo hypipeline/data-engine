@@ -226,8 +226,10 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         # Phase 7: Registry validation
         entity = report.get('recommended_entity')
         has_registry_id = bool(entity and entity.get('registry_id'))
-        if has_registry_id:
-            self.log('phase', "Phase 7: Registry Validation", {'phase_num': 7})
+        if entity:
+            if has_registry_id:
+                self.log('phase', "Phase 7: Registry Validation", {'phase_num': 7})
+            # Always run — with no ID it still flags an uncovered jurisdiction (no_registry_access).
             report = self.validate_entity_in_registry(report)
 
         # Phase 8: Re-analysis — OFF by default. The second LLM pass proved net-negative in practice
@@ -246,7 +248,13 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
 
         # Flag a non-verified registry validation on the KEPT recommendation (no second LLM pass).
         rv_status = (report.get('registry_validation') or {}).get('status')
-        if rv_status and rv_status != 'verified':
+        if rv_status == 'no_registry_access':
+            # We couldn't check this jurisdiction at all — cap confidence (it can't be 'high' when a
+            # human still has to verify) but DON'T flag it as a validation failure.
+            if (report.get('confidence') or '') == 'high':
+                report['confidence'] = 'medium'
+            self.log('warning', "Confidence capped at 'medium': no registry for jurisdiction — manual verification required")
+        elif rv_status and rv_status != 'verified':
             report['confidence'] = 'low'
             report['validation_warning'] = (f"Registry validation not verified (status: {rv_status}) — "
                                             "confidence downgraded; recommendation kept without a second LLM pass.")
