@@ -113,26 +113,46 @@ def _soft_in(needle, haystacks, minlen=4) -> bool:
     return False
 
 
-def _ground(items, hay_norm, minlen=5) -> list:
-    """Keep only items that appear (alphanumeric-normalised) in the website text — deduped."""
-    out, seen = [], set()
+def _pool_ground_dedup(items, hay_norm, minlen) -> list:
+    """Build the ideal reference set for one dimension from a POOL of items proposed by many models:
+    (1) keep only items that appear (alphanumeric-normalised) in the website text — this drops every
+    hallucination regardless of which model proposed it; (2) dedup by normalised key, keeping the
+    longest surface form; (3) collapse pure substring subsumptions (drop 'adidas' when 'adidas AG' is
+    present), again keeping the longest. The result is the consensus of everything real anyone found."""
+    uniq = {}
     for it in items:
         n = _norm(it)
-        if len(n) >= minlen and n in hay_norm and n not in seen:
-            seen.add(n)
-            out.append(it)
-    return out
+        if len(n) >= minlen and n in hay_norm and (n not in uniq or len(it) > len(uniq[n])):
+            uniq[n] = it
+    keys = sorted(uniq, key=len, reverse=True)          # longest first
+    kept = []
+    for n in keys:
+        if any(n != k and n in k for k in kept):        # n is a substring of an already-kept longer form
+            continue
+        kept.append(n)
+    return [uniq[n] for n in kept]
 
 
-def reference_targets(content) -> dict:
-    """The grounded good-data the live model found in the page, per dimension. {} keys always present."""
+def reference_targets(content, results=None) -> dict:
+    """The IDEAL good-data record for a case, pooled across the live production model AND every
+    candidate model's proposal, then grounded (regex-matched to the page) + deduped. Passing
+    `results` (the model rows) makes the baseline the consensus of all of them; with no results it
+    falls back to the live model's extraction alone. {} keys always present."""
     eio = (content or {}).get("extraction_io") or {}
     hay = _norm(eio.get("user") or "")
     live = _loads_loose(eio.get("output") or "") or {}
-    names = _ground(_list(live, "entity_names") + _list(live, "short_names"), hay, minlen=4)
-    people = _ground(_list(live, "key_people"), hay, minlen=5)
-    addrs = _ground(_list(live, "addresses"), hay, minlen=8)
-    return {"entity_names": names, "key_people": people, "addresses": addrs}
+    name_pool = _list(live, "entity_names") + _list(live, "short_names")
+    ppl_pool = _list(live, "key_people")
+    adr_pool = _list(live, "addresses")
+    for r in (results or []):
+        if not isinstance(r, dict):
+            continue
+        name_pool += list(r.get("names") or [])
+        ppl_pool += list(r.get("people") or [])
+        adr_pool += list(r.get("addresses") or [])
+    return {"entity_names": _pool_ground_dedup(name_pool, hay, 4),
+            "key_people": _pool_ground_dedup(ppl_pool, hay, 5),
+            "addresses": _pool_ground_dedup(adr_pool, hay, 8)}
 
 
 def _recall(targets, got, minlen):
@@ -172,8 +192,11 @@ def score(report, targets) -> dict:
                               else f"only {hit}/{tot} good-data items"))}
 
 
-# ── run one model / one case (parsing the EXTRACTION json, scoring vs grounded targets) ────────
-def run_one_model(config, inp, model, targets, cid=None) -> dict:
+# ── run one model / one case ───────────────────────────────────────────────────────────────────
+# run_one_model only EXTRACTS + stores the raw items. Recall scoring is deferred to _finalize (at
+# serve time) because the baseline is the CONSENSUS across every model — it can't be known until all
+# of them have produced their items. Grounding (✅/❓) and jurisdiction are likewise serve-time.
+def run_one_model(config, inp, model, cid=None) -> dict:
     raw = {}
     for attempt in range(3):
         try:
@@ -194,21 +217,37 @@ def run_one_model(config, inp, model, targets, cid=None) -> dict:
             report = agent_parse(config, raw["text"])
         except Exception as e:  # noqa: BLE001
             raw["error"] = raw.get("error") or f"parse: {type(e).__name__}: {e}"
-    sc = score(report, targets)
     row = {
         "model": model, "route": raw.get("route"), "provider": raw.get("provider"),
         "error": raw.get("error"),
-        "names": sc["got"]["names"], "people": sc["got"]["people"], "addresses": sc["got"]["addresses"],
+        "names": _extracted_names(report), "people": _list(report, "key_people"),
+        "addresses": _list(report, "addresses"),
         "jurisdiction": (report or {}).get("jurisdiction") if isinstance(report, dict) else None,
         "cost_usd": raw.get("cost_usd"), "latency_ms": raw.get("latency_ms"),
         "input_tokens": raw.get("input_tokens"), "output_tokens": raw.get("output_tokens"),
         "json_ok": bool(isinstance(report, dict) and not raw.get("error")),
         "truncated": raw.get("truncated"),
-        "score": sc, "raw": (raw.get("text") or "")[:60000],
+        "score": {}, "raw": (raw.get("text") or "")[:60000],       # score filled in by _finalize
     }
     if cid:
         _result_put(cid, model, row)
     return row
+
+
+def _finalize(results, content, expected_juris) -> dict:
+    """Build the pooled/grounded IDEAL baseline from all results, then score every row's recall
+    against it, and layer on the ✅/❓ grounding marks + jurisdiction verdict. Returns the targets."""
+    targets = reference_targets(content, results)
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        pseudo = {"entity_names": r.get("names") or [], "key_people": r.get("people") or [],
+                  "addresses": r.get("addresses") or []}
+        r["score"] = score(pseudo, targets)
+    _mark_grounding(results, ((content or {}).get("extraction_io") or {}).get("user") or "")
+    _mark_jurisdiction(results, expected_juris)          # folds jurisdiction into score.ok
+    targets["expected_jurisdiction"] = _norm_juris(expected_juris)
+    return targets
 
 
 def run_case(config: dict, case: dict, models: list, refresh_input: bool = False,
@@ -222,9 +261,8 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
     meta["user_chars"] = len(eio.get("user") or "")
     inp = {"system": eio.get("system") or "", "user": eio.get("user") or "", "meta": meta}
     cid = case.get("id")
-    targets = reference_targets(content)
     if meta.get("stage1_na"):                         # names-mode case: no extraction stage to test
-        return {"case_id": cid, "input_meta": meta, "targets": targets, "stage1_na": True,
+        return {"case_id": cid, "input_meta": meta, "targets": reference_targets(content), "stage1_na": True,
                 "summary": {"models": 0, "scored": 0, "pass": 0, "cost_usd": 0}, "results": []}
     results, to_run = [], []
     for m in models:
@@ -236,11 +274,9 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
         to_run.append(m)
     if to_run:
         with ThreadPoolExecutor(max_workers=min(10, len(to_run))) as ex:
-            results.extend(ex.map(lambda m: run_one_model(config, inp, m, targets, cid), to_run))
+            results.extend(ex.map(lambda m: run_one_model(config, inp, m, cid), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
-    _mark_grounding(results, eio.get("user") or "")
-    _mark_jurisdiction(results, case.get("jurisdiction"))     # folds jurisdiction into score.ok
-    targets["expected_jurisdiction"] = _norm_juris(case.get("jurisdiction"))
+    targets = _finalize(results, content, case.get("jurisdiction"))   # pooled baseline + score all
     scored = [r for r in results if r["score"].get("scored")]
     return {"case_id": cid, "input_meta": meta, "targets": targets,
             "summary": {"models": len(results), "scored": len(scored),
@@ -340,7 +376,6 @@ def matrix():
 def get_cached(cid, expect_juris=None):
     content = coverage.content_cache_get(cid)
     meta = (content or {}).get("meta")
-    targets = reference_targets(content) if content else {"entity_names": [], "key_people": [], "addresses": []}
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT result FROM entity.extract_compare_results WHERE case_id=%s ORDER BY model", (cid,))
@@ -349,9 +384,9 @@ def get_cached(cid, expect_juris=None):
                 cur.execute("SELECT jurisdiction FROM entity.coverage_cases WHERE id=%s", (cid,))
                 jr = cur.fetchone()
                 expect_juris = jr["jurisdiction"] if jr else None
-    _mark_grounding(rows, ((content or {}).get("extraction_io") or {}).get("user") or "")
-    _mark_jurisdiction(rows, expect_juris)
-    targets["expected_jurisdiction"] = _norm_juris(expect_juris)
+    # pooled/grounded ideal baseline from ALL stored model rows, then score every row against it
+    targets = _finalize(rows, content, expect_juris) if content else \
+        {"entity_names": [], "key_people": [], "addresses": [], "expected_jurisdiction": _norm_juris(expect_juris)}
     return {"case_id": cid, "input_meta": meta, "targets": targets, "results": rows}
 
 

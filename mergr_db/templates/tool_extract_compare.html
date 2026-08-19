@@ -57,10 +57,10 @@
 <h1 class="page">Model Comparison · <span style="color:#4a90d9">Stage 1 — Name Extraction</span></h1>
 <p class="sub">The <b>first</b> LLM pass. This stage is <b>not about finding the final entity</b> — it's about extracting good, real
 data (entity names, key <b>people</b>, <b>addresses</b>) for Stage 2 to search on. So each case is graded on <b>how much of the
-good data it recovers</b>. The reference targets are derived automatically: the <b>currently-live production model's</b>
-extraction, filtered to items that <b>actually appear in the website text</b> (grounded — hallucinations and training-only facts
-like a known parent are dropped). Each candidate model is scored on <b>recall</b> of that reference set across the three
-dimensions. Contrast with <a href="/entity/tools/model-compare">Stage 2 — Analysis</a>, which scores the final recommended entity.</p>
+good data it recovers</b>. The reference set is the <b>ideal record</b>, built automatically by <b>pooling what every model proposes</b> (plus the live
+production model), keeping only items that <b>actually appear in the website text</b> (regex-grounded — hallucinations and
+training-only facts like a known parent are dropped), and de-duplicating. Each candidate model is then scored on <b>recall</b>
+of that consensus set across the three dimensions. Contrast with <a href="/entity/tools/model-compare">Stage 2 — Analysis</a>, which scores the final recommended entity.</p>
 
 <div class="mc-fg">
   <label>Models (one per line — OpenRouter-style ids)</label>
@@ -207,7 +207,7 @@ function renderTargets(cs){
   var ej=t.expected_jurisdiction;
   var jrow='<div class="tgt-row"><span class="tgt-lbl">Jurisdiction</span>'
     +(ej?('<span class="chip" style="background:#e0e7ff;color:#3730a3">expected: '+esc(ej)+'</span>'):'<span class="muted">— no expected jurisdiction set —</span>')+'</div>';
-  q('tgt-panel').innerHTML='<b>Good-data targets to recover</b> <span class="muted">('+tot+' items — the live model\'s extraction, kept only where the text actually appears on the site; rebuild input to refresh)</span>'+rows+jrow;
+  q('tgt-panel').innerHTML='<b>Ideal record — good-data targets to recover</b> <span class="muted">('+tot+' items — pooled across ALL models\' proposals, kept only where the text actually appears on the site (regex-validated), de-duplicated)</span>'+rows+jrow;
 }
 function openCase(cid){
   SELECTED=cid; var cs=caseById(cid); if(!cs) return;
