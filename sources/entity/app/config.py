@@ -21,9 +21,25 @@ def load_config() -> dict:
     def g(key, env):
         return os.environ.get(env) or settings.get(key, "")
 
+    def openrouter_key():
+        # env > settings > gitignored secrets file (same file the model-compare tool uses)
+        k = os.environ.get("OPENROUTER_API_KEY") or settings.get("openrouter_api_key", "")
+        if k:
+            return k
+        for p in ["/app/openrouter.secrets.env",
+                  str(pathlib.Path(__file__).resolve().parents[3] / "openrouter.secrets.env")]:
+            try:
+                for line in open(p):
+                    if line.strip().startswith("OPENROUTER_API_KEY="):
+                        return line.split("=", 1)[1].strip()
+            except OSError:
+                pass
+        return ""
+
     return {
         "anthropic_api_key": g("anthropic_api_key", "ANTHROPIC_API_KEY"),
         "openai_api_key": g("openai_api_key", "OPENAI_API_KEY"),
+        "openrouter_api_key": openrouter_key(),
         "browserbase_api_key": g("browserbase_api_key", "BROWSERBASE_API_KEY"),
         "browserbase_project_id": g("browserbase_project_id", "BROWSERBASE_PROJECT_ID"),
         "brightdata_api_key": g("brightdata_api_key", "BRIGHTDATA_API_KEY"),

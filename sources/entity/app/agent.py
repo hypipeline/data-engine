@@ -299,6 +299,10 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             rates = (15.00, 75.00)
         elif 'sonnet' in model:
             rates = (3.00, 15.00)
+        elif 'gemini' in model and 'flash' in model:
+            rates = (0.30, 2.50)
+        elif 'gemini' in model:
+            rates = (1.25, 10.00)
         elif model == 'gpt-4o-mini':
             rates = (0.15, 0.60)
         elif model == 'gpt-4o':
@@ -347,6 +351,9 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
         return m.startswith('gpt-') or m.startswith('o1') or m.startswith('o3') or m.startswith('o4')
 
     def call_llm(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        m = self.config.get('model') or ''
+        if '/' in m:                       # OpenRouter-style id (e.g. google/gemini-2.5-flash) → OpenRouter
+            return self.call_openrouter(system_prompt, user_message, max_tokens, op=op)
         if self._is_openai_model():
             return self.call_openai(system_prompt, user_message, max_tokens, op=op)
         return self.call_claude(system_prompt, user_message, max_tokens, op=op)
@@ -468,6 +475,72 @@ class EntityLookup(WebsiteFetchMixin, ExtractionMixin, RegistrySearchMixin,
             self.log('llm', f"WARNING: Response truncated (hit max_tokens={max_tokens}). Output may be incomplete.")
         if not text:
             return json.dumps({'error': 'OpenAI API returned empty response'})
+        return text
+
+    def call_openrouter(self, system_prompt: str, user_message: str, max_tokens: int, op: str | None = None) -> str:
+        """OpenRouter path for non-Anthropic/OpenAI models (e.g. google/gemini-2.5-flash). Same
+        OpenAI-compatible streaming shape as call_openai; fallbacks left ON for production resilience."""
+        self.tools.count('openrouter', op=op)
+        input_chars = len(system_prompt) + len(user_message)
+        model = self.config['model']
+        key = self.config.get('openrouter_api_key')
+        self.log('llm', f"Calling OpenRouter ({model}) — input: {input_chars:,} chars, max_tokens: {max_tokens} [streaming]")
+        if not key:
+            self.log('llm', "ERROR: no OpenRouter API key configured")
+            return json.dumps({'error': 'no OpenRouter API key configured'})
+        parts: list[str] = []
+        it, ot, finish = 0, 0, 'unknown'
+        try:
+            with requests.post('https://openrouter.ai/api/v1/chat/completions',
+                               headers={'Content-Type': 'application/json',
+                                        'Authorization': f"Bearer {key}",
+                                        'HTTP-Referer': 'https://dataengine.hyndlandpartners.com',
+                                        'X-Title': 'Data Engine'},
+                               json={'model': model, 'max_tokens': max_tokens,
+                                     'messages': [{'role': 'system', 'content': system_prompt},
+                                                  {'role': 'user', 'content': user_message}],
+                                     'stream': True, 'stream_options': {'include_usage': True},
+                                     'usage': {'include': True}},
+                               stream=True, timeout=(15, 120)) as r:
+                if r.status_code != 200:
+                    try:
+                        err = (r.json().get('error') or {}).get('message')
+                    except Exception:
+                        err = 'No response body'
+                    self.log('llm', f"ERROR: OpenRouter returned HTTP {r.status_code} — {err}")
+                    return json.dumps({'error': f"OpenRouter API returned HTTP {r.status_code}"})
+                for line in r.iter_lines(decode_unicode=True):
+                    if not line or not line.startswith('data:'):   # skip ": OPENROUTER PROCESSING" comments
+                        continue
+                    payload = line[5:].strip()
+                    if payload == '[DONE]':
+                        break
+                    try:
+                        ev = json.loads(payload)
+                    except Exception:
+                        continue
+                    ch = ev.get('choices') or []
+                    if ch:
+                        delta = (ch[0].get('delta') or {}).get('content')
+                        if delta:
+                            parts.append(delta)
+                        if ch[0].get('finish_reason'):
+                            finish = ch[0]['finish_reason']
+                    u = ev.get('usage')
+                    if u:
+                        it = u.get('prompt_tokens', it)
+                        ot = u.get('completion_tokens', ot)
+        except requests.RequestException as e:
+            self.log('llm', f"ERROR: OpenRouter API request failed — {e}")
+            return json.dumps({'error': 'OpenRouter API request failed'})
+        text = ''.join(parts)
+        self.total_input_tokens += it
+        self.total_output_tokens += ot
+        self.log('llm', f"Response: {it:,} input / {ot:,} output tokens")
+        if finish == 'length':
+            self.log('llm', f"WARNING: Response truncated (hit max_tokens={max_tokens}). Output may be incomplete.")
+        if not text:
+            return json.dumps({'error': 'OpenRouter API returned empty response'})
         return text
 
     def parse_json_response(self, text: str, fallback: dict) -> dict:
