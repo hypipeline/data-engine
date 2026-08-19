@@ -50,18 +50,27 @@ def build_input(config: dict, case: dict, refresh: bool = False, progress=None) 
     return {"system": eio.get("system") or "", "user": eio.get("user") or "", "meta": meta}
 
 
-# ── scoring: did the model surface a name that matches an expected entity? ──────────────────────
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Ground truth for Stage 1 — what GOOD DATA should extraction pass to the next stage?
+#
+# This stage is NOT about picking the final entity. It's about extracting good, real data —
+# entity names, key PEOPLE, and ADDRESSES — for Stage 2 to search on. So per case we derive a
+# reference target set = the CURRENTLY-LIVE production model's extraction, filtered to items that
+# are actually PRESENT VERBATIM in the website text (the alphanumeric-normalised page contains the
+# alphanumeric-normalised item). That grounding drops anything the live model hallucinated or knew
+# only from training (e.g. known_parent), leaving concrete, checkable facts. Each candidate model is
+# then scored on RECALL of that reference set across the three dimensions.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+def _list(report, key) -> list:
+    v = report.get(key) if isinstance(report, dict) else None
+    return [str(x) for x in v if str(x).strip()] if isinstance(v, list) else []
+
+
 def _extracted_names(report) -> list:
     """All name-like candidates a model produced, deduped. known_parent is included because
     production folds it into entity_names too (see extract_entities_with_llm)."""
-    if not isinstance(report, dict):
-        return []
-    out = []
-    for k in ("entity_names", "short_names"):
-        v = report.get(k)
-        if isinstance(v, list):
-            out.extend(str(x) for x in v if str(x).strip())
-    kp = report.get("known_parent")
+    out = _list(report, "entity_names") + _list(report, "short_names")
+    kp = report.get("known_parent") if isinstance(report, dict) else None
     if kp and str(kp).strip():
         out.append(str(kp))
     seen, uniq = set(), []
@@ -72,49 +81,99 @@ def _extracted_names(report) -> list:
     return uniq
 
 
-def _name_matches(expected: str, extracted_names: list) -> bool:
-    """Lenient bidirectional match: an expected option is satisfied if its normalised form contains,
-    or is contained by, any extracted name's normalised form (min 4 chars to avoid trivial hits)."""
-    e = _norm(expected)
-    if len(e) < 4:
+def _loads_loose(text):
+    """Parse a model's JSON output tolerating ```json fences / surrounding prose (no config needed)."""
+    import re
+    s = (text or "").strip()
+    m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", s)
+    if m:
+        s = m.group(1)
+    try:
+        return json.loads(s)
+    except Exception:  # noqa: BLE001
+        a, b = s.find("{"), s.rfind("}")
+        if a != -1 and b > a:
+            try:
+                return json.loads(s[a:b + 1])
+            except Exception:  # noqa: BLE001
+                pass
+    return None
+
+
+def _soft_in(needle, haystacks, minlen=4) -> bool:
+    """Lenient bidirectional match: needle matches if its normalised form contains, or is contained
+    by, any haystack's normalised form (min length guard to avoid trivial hits)."""
+    a = _norm(needle)
+    if len(a) < minlen:
         return False
-    for n in extracted_names:
-        x = _norm(n)
-        if len(x) < 4:
-            continue
-        if e in x or x in e:
+    for h in haystacks:
+        b = _norm(h)
+        if len(b) >= minlen and (a in b or b in a):
             return True
     return False
 
 
-def score(report, spec) -> dict:
-    """spec = {"mode":"entity","options":[{"name":..}, ...]} — expect at least one option surfaced.
-    Extraction has no meaningful 'abstain' expectation, so mode 'none'/absent → not scored."""
+def _ground(items, hay_norm, minlen=5) -> list:
+    """Keep only items that appear (alphanumeric-normalised) in the website text — deduped."""
+    out, seen = [], set()
+    for it in items:
+        n = _norm(it)
+        if len(n) >= minlen and n in hay_norm and n not in seen:
+            seen.add(n)
+            out.append(it)
+    return out
+
+
+def reference_targets(content) -> dict:
+    """The grounded good-data the live model found in the page, per dimension. {} keys always present."""
+    eio = (content or {}).get("extraction_io") or {}
+    hay = _norm(eio.get("user") or "")
+    live = _loads_loose(eio.get("output") or "") or {}
+    names = _ground(_list(live, "entity_names") + _list(live, "short_names"), hay, minlen=4)
+    people = _ground(_list(live, "key_people"), hay, minlen=5)
+    addrs = _ground(_list(live, "addresses"), hay, minlen=8)
+    return {"entity_names": names, "key_people": people, "addresses": addrs}
+
+
+def _recall(targets, got, minlen):
+    if not targets:
+        return None
+    hit = [t for t in targets if _soft_in(t, got, minlen)]
+    missed = [t for t in targets if not _soft_in(t, got, minlen)]
+    return {"total": len(targets), "hit": len(hit), "hit_items": hit, "missed": missed}
+
+
+def score(report, targets) -> dict:
+    """Grade a model on RECALL of the grounded reference targets across names / people / addresses.
+    ok = recovered EVERY grounded entity name (so Stage 2 has something to search) AND overall
+    recall >= 0.6 of all good data. Per-dimension detail is returned for display."""
     names = _extracted_names(report)
-    got = ", ".join(names[:6]) if names else None
-    if not spec or spec.get("mode") != "entity" or not spec.get("options"):
-        return {"scored": False, "got": got, "names": names}
-    hits = [o for o in spec["options"] if _name_matches(o.get("name") or o.get("registry_id") or "", names)]
-    ok = bool(hits)
-    return {"scored": True, "ok": ok, "got": got, "names": names,
-            "verdict": ("surfaced expected name" if ok else "expected name not surfaced")}
+    people = _list(report, "key_people")
+    addrs = _list(report, "addresses")
+    got = {"names": names, "people": people, "addresses": addrs}
+    dims = {
+        "entity_names": _recall(targets.get("entity_names") or [], names, 4),
+        "key_people": _recall(targets.get("key_people") or [], people, 5),
+        "addresses": _recall(targets.get("addresses") or [], addrs, 8),
+    }
+    present = {k: v for k, v in dims.items() if v}
+    if not present:                               # nothing grounded to grade against
+        return {"scored": False, "dims": dims, "got": got}
+    tot = sum(v["total"] for v in present.values())
+    hit = sum(v["hit"] for v in present.values())
+    recall = round(hit / tot, 3) if tot else 0.0
+    ent = dims["entity_names"]
+    ent_ok = (ent is None) or (ent["hit"] == ent["total"])
+    ok = ent_ok and recall >= 0.6
+    return {"scored": True, "ok": ok, "recall": recall, "hit": hit, "total": tot,
+            "dims": dims, "got": got,
+            "verdict": (f"recovered {hit}/{tot} good-data items" if ok
+                        else (f"missed searchable name(s)" if not ent_ok
+                              else f"only {hit}/{tot} good-data items"))}
 
 
-def spec_for(case):
-    """Extraction expectation reuses the case's editable `expect` names (managed in Search Coverage)
-    — the names extraction must surface. Falls back to the stored analysis spec's options if present."""
-    opts = [{"name": e} for e in (case.get("expect") or []) if str(e).strip()]
-    if opts:
-        return {"mode": "entity", "options": opts}
-    # fall back to the analysis expectation's entity options, if the user set one there
-    an = model_compare.spec_for(case)
-    if an and an.get("mode") == "entity" and an.get("options"):
-        return an
-    return None
-
-
-# ── run one model / one case (mirrors model_compare, parsing the EXTRACTION json) ──────────────
-def run_one_model(config, inp, model, spec, cid=None) -> dict:
+# ── run one model / one case (parsing the EXTRACTION json, scoring vs grounded targets) ────────
+def run_one_model(config, inp, model, targets, cid=None) -> dict:
     raw = {}
     for attempt in range(3):
         try:
@@ -135,11 +194,11 @@ def run_one_model(config, inp, model, spec, cid=None) -> dict:
             report = agent_parse(config, raw["text"])
         except Exception as e:  # noqa: BLE001
             raw["error"] = raw.get("error") or f"parse: {type(e).__name__}: {e}"
-    sc = score(report, spec)
+    sc = score(report, targets)
     row = {
         "model": model, "route": raw.get("route"), "provider": raw.get("provider"),
         "error": raw.get("error"),
-        "names": sc.get("names") or [],
+        "names": sc["got"]["names"], "people": sc["got"]["people"], "addresses": sc["got"]["addresses"],
         "jurisdiction": (report or {}).get("jurisdiction") if isinstance(report, dict) else None,
         "cost_usd": raw.get("cost_usd"), "latency_ms": raw.get("latency_ms"),
         "input_tokens": raw.get("input_tokens"), "output_tokens": raw.get("output_tokens"),
@@ -154,11 +213,18 @@ def run_one_model(config, inp, model, spec, cid=None) -> dict:
 
 def run_case(config: dict, case: dict, models: list, refresh_input: bool = False,
              refresh_models: bool = False) -> dict:
-    inp = build_input(config, case, refresh=refresh_input)
+    content = coverage.build_content(config, case, refresh=refresh_input)
+    if refresh_input and case.get("id"):
+        _clear_results(case["id"])
+    eio = content.get("extraction_io") or {}
+    meta = dict(content.get("meta") or {})
+    meta["stage1_na"] = not bool(eio.get("user"))
+    meta["user_chars"] = len(eio.get("user") or "")
+    inp = {"system": eio.get("system") or "", "user": eio.get("user") or "", "meta": meta}
     cid = case.get("id")
-    spec = spec_for(case)
-    if inp["meta"].get("stage1_na"):                  # names-mode case: no extraction stage to test
-        return {"case_id": cid, "input_meta": inp["meta"], "spec": spec, "stage1_na": True,
+    targets = reference_targets(content)
+    if meta.get("stage1_na"):                         # names-mode case: no extraction stage to test
+        return {"case_id": cid, "input_meta": meta, "targets": targets, "stage1_na": True,
                 "summary": {"models": 0, "scored": 0, "pass": 0, "cost_usd": 0}, "results": []}
     results, to_run = [], []
     for m in models:
@@ -170,10 +236,10 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
         to_run.append(m)
     if to_run:
         with ThreadPoolExecutor(max_workers=min(10, len(to_run))) as ex:
-            results.extend(ex.map(lambda m: run_one_model(config, inp, m, spec, cid), to_run))
+            results.extend(ex.map(lambda m: run_one_model(config, inp, m, targets, cid), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
     scored = [r for r in results if r["score"].get("scored")]
-    return {"case_id": cid, "input_meta": inp["meta"], "spec": spec,
+    return {"case_id": cid, "input_meta": meta, "targets": targets,
             "summary": {"models": len(results), "scored": len(scored),
                         "pass": sum(1 for r in scored if r["score"].get("ok")),
                         "cost_usd": total_cost},
@@ -188,8 +254,7 @@ def matrix():
         cached = get_cached(cid)
         out.append({
             "id": cid, "name": c["name"], "url": c.get("url"), "names": c.get("names"),
-            "expect": c.get("expect") or [], "spec": cached.get("spec"),
-            "input_meta": cached.get("input_meta"),
+            "targets": cached.get("targets"), "input_meta": cached.get("input_meta"),
             "stage1_na": not bool(c.get("url")),      # no website → no extraction stage
             "results": {r["model"]: r for r in (cached.get("results") or [])},
         })
@@ -199,11 +264,12 @@ def matrix():
 def get_cached(cid):
     content = coverage.content_cache_get(cid)
     meta = (content or {}).get("meta")
+    targets = reference_targets(content) if content else {"entity_names": [], "key_people": [], "addresses": []}
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT result FROM entity.extract_compare_results WHERE case_id=%s ORDER BY model", (cid,))
             rows = [r["result"] for r in cur.fetchall()]
-    return {"case_id": cid, "input_meta": meta, "spec": None, "results": rows}
+    return {"case_id": cid, "input_meta": meta, "targets": targets, "results": rows}
 
 
 def input_for(config, case):

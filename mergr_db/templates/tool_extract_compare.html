@@ -33,30 +33,34 @@
   .run-log { font-size:12px; color:var(--muted); margin:6px 0; min-height:16px; }
   .errbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:8px; font-size:13px; margin-top:10px; }
   #detail { display:none; margin-top:26px; padding-top:18px; border-top:2px solid var(--border); }
-  .exp-panel { margin:10px 0; padding:10px 12px; background:#f7f8fa; border:1px solid var(--border); border-radius:9px; font-size:13px; }
-  .exp-names { font-family:var(--mono); font-size:12px; }
+  .tgt-panel { margin:10px 0; padding:11px 13px; background:#f7f8fa; border:1px solid var(--border); border-radius:9px; font-size:13px; }
+  .tgt-row { margin-top:6px; }
+  .tgt-lbl { display:inline-block; min-width:120px; font-weight:600; color:#475569; font-size:12px; vertical-align:top; }
+  .chip { display:inline-block; margin:2px 3px 0 0; padding:2px 7px; border-radius:6px; font-size:11.5px; background:#eef2f7; }
+  .chip.hit { background:#dcfce7; color:#166534; font-weight:600; }
+  .chip.miss { background:#fee2e2; color:#991b1b; }
+  .chip.extra { background:#eef2ff; color:#3730a3; }
+  .dimline { font-size:11.5px; color:#64748b; margin-top:5px; }
   .llm-pre { margin:4px 0 10px; padding:10px 12px; background:#1a1a2e; color:#c9d1d9; border-radius:6px; font-family:var(--mono); font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:440px; overflow:auto; }
   .isec { margin:4px 0; border-bottom:1px solid #f0f0f5; }
   .isec > summary { cursor:pointer; font-size:12.5px; color:#4a90d9; font-weight:600; padding:6px 0; }
   .isec > summary:hover { text-decoration:underline; }
   .isec[open] > summary { color:#1a1a2e; }
   .raw { display:none; margin-top:6px; background:#fff; border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:320px; overflow:auto; }
-  .out-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-top:10px; }
+  .out-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; margin-top:10px; }
   .out-card { border:1px solid var(--border); border-radius:9px; padding:10px 12px; background:#fff; font-size:12.5px; }
   .out-card h4 { margin:0 0 6px; font-family:var(--mono); font-size:12px; }
-  .nm-chip { display:inline-block; margin:2px 3px 0 0; padding:2px 7px; border-radius:6px; font-size:11.5px; background:#eef2f7; }
-  .nm-chip.hit { background:#dcfce7; color:#166534; font-weight:600; }
 </style>
 {% endblock %}
 {% block body %}
 <a class="tool-back" href="/entity">← Back to Entity Lookup</a>
 <h1 class="page">Model Comparison · <span style="color:#4a90d9">Stage 1 — Name Extraction</span></h1>
-<p class="sub">The <b>first</b> LLM pass. For each case it takes the exact extraction input production builds
-(the website text sent to <code>extract_entities_with_llm</code>), feeds that <b>same input to different models</b>, and
-scores each ✓/✗ on whether it <b>surfaces the expected name</b>. Scoring is lenient — a candidate good enough to drive
-registry search counts (extracting <i>"Quest Global"</i> satisfies an expectation of <i>"Quest Global Services Pte. Ltd."</i>).
-Expected names come from each case's <a href="/entity/tools/coverage">Search coverage</a> <code>expect</code> list (edit them there).
-Contrast with <a href="/entity/tools/model-compare">Stage 2 — Analysis</a>, which scores the final recommended <b>entity</b>.</p>
+<p class="sub">The <b>first</b> LLM pass. This stage is <b>not about finding the final entity</b> — it's about extracting good, real
+data (entity names, key <b>people</b>, <b>addresses</b>) for Stage 2 to search on. So each case is graded on <b>how much of the
+good data it recovers</b>. The reference targets are derived automatically: the <b>currently-live production model's</b>
+extraction, filtered to items that <b>actually appear in the website text</b> (grounded — hallucinations and training-only facts
+like a known parent are dropped). Each candidate model is scored on <b>recall</b> of that reference set across the three
+dimensions. Contrast with <a href="/entity/tools/model-compare">Stage 2 — Analysis</a>, which scores the final recommended entity.</p>
 
 <div class="mc-fg">
   <label>Models (one per line — OpenRouter-style ids)</label>
@@ -68,18 +72,18 @@ Contrast with <a href="/entity/tools/model-compare">Stage 2 — Analysis</a>, wh
     <label><input type="radio" name="rerun-mode" value="failed"> retry <b>failed + missing</b></label>
     <label><input type="radio" name="rerun-mode" value="all"> re-run <b>all</b></label>
   </span>
-  <label><input type="checkbox" id="refresh-input"> also rebuild the website input (re-fetch/extract)</label>
+  <label><input type="checkbox" id="refresh-input"> also rebuild the website input <span class="muted">(re-fetch/extract + refresh the live-model reference targets)</span></label>
   <button class="btn primary" id="runall-btn" onclick="runAll()">▶ Run all cases</button>
 </div>
 <div class="run-log" id="runall-log"></div>
 
 <h3 class="page" style="font-size:16px;margin-top:6px">Overview — all cases × models</h3>
 <div id="matrix"></div>
-<p class="muted" style="font-size:12px;margin-top:6px">Click a case (or cell) for full detail. Green = ✓ surfaced expected name, red = ✗. Names-mode cases have no extraction stage (n/a).</p>
+<p class="muted" style="font-size:12px;margin-top:6px">Cells show <b>recall</b> of the good-data targets (green ✓ / red ✗). Click a case for the per-dimension breakdown. Names-mode cases have no extraction stage (n/a).</p>
 
 <div id="detail">
   <h3 class="page" style="font-size:16px" id="detail-title">Detail</h3>
-  <div class="exp-panel" id="exp-panel"></div>
+  <div class="tgt-panel" id="tgt-panel"></div>
   <div class="mc-opts">
     <button class="btn primary" id="run-btn" onclick="run()">▶ Run models for this case</button>
     <span id="detail-note" class="muted"></span>
@@ -104,12 +108,14 @@ function rerunScope(){ return (document.querySelector('input[name=rerun-mode]:ch
 function money2(c){ return c==null?'':'$'+Number(c).toFixed(2); }
 function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }
 function short(m){ return m.split('/').pop(); }
+function norm(s){ return (s==null?'':String(s)).toLowerCase().replace(/[^a-z0-9]/g,''); }
+function soft(a,b,ml){ a=norm(a); b=norm(b); ml=ml||4; return a.length>=ml&&b.length>=ml&&(a.indexOf(b)>=0||b.indexOf(a)>=0); }
 var MATRIX={cases:[],models:[]}, SELECTED=null;
 function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
 function curCase(){ return caseById(SELECTED); }
 function loadMatrix(){ return getJSON(EB+'/api/extractcompare/matrix').then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
 
-// which cells need to run under the chosen scope (mirrors the server)
+function tgtCount(t){ t=t||{}; return (t.entity_names||[]).length+(t.key_people||[]).length+(t.addresses||[]).length; }
 function cellNeedsRun(cs, model, scope){
   var r=(cs.results||{})[model];
   if(scope==='all') return true;
@@ -124,29 +130,36 @@ function matrixCell(r){
   if(!r) return '<span class="muted">–</span>';
   if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
   var sc=r.score||{};
-  var b=!sc.scored?'<span class="muted" title="no expected names set on this case">·</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
-  return b+'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
+  if(!sc.scored) return '<span class="muted" title="no grounded targets for this case">·</span>'
+    +'<div class="cost">'+money2(r.cost_usd)+'</div>';
+  var pct=Math.round((sc.recall||0)*100);
+  var b=(sc.ok?'<span class="pill pass">✓ '+pct+'%</span>':'<span class="pill fail">'+pct+'%</span>');
+  return b+'<div class="cost" title="'+sc.hit+'/'+sc.total+' good-data items · '+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
 }
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
   var cases=MATRIX.cases||[];
-  var head='<tr><th class="rowlab">Case</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var head='<tr><th class="rowlab">Case</th><th title="grounded good-data targets: entity names + people + addresses">Targets</th>'
+    +models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
   var body=cases.map(function(cs){
     if(cs.stage1_na){
       return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'
-        +'<td class="mcell na" colspan="'+models.length+'" onclick="openCase('+cs.id+')"><span class="pill na">no extraction stage (names mode)</span></td></tr>';
+        +'<td class="mcell na" colspan="'+(models.length+1)+'" onclick="openCase('+cs.id+')"><span class="pill na">no extraction stage (names mode)</span></td></tr>';
     }
     var tds=models.map(function(m){
       var r=(cs.results||{})[m], cls=r&&r.score&&r.score.scored?(r.score.ok?' ok':' bad'):'';
       return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>';
     }).join('');
-    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'+tds+'</tr>';
+    var tc=tgtCount(cs.targets);
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'
+      +'<td class="mcell" onclick="openCase('+cs.id+')" title="'+tc+' grounded items">'+(tc?('<b>'+tc+'</b>'):'<span class="muted">0</span>')+'</td>'+tds+'</tr>';
   }).join('');
-  var foot='<tr class="agg"><th class="rowlab">pass · avg cost</th>'+models.map(function(m){
-    var pass=0,scored=0,costs=[];
-    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored){scored++; if(r.score.ok)pass++;} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
+  var foot='<tr class="agg"><th class="rowlab">avg recall · avg cost</th><td></td>'+models.map(function(m){
+    var recs=[],costs=[];
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored)recs.push(r.score.recall||0); if(r.cost_usd!=null)costs.push(r.cost_usd);} });
+    var avgr=recs.length?(recs.reduce(function(a,b){return a+b;},0)/recs.length):null;
     var avgc=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
-    return '<td style="text-align:center">'+(scored?('<b>'+pass+'/'+scored+'</b>'):'—')+'<div class="cost">'+(avgc!=null?per1k(avgc):'—')+'</div></td>';
+    return '<td style="text-align:center">'+(avgr!=null?('<b>'+Math.round(avgr*100)+'%</b>'):'—')+'<div class="cost">'+(avgc!=null?per1k(avgc):'—')+'</div></td>';
   }).join('')+'</tr>';
   q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
 }
@@ -166,47 +179,68 @@ function runAll(){
     var cs=todo[i]; q('runall-log').textContent='Running '+(done+1)+'/'+todo.length+': '+cs.name+' …';
     getJSON(EB+'/api/extractcompare/run',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({id:cs.id, models:models, refresh_input:refresh, refresh_models:scope==='all'})})
-    .then(function(res){ (res.results||[]).forEach(function(r){ updateMatrixCell(cs.id, r); }); done++; step(i+1); })
+    .then(function(res){ if(res.targets) cs.targets=res.targets; (res.results||[]).forEach(function(r){ updateMatrixCell(cs.id, r); }); done++; step(i+1); })
     .catch(function(e){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">'+esc(cs.name)+': '+esc(e.message||e)+'</span>'; btn.disabled=false; });
   }
   step(0);
 }
 
 // ── detail ────────────────────────────────────────────────────────────────────
+var DIMS=[['entity_names','Entity names'],['key_people','Key people'],['addresses','Addresses']];
+function renderTargets(cs){
+  var t=cs.targets||{}, tot=tgtCount(t);
+  if(cs.stage1_na){ q('tgt-panel').innerHTML='<span class="muted">Names-mode case — no website, so no extraction stage to test.</span>'; return; }
+  var rows=DIMS.map(function(d){
+    var items=(t[d[0]]||[]);
+    return '<div class="tgt-row"><span class="tgt-lbl">'+d[1]+' ('+items.length+')</span>'
+      +(items.length?items.map(function(x){return '<span class="chip">'+esc(x)+'</span>';}).join(''):'<span class="muted">— none grounded —</span>')+'</div>';
+  }).join('');
+  q('tgt-panel').innerHTML='<b>Good-data targets to recover</b> <span class="muted">('+tot+' items — the live model\'s extraction, kept only where the text actually appears on the site; rebuild input to refresh)</span>'+rows;
+}
 function openCase(cid){
   SELECTED=cid; var cs=caseById(cid); if(!cs) return;
   q('detail').style.display='block';
   q('detail-title').textContent='Detail: '+cs.name;
   var ib=q('llm-input'); if(ib){ ib.style.display='none'; ib.innerHTML=''; }
   q('summary').innerHTML='';
-  var exp=(cs.expect||[]);
-  q('exp-panel').innerHTML='<b>Expected name(s) to surface:</b> '
-    +(exp.length?('<span class="exp-names">'+exp.map(esc).join(' · ')+'</span>'):'<span class="muted">none set — add them in Search coverage to grade this case</span>')
-    +' <span class="muted">· edit in <a href="/entity/tools/coverage">Search coverage</a></span>';
+  renderTargets(cs);
   q('detail-note').textContent = cs.stage1_na ? 'This is a names-mode case — it has no extraction stage to test.' : '';
   q('run-btn').disabled = !!cs.stage1_na;
   renderOut(cs);
   q('detail').scrollIntoView({behavior:'smooth', block:'start'});
 }
-function nameChips(r, exp){
-  var names=(r.names||[]);
-  if(!names.length) return '<span class="muted">— no names —</span>';
-  return names.map(function(n){
-    var hit=(exp||[]).some(function(e){ var a=norm(e),b=norm(n); return a.length>=4&&b.length>=4&&(a.indexOf(b)>=0||b.indexOf(a)>=0); });
-    return '<span class="nm-chip'+(hit?' hit':'')+'">'+esc(n)+'</span>';
-  }).join('');
+// chips for one dimension: green=recovered a target, red=missed target, blue=extra (extracted but not a target)
+function dimChips(targets, got){
+  targets=targets||[]; got=got||[];
+  var out=targets.map(function(t){
+    var hit=got.some(function(g){ return soft(t,g); });
+    return '<span class="chip '+(hit?'hit':'miss')+'">'+esc(t)+'</span>';
+  });
+  got.forEach(function(g){
+    var isTarget=targets.some(function(t){ return soft(t,g); });
+    if(!isTarget) out.push('<span class="chip extra" title="extracted but not a grounded target">'+esc(g)+'</span>');
+  });
+  return out.length?out.join(''):'<span class="muted">—</span>';
 }
-function norm(s){ return (s==null?'':String(s)).toLowerCase().replace(/[^a-z0-9]/g,''); }
-function outCard(r, exp){
-  var sc=r.score||{};
-  var badge=r.error?'<span class="pill err">error</span>':(!sc.scored?'<span class="pill na">no expectation</span>':(sc.ok?'<span class="pill pass">✓ surfaced</span>':'<span class="pill fail">✗ missed</span>'));
+function outCard(r, targets){
+  var sc=r.score||{}, dims=sc.dims||{};
+  var badge=r.error?'<span class="pill err">error</span>'
+    :(!sc.scored?'<span class="pill na">no targets</span>'
+      :(sc.ok?'<span class="pill pass">✓ '+Math.round((sc.recall||0)*100)+'% recall</span>':'<span class="pill fail">'+Math.round((sc.recall||0)*100)+'% recall</span>'));
   var rid='rw'+Math.random().toString(36).slice(2,8);
-  var body = r.error
-    ? '<div style="color:#991b1b;font-size:12px;margin-top:6px">'+esc(r.error)+'</div>'
-    : '<div style="margin-top:6px">'+nameChips(r, exp)+'</div>'
-      +(r.jurisdiction?'<div class="muted" style="margin-top:5px">jurisdiction: '+esc(r.jurisdiction)+'</div>':'');
+  var body;
+  if(r.error){ body='<div style="color:#991b1b;font-size:12px;margin-top:6px">'+esc(r.error)+'</div>'; }
+  else {
+    var got={entity_names:r.names, key_people:r.people, addresses:r.addresses};
+    body=DIMS.map(function(d){
+      var dm=dims[d[0]];
+      var lbl=d[1]+(dm?(' <span class="muted">'+dm.hit+'/'+dm.total+'</span>'):'');
+      return '<div class="tgt-row"><span class="tgt-lbl" style="min-width:105px">'+lbl+'</span>'+dimChips((targets||{})[d[0]], got[d[0]])+'</div>';
+    }).join('');
+    if(r.jurisdiction) body+='<div class="dimline">jurisdiction: '+esc(r.jurisdiction)+'</div>';
+  }
   return '<div class="out-card"><h4>'+esc(short(r.model))+' '+badge+'</h4>'+body
-    +'<div class="muted" style="margin-top:6px">'+(r.cost_usd!=null?('<b>'+money2(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
+    +'<div class="muted" style="margin-top:7px">'+(r.cost_usd!=null?('<b>'+money2(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
       +' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')+' · '+(r.input_tokens||0)+'/'+(r.output_tokens||0)+' tok</div>'
     +'<div style="margin-top:4px"><span class="pill route">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span>'
       +' <span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span></div>'
@@ -214,14 +248,15 @@ function outCard(r, exp){
 }
 function renderOut(cs){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
-  var exp=cs.expect||[];
   var rows=models.map(function(m){ return (cs.results||{})[m]; }).filter(Boolean);
   if(!rows.length){ q('out').innerHTML='<p class="muted">No results yet — click “Run models for this case”.</p>'; return; }
-  var pass=rows.filter(function(r){return r.score&&r.score.scored&&r.score.ok;}).length;
-  var scored=rows.filter(function(r){return r.score&&r.score.scored;}).length;
+  var scored=rows.filter(function(r){return r.score&&r.score.scored;});
+  var pass=scored.filter(function(r){return r.score.ok;}).length;
+  var avgr=scored.length?Math.round(scored.reduce(function(a,r){return a+(r.score.recall||0);},0)/scored.length*100):0;
   var cost=rows.reduce(function(a,r){return a+(r.cost_usd||0);},0);
-  q('summary').innerHTML='<b>'+pass+'/'+scored+'</b> models surfaced an expected name · total run cost '+money2(cost);
-  q('out').innerHTML='<div class="out-grid">'+rows.map(function(r){return outCard(r, exp);}).join('')+'</div>';
+  q('summary').innerHTML='<b>'+pass+'/'+scored.length+'</b> models passed · avg recall <b>'+avgr+'%</b> · total run cost '+money2(cost)
+    +' <span class="muted">— green = recovered a target · red = missed a target · blue = extra data not in the reference set</span>';
+  q('out').innerHTML='<div class="out-grid">'+rows.map(function(r){return outCard(r, cs.targets);}).join('')+'</div>';
 }
 function run(){
   var cs=curCase(); if(!cs) return;
@@ -230,6 +265,7 @@ function run(){
   getJSON(EB+'/api/extractcompare/run',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({id:cs.id, models:models, refresh_input:q('refresh-input').checked, refresh_models:rerunScope()==='all'})})
   .then(function(res){
+    if(res.targets){ cs.targets=res.targets; renderTargets(cs); }
     if(res.stage1_na){ q('summary').innerHTML='<span class="muted">Names-mode case — no extraction stage.</span>'; }
     cs.results=cs.results||{}; (res.results||[]).forEach(function(r){ cs.results[r.model]=r; updateMatrixCell(cs.id, r); });
     renderOut(cs); btn.disabled=false; btn.textContent='▶ Run models for this case';
