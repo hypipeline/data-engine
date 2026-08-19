@@ -437,6 +437,18 @@ function loadHistory(){
     h.innerHTML=out;
   }).catch(function(){});
 }
+// Mirror the pipeline's agent.parse_json_response: many models wrap output in ```json
+// fences (or add prose), so a bare JSON.parse fails. Strip fences, then fall back to the
+// outermost {...} span. Returns null if nothing parses.
+function parseModelJSON(raw){
+  var s=(raw||'').trim();
+  var m=s.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if(m) s=m[1].trim();
+  try{ return JSON.parse(s); }catch(e){}
+  var a=s.indexOf('{'), b=s.lastIndexOf('}');
+  if(a!==-1 && b>a){ try{ return JSON.parse(s.slice(a,b+1)); }catch(e){} }
+  return null;
+}
 // Test-only: render a Model-compare stored result via the existing entity card.
 function loadModelResult(cid, model, url){
   document.getElementById('url').value = url||'';
@@ -446,7 +458,8 @@ function loadModelResult(cid, model, url){
     .then(function(res){
       var rpt=document.getElementById('report');
       if(!res || res.error){ rpt.innerHTML='<div class="report-card"><div class="report-body">No stored result for this model — run the case in Model comparison first.</div></div>'; return; }
-      var report=null; try{ report=JSON.parse(res.raw||'{}'); }catch(e){
+      var report=parseModelJSON(res.raw);
+      if(!report){
         rpt.innerHTML='<div class="report-card conf-insufficient"><div class="report-header"><div class="report-entity">Model output was not valid JSON</div></div><div class="report-body"><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">'+esc((res.raw||'').slice(0,6000))+'</pre></div></div>'; return; }
       var meta={ model:model, cost_usd:res.cost_usd, total_time_s:(res.latency_ms!=null?(res.latency_ms/1000).toFixed(1):null) };
       rpt.innerHTML = renderReport(report, meta, url);
