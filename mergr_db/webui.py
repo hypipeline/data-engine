@@ -505,6 +505,13 @@ def tool_model_compare(request: Request):
     return render(request, "tool_model_compare.html", "entity")
 
 
+@app.get("/entity/tools/model-compare/result", response_class=HTMLResponse)
+def tool_model_compare_result(request: Request):
+    # Test-only full-result view: reuses entity.html; empty initials so its
+    # ?mccase/?mcmodel query-param branch renders the stored model output.
+    return render(request, "entity.html", "entity", initial_url="", initial_result=None)
+
+
 @app.get("/entity/tools/northdata", response_class=HTMLResponse)
 def tool_northdata(request: Request):
     return render(request, "tool_northdata.html", "entity")

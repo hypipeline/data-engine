@@ -503,6 +503,11 @@ def matrix():
     return {"cases": out, "models": DEFAULT_MODELS}
 
 
+def result_for(cid, model):
+    """Public wrapper over _result_get — one model's stored result row for the full-result view."""
+    return _result_get(cid, model)
+
+
 def _result_get(cid, model):
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:

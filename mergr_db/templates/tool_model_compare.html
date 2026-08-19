@@ -302,6 +302,14 @@ function cell(r){
   var badge=!sc.scored?'<span class="pill err">no expectation set</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
   var verdict=sc.verdict?' <span class="muted">'+esc(sc.verdict)+'</span>':'';
   var rid='rw'+Math.random().toString(36).slice(2,8);
+  // Test-only: open this model's stored output in the reusable entity card (new tab).
+  var _cc=curCase()||{}, _cdom=_cc.url||_cc.name||'';
+  var fullLink=(r.raw && SELECTED!=null)
+    ? ' <a class="btn sm" target="_blank" title="render this stored output in the entity-lookup card"'
+      +' href="/entity/tools/model-compare/result?mccase='+encodeURIComponent(SELECTED)
+      +'&mcmodel='+encodeURIComponent(r.model||'')+'&mcurl='+encodeURIComponent(_cdom)
+      +'" style="text-decoration:none">View full result ↗</a>'
+    : '';
   return badge+verdict
     +'<div style="margin-top:7px" class="ent-name">'+esc(ent.legal_entity_name||'— none —')+'</div>'
     +'<div class="muted">'+esc(ent.registry_id||'no id')+(ent.jurisdiction_country?(' · '+esc(ent.jurisdiction_country)):'')+'</div>'
@@ -309,7 +317,7 @@ function cell(r){
     +'<div class="muted" style="margin-top:6px">'+(r.cost_usd!=null?('<b>'+money2(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
       +' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')+' · '+(r.input_tokens||0)+'/'+(r.output_tokens||0)+' tok</div>'
     +'<div style="margin-top:4px"><span class="pill route">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span></div>'
-    +'<span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span>'
+    +'<span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span>'+fullLink
     +'<div class="raw" id="'+rid+'">'+esc(r.raw||'(no output)')+'</div>';
 }
 function render(results, cached){

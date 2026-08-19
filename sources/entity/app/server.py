@@ -409,6 +409,13 @@ def api_modelcompare_input(case_id: int):
                          "sections": c.get("sections"), "meta": c.get("meta")})
 
 
+@app.get("/api/modelcompare/result")
+def api_modelcompare_result(case_id: int, model: str = ""):
+    """One model's stored result row (incl. its raw JSON output) for the full-result view."""
+    r = model_compare.result_for(int(case_id), model)
+    return JSONResponse(r or {"error": "no stored result for this case/model"})
+
+
 @app.post("/api/modelcompare/run")
 async def api_modelcompare_run(request: Request):
     """Run one coverage case across a set of models. Body: {id | case, models[], refresh_input,

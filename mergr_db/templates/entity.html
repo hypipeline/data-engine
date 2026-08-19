@@ -437,8 +437,28 @@ function loadHistory(){
     h.innerHTML=out;
   }).catch(function(){});
 }
+// Test-only: render a Model-compare stored result via the existing entity card.
+function loadModelResult(cid, model, url){
+  document.getElementById('url').value = url||'';
+  document.getElementById('meta').innerHTML = 'Model-compare test result · <b>'+esc(model)+'</b> · <span style="color:#856404">stored analysis output — not a live run</span>';
+  fetch(EBASE+'/api/modelcompare/result?case_id='+encodeURIComponent(cid)+'&model='+encodeURIComponent(model))
+    .then(function(r){return r.json();})
+    .then(function(res){
+      var rpt=document.getElementById('report');
+      if(!res || res.error){ rpt.innerHTML='<div class="report-card"><div class="report-body">No stored result for this model — run the case in Model comparison first.</div></div>'; return; }
+      var report=null; try{ report=JSON.parse(res.raw||'{}'); }catch(e){
+        rpt.innerHTML='<div class="report-card conf-insufficient"><div class="report-header"><div class="report-entity">Model output was not valid JSON</div></div><div class="report-body"><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">'+esc((res.raw||'').slice(0,6000))+'</pre></div></div>'; return; }
+      var meta={ model:model, cost_usd:res.cost_usd, total_time_s:(res.latency_ms!=null?(res.latency_ms/1000).toFixed(1):null) };
+      rpt.innerHTML = renderReport(report, meta, url);
+    })
+    .catch(function(){ document.getElementById('report').innerHTML='<div class="report-card"><div class="report-body">Failed to load result.</div></div>'; });
+}
+
 loadHistory();
-if(INITIAL_RESULT){ renderStored(INITIAL_RESULT, INITIAL_URL); }   // /entity/<domain>/<id> permalink
+var _mcq = new URLSearchParams(location.search);
+if(_mcq.get('mccase') && _mcq.get('mcmodel')){                     // test-only full-result view
+  loadModelResult(_mcq.get('mccase'), _mcq.get('mcmodel'), _mcq.get('mcurl')||'');
+} else if(INITIAL_RESULT){ renderStored(INITIAL_RESULT, INITIAL_URL); }   // /entity/<domain>/<id> permalink
 else if(INITIAL_URL){ runLookup(INITIAL_URL, false); }             // deep-link: replay latest, don't push
 </script>
 {% endblock %}
