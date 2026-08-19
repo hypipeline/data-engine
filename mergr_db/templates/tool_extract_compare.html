@@ -126,15 +126,22 @@ function cellNeedsRun(cs, model, scope){
 function caseNeedsWork(cs, models, scope){ return !cs.stage1_na && models.some(function(m){ return cellNeedsRun(cs, m, scope); }); }
 
 // ── overview matrix ──────────────────────────────────────────────────────────
+// count SUGGESTED items that aren't matched in the input (❓ suspected hallucinations)
+function hallucCount(r){
+  var gm=r&&r.gmark; if(!gm) return 0; var n=0;
+  ['entity_names','key_people','addresses'].forEach(function(d){ var m=gm[d]||{}; for(var k in m){ if(m.hasOwnProperty(k)&&!m[k]) n++; } });
+  return n;
+}
+function hbadge(hc){ return hc>0?' <span style="font-size:10px;color:#b45309" title="'+hc+' suggested item(s) not found in the input — suspected hallucination">❓'+hc+'</span>':''; }
 function matrixCell(r){
   if(!r) return '<span class="muted">–</span>';
   if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
-  var sc=r.score||{};
-  if(!sc.scored) return '<span class="muted" title="no grounded targets for this case">·</span>'
+  var sc=r.score||{}, hc=hallucCount(r);
+  if(!sc.scored) return '<span class="muted" title="no grounded targets for this case">·</span>'+hbadge(hc)
     +'<div class="cost">'+money2(r.cost_usd)+'</div>';
   var pct=Math.round((sc.recall||0)*100);
   var b=(sc.ok?'<span class="pill pass">✓ '+pct+'%</span>':'<span class="pill fail">'+pct+'%</span>');
-  return b+'<div class="cost" title="'+sc.hit+'/'+sc.total+' good-data items · '+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
+  return b+hbadge(hc)+'<div class="cost" title="'+sc.hit+'/'+sc.total+' good-data items · '+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
 }
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
@@ -154,12 +161,13 @@ function renderMatrix(){
     return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'
       +'<td class="mcell" onclick="openCase('+cs.id+')" title="'+tc+' grounded items">'+(tc?('<b>'+tc+'</b>'):'<span class="muted">0</span>')+'</td>'+tds+'</tr>';
   }).join('');
-  var foot='<tr class="agg"><th class="rowlab">avg recall · avg cost</th><td></td>'+models.map(function(m){
-    var recs=[],costs=[];
-    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored)recs.push(r.score.recall||0); if(r.cost_usd!=null)costs.push(r.cost_usd);} });
+  var foot='<tr class="agg"><th class="rowlab">avg recall · avg cost · ❓total</th><td></td>'+models.map(function(m){
+    var recs=[],costs=[],hall=0;
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ if(r.score&&r.score.scored)recs.push(r.score.recall||0); if(r.cost_usd!=null)costs.push(r.cost_usd); hall+=hallucCount(r);} });
     var avgr=recs.length?(recs.reduce(function(a,b){return a+b;},0)/recs.length):null;
     var avgc=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
-    return '<td style="text-align:center">'+(avgr!=null?('<b>'+Math.round(avgr*100)+'%</b>'):'—')+'<div class="cost">'+(avgc!=null?per1k(avgc):'—')+'</div></td>';
+    return '<td style="text-align:center">'+(avgr!=null?('<b>'+Math.round(avgr*100)+'%</b>'):'—')
+      +'<div class="cost">'+(avgc!=null?per1k(avgc):'—')+(hall?' · <span style="color:#b45309" title="total suggested items not found in the input across all cases">❓'+hall+'</span>':'')+'</div></td>';
   }).join('')+'</tr>';
   q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
 }
