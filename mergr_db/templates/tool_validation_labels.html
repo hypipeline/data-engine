@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Registry Validation Labels — Data Engine{% endblock %}
+{% block title %}Registry Validation Tests — Data Engine{% endblock %}
 {% block head %}
 <style>
   .rv-intro { color:#555; font-size:13.5px; line-height:1.6; max-width:920px; margin:2px 0 16px; }
@@ -12,6 +12,10 @@
   /* positive-but-partial (name verified, no ID) — blue, so it never reads like the amber
      "matched but struck off/dissolved" warnings. */
   .badge-info { background:#cce5ff; color:#004085; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:11px; font-size:12px; font-weight:700; }
+  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
+  .pill.running { background:#e0edff; color:#1e40af; } .pill.idle { background:#f1f3f6; color:#9aa3af; }
+  .pill.error { background:#e5e7eb; color:#374151; }
   .rv-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:12px; max-width:1000px; }
   .rv-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .rv-name { font-weight:700; font-size:15px; }
@@ -19,13 +23,17 @@
   .rv-facts { color:#555; font-size:12.5px; margin:6px 0 0; display:flex; flex-wrap:wrap; gap:6px 14px; }
   .rv-facts .k { color:#9aa3af; }
   .rv-note { color:#666; font-size:12.5px; margin:8px 0 0; }
-  .rv-conf { display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px; font-weight:700; background:#f1f3f6; color:#555; text-transform:uppercase; }
+  .rv-result { margin:10px 0 0; border-top:1px solid #eee; padding-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rv-lab { font-size:11.5px; color:#9aa3af; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .rv-runat { color:#9aa3af; font-size:11.5px; }
   .rv-btn { padding:5px 12px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:7px; font-size:13px; cursor:pointer; }
   .rv-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
   .rv-btn.link { border:none; background:none; color:#2563eb; padding:5px 6px; }
   .rv-btn.danger { color:#b91c1c; border-color:#fecaca; background:#fff5f5; }
   .grow { flex:1; }
   .rv-err { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; font-size:12.5px; padding:6px 10px; border-radius:7px; margin-top:8px; }
+  .rv-json { background:#1e1e2e; color:#a6e3a1; padding:10px 12px; border-radius:6px; font-size:11.5px; line-height:1.5; margin:8px 0 0; white-space:pre-wrap; word-break:break-word; font-family:'SF Mono','Fira Code',monospace; max-height:320px; overflow:auto; }
+  .rv-exp summary { cursor:pointer; font-size:12.5px; color:#2563eb; font-weight:600; }
   .rv-form { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:18px; max-width:1000px; }
   .rv-form label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
   .rv-form input, .rv-form textarea, .rv-form select { width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; font-family:inherit; }
@@ -34,39 +42,37 @@
 </style>
 {% endblock %}
 {% block body %}
-<h2 style="margin:6px 0 2px">🏷️ Registry validation labels</h2>
+<h2 style="margin:6px 0 2px">🏷️ Registry validation tests</h2>
 <p class="rv-intro">
-  Each row is an entity + the <b>registry facts</b> that were (or would be) found, and shows the resulting
-  <b>validation badge</b> — the exact badge rendered on the entity card. This is a <b>render-only</b> curation
-  view: it does <b>not</b> run the pipeline, it just maps each case's stored <code>status</code> (and registry
-  status) to a label. Use it to review/curate the label scheme so the entity-card labels stay coherent.
+  Each case is an entity (name + jurisdiction + optional registry ID) plus an <b>expected</b> validation
+  status. A <b>Run</b> instantiates the real <code>EntityLookup</code> agent and calls the production
+  <code>validate_entity_in_registry</code> — making <b>live</b> registry calls (Delaware via Browserbase,
+  NorthData, Companies House, ACRA, NZ) — then grades the derived <b>actual</b> status against the expected
+  one (<b>PASS</b> / <b>FAIL</b>). Live, so registry results can drift between runs.
 </p>
 
 <div class="rv-row" style="margin-bottom:14px">
+  <button class="rv-btn primary" id="runall" onclick="runAll()">▶ Run all (live)</button>
   <button class="rv-btn" onclick="showForm()">＋ Add case</button>
   <span id="summary" class="rv-meta"></span>
 </div>
 
 <div class="rv-form" id="form" style="display:none">
-  <div class="rv-row"><b id="form-title">New label case</b><span class="grow"></span>
+  <div class="rv-row"><b id="form-title">New test case</b><span class="grow"></span>
     <span class="rv-meta" id="form-msg"></span></div>
+  <label>Entity name</label>
+  <input id="f-name" placeholder="e.g. SREP Capital Management, LLC">
   <div class="two">
-    <div><label>Entity name</label>
-      <input id="f-name" placeholder="e.g. SREP Capital Management, LLC"></div>
-    <div><label>Jurisdiction <span class="fh">(optional)</span></label>
-      <input id="f-jurisdiction" placeholder="US · Delaware"></div>
+    <div><label>Jurisdiction country <span class="fh">(ISO — US, GB, LU, OM…)</span></label>
+      <input id="f-jurisdiction_country" placeholder="US"></div>
+    <div><label>Jurisdiction state <span class="fh">(optional — e.g. DE)</span></label>
+      <input id="f-jurisdiction_state" placeholder="DE"></div>
   </div>
   <div class="two">
-    <div><label>Registry ID <span class="fh">(optional; blank / — if none)</span></label>
+    <div><label>Registry ID <span class="fh">(optional; blank if none)</span></label>
       <input id="f-registry_id" placeholder="4334492"></div>
-    <div><label>Source <span class="fh">(registry / provider)</span></label>
-      <input id="f-source" placeholder="Delaware Div. of Corps."></div>
-  </div>
-  <label>Registry status <span class="fh">(what the registry says — Active, Dissolved, …)</span></label>
-  <input id="f-registry_status" placeholder="Active">
-  <div class="two">
-    <div><label>Status <span class="fh">(drives the badge)</span></label>
-      <select id="f-status">
+    <div><label>Expected status <span class="fh">(what a correct run should yield)</span></label>
+      <select id="f-expect_status">
         <option value="verified">verified</option>
         <option value="name_verified">name_verified</option>
         <option value="no_registry_access">no_registry_access</option>
@@ -74,16 +80,9 @@
         <option value="name_mismatch">name_mismatch</option>
         <option value="not_found">not_found</option>
       </select></div>
-    <div><label>Confidence</label>
-      <select id="f-confidence">
-        <option value="high">high</option>
-        <option value="medium">medium</option>
-        <option value="low">low</option>
-        <option value="keep">keep</option>
-      </select></div>
   </div>
   <label>Note</label>
-  <textarea id="f-note" rows="2" placeholder="why this case maps to this label"></textarea>
+  <textarea id="f-note" rows="2" placeholder="why this case matters / what it documents"></textarea>
   <div class="rv-row" style="margin-top:12px">
     <button class="rv-btn primary" onclick="saveCase()">Save</button>
     <button class="rv-btn link" onclick="hideForm()">Cancel</button>
@@ -98,43 +97,42 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){retur
 function getJSON(url,opts){ return fetch(url,opts).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); }); }
 var CASES=[], editingId=null;
 
-// Map a stored status (+ registry status) to the entity-card validation badge.
-function rvInfo(status, registry_status){
+// Map a validation status to the entity-card validation badge (consistent with entity.html).
+function rvInfo(status){
   switch(status){
     case 'verified':               return {cls:'badge-high',         label:'Registry Verified'};
     case 'name_verified':          return {cls:'badge-info',         label:'Name Verified — No Registry ID'};
     case 'no_registry_access':     return {cls:'badge-neutral',      label:'Registry Not Available — Verify Manually'};
-    case 'name_match_bad_status':  return {cls:'badge-insufficient',  label:'Inactive in Registry'+(registry_status?(' — '+registry_status):'')};
+    case 'name_match_bad_status':  return {cls:'badge-insufficient', label:'Inactive in Registry'};
     case 'name_mismatch':          return {cls:'badge-insufficient', label:'Registry Mismatch'};
     case 'not_found':              return {cls:'badge-insufficient', label:'Not Found in Registry'};
-    default:                       return {cls:'badge-insufficient', label:'Not Verified'};
+    case 'unvalidated':            return {cls:'badge-neutral',      label:'Unvalidated'};
+    default:                       return {cls:'badge-insufficient', label:esc(status||'Not Verified')};
   }
 }
+function statusBadge(status){ var i=rvInfo(status); return '<span class="badge '+i.cls+'">'+esc(i.label)+'</span>'; }
 
-function showForm(){ editingId=null; document.getElementById('form-title').textContent='New label case';
-  ['name','jurisdiction','registry_id','source','registry_status','note'].forEach(function(k){ document.getElementById('f-'+k).value=''; });
-  document.getElementById('f-status').value='verified'; document.getElementById('f-confidence').value='high';
+function showForm(){ editingId=null; document.getElementById('form-title').textContent='New test case';
+  ['name','jurisdiction_country','jurisdiction_state','registry_id','note'].forEach(function(k){ document.getElementById('f-'+k).value=''; });
+  document.getElementById('f-expect_status').value='verified';
   document.getElementById('form-msg').textContent=''; document.getElementById('form').style.display='block'; }
 function hideForm(){ document.getElementById('form').style.display='none'; }
 function editCase(id){ var c=CASES.filter(function(x){return x.id===id;})[0]; if(!c) return;
   editingId=id; document.getElementById('form-title').textContent='Edit case #'+id;
-  ['name','jurisdiction','registry_id','source','registry_status','note'].forEach(function(k){ document.getElementById('f-'+k).value=c[k]||''; });
-  document.getElementById('f-status').value=c.status||'verified';
-  document.getElementById('f-confidence').value=c.confidence||'high';
+  ['name','jurisdiction_country','jurisdiction_state','registry_id','note'].forEach(function(k){ document.getElementById('f-'+k).value=c[k]||''; });
+  document.getElementById('f-expect_status').value=c.expect_status||'verified';
   document.getElementById('form-msg').textContent=''; document.getElementById('form').style.display='block';
   window.scrollTo(0,0);
 }
 function saveCase(){
   var body={ name:document.getElementById('f-name').value.trim(),
-    jurisdiction:document.getElementById('f-jurisdiction').value.trim(),
+    jurisdiction_country:document.getElementById('f-jurisdiction_country').value.trim(),
+    jurisdiction_state:document.getElementById('f-jurisdiction_state').value.trim(),
     registry_id:document.getElementById('f-registry_id').value.trim(),
-    source:document.getElementById('f-source').value.trim(),
-    registry_status:document.getElementById('f-registry_status').value.trim(),
-    status:document.getElementById('f-status').value,
-    confidence:document.getElementById('f-confidence').value,
+    expect_status:document.getElementById('f-expect_status').value,
     note:document.getElementById('f-note').value.trim() };
   if(!body.name){ document.getElementById('form-msg').textContent='Entity name is required.'; return; }
-  if(!body.status){ document.getElementById('form-msg').textContent='Status is required.'; return; }
+  if(!body.expect_status){ document.getElementById('form-msg').textContent='Expected status is required.'; return; }
   var url=editingId?EB+'/api/validation-labels/cases/'+editingId:EB+'/api/validation-labels/cases';
   getJSON(url,{method:editingId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(){ hideForm(); loadCases(); })
@@ -143,31 +141,71 @@ function saveCase(){
 function delCase(id){ if(!confirm('Delete this case?')) return;
   getJSON(EB+'/api/validation-labels/cases/'+id,{method:'DELETE'}).then(loadCases); }
 
+function resultPill(id,lr){
+  if(!lr) return '<span class="pill idle" id="badge-'+id+'">not run</span>';
+  if(lr.actual_status==='error' || lr.error) return '<span class="pill error" id="badge-'+id+'">error</span>';
+  return '<span class="pill '+(lr.passed?'pass':'fail')+'" id="badge-'+id+'">'+(lr.passed?'PASS':'FAIL')+'</span>';
+}
 function render(){
   if(!CASES.length){ document.getElementById('cases').innerHTML='<div class="rv-meta">No cases yet — add one above.</div>'; return; }
   document.getElementById('summary').textContent=CASES.length+' case'+(CASES.length===1?'':'s');
   var h='';
   CASES.forEach(function(c){
-    var info=rvInfo(c.status, c.registry_status);
-    var badge='<span class="badge '+info.cls+'">'+esc(info.label)+'</span>';
-    var rid=(c.registry_id && c.registry_id!=='—' && c.registry_id!=='')?esc(c.registry_id):'— none';
-    var src=[c.source, c.registry_status].filter(function(x){return x && x!=='—';}).map(esc).join(' · ')||'—';
+    var juris=[c.jurisdiction_country,c.jurisdiction_state].filter(Boolean).map(esc).join(' · ')||'—';
+    var rid=(c.registry_id && c.registry_id!=='')?esc(c.registry_id):'— none';
     h+='<div class="rv-card" id="card-'+c.id+'">'
      + '<div class="rv-row"><span class="rv-name">'+esc(c.name)+'</span>'
-     +   (c.jurisdiction?'<span class="rv-meta">'+esc(c.jurisdiction)+'</span>':'')
-     +   '<span class="grow"></span>'+badge
-     +   (c.confidence?' <span class="rv-conf">'+esc(c.confidence)+'</span>':'')
+     +   '<span class="rv-meta">'+juris+'</span>'
+     +   '<span class="grow"></span>'+resultPill(c.id,c.last_result)
+     +   '<button class="rv-btn primary" onclick="runCase('+c.id+')">Run (live)</button>'
      +   '<button class="rv-btn link" onclick="editCase('+c.id+')">Edit</button>'
      +   '<button class="rv-btn danger" onclick="delCase('+c.id+')">Delete</button></div>'
      + '<div class="rv-facts">'
      +   '<span><span class="k">registry id:</span> '+rid+'</span>'
-     +   '<span><span class="k">source · status:</span> '+src+'</span>'
-     +   '<span><span class="k">status:</span> <code>'+esc(c.status)+'</code></span>'
+     +   '<span><span class="k">expected:</span> '+statusBadge(c.expect_status)+' <code>'+esc(c.expect_status)+'</code></span>'
      + '</div>'
      + (c.note?'<div class="rv-note">'+esc(c.note)+'</div>':'')
+     + '<div id="body-'+c.id+'"></div>'
      + '</div>';
   });
   document.getElementById('cases').innerHTML=h;
+  // show the last run's result on load (persisted), so you don't have to Run live to see it
+  CASES.forEach(function(c){ if(c.last_result){ try{ renderResult(c.id,c.last_result,c.last_run_at); }catch(e){} } });
+}
+function badge(id,cls,txt){ var b=document.getElementById('badge-'+id); if(b){ b.className='pill '+cls; b.textContent=txt; } }
+function renderResult(id,r,runAt){
+  var body=document.getElementById('body-'+id); if(!body) return r;
+  if(r.error){ badge(id,'error','error'); body.innerHTML='<div class="rv-err">'+esc(r.error)+'</div>'; return r; }
+  badge(id, r.passed?'pass':'fail', r.passed?'PASS':'FAIL');
+  var rv=r.registry_validation||{};
+  var rvJson='';
+  if(rv && Object.keys(rv).length){
+    rvJson='<details class="rv-exp"><summary>registry_validation ('+Object.keys(rv).length+' keys)</summary>'
+         + '<pre class="rv-json">'+esc(JSON.stringify(rv,null,2))+'</pre></details>';
+  }
+  body.innerHTML=
+      '<div class="rv-result">'
+    +   '<span class="rv-lab">Actual</span> '+statusBadge(r.actual_status)+' <code>'+esc(r.actual_status)+'</code>'
+    +   '<span class="pill '+(r.passed?'pass':'fail')+'">'+(r.passed?'PASS':'FAIL')+'</span>'
+    +   (runAt?'<span class="grow"></span><span class="rv-runat">last run: '+esc(runAt)+'</span>':'')
+    + '</div>'
+    + rvJson;
+  return r;
+}
+function runCase(id){
+  badge(id,'running','running… (live)');
+  return getJSON(EB+'/api/validation-labels/run?id='+id)
+    .then(function(r){ return renderResult(id,r,r.last_run_at||new Date().toISOString()); })
+    .catch(function(e){ badge(id,'error','error'); var b=document.getElementById('body-'+id); if(b) b.innerHTML='<div class="rv-err">'+esc(e.message)+'</div>'; return {error:e.message}; });
+}
+function runAll(){
+  if(!CASES.length) return;
+  var btn=document.getElementById('runall'); btn.disabled=true; document.getElementById('summary').textContent='running…';
+  var pass=0,fail=0,err=0;
+  // sequential — each run makes live registry calls
+  var chain=Promise.resolve();
+  CASES.forEach(function(c){ chain=chain.then(function(){ return runCase(c.id).then(function(r){ if(r.error||r.actual_status==='error') err++; else if(r.passed) pass++; else fail++; }); }); });
+  chain.then(function(){ btn.disabled=false; document.getElementById('summary').innerHTML='<span class="pill pass">'+pass+' pass</span> <span class="pill fail">'+fail+' fail</span>'+(err?' <span class="pill error">'+err+' error</span>':''); });
 }
 function loadCases(){ return getJSON(EB+'/api/validation-labels/cases').then(function(d){ CASES=d.cases||[]; render(); })
   .catch(function(e){ document.getElementById('cases').innerHTML='<div class="rv-err">Could not load cases: '+esc(e.message)+'</div>'; }); }

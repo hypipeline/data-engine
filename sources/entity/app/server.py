@@ -302,8 +302,9 @@ def api_northdata_resolve(id: int = 0):
                              "trace": traceback.format_exc()[-1200:]}, status_code=500)
 
 
-# ── Registry-validation LABEL cases (editable; render-only — the badge is computed from the
-#    stored registry facts, no pipeline run). Curate the validation-label scheme here. ─────
+# ── Registry-validation TEST cases (editable; LIVE — each Run instantiates the real EntityLookup
+#    agent and calls the production validate_entity_in_registry against live registries, then grades
+#    the derived actual status vs the expected one). Mirrors the NorthData integration tests. ──────
 @app.get("/api/validation-labels/cases")
 def api_validation_labels_cases():
     return JSONResponse({"cases": validation_cases.list_cases()})
@@ -312,16 +313,16 @@ def api_validation_labels_cases():
 @app.post("/api/validation-labels/cases")
 async def api_validation_labels_add(request: Request):
     body = await request.json()
-    if not (body.get("name") and body.get("status")):
-        return JSONResponse({"error": "provide name and status"}, status_code=400)
+    if not (body.get("name") and body.get("expect_status")):
+        return JSONResponse({"error": "provide name and expect_status"}, status_code=400)
     return JSONResponse({"id": validation_cases.add_case(body)})
 
 
 @app.put("/api/validation-labels/cases/{cid}")
 async def api_validation_labels_update(cid: int, request: Request):
     body = await request.json()
-    if not (body.get("name") and body.get("status")):
-        return JSONResponse({"error": "provide name and status"}, status_code=400)
+    if not (body.get("name") and body.get("expect_status")):
+        return JSONResponse({"error": "provide name and expect_status"}, status_code=400)
     validation_cases.update_case(cid, body)
     return JSONResponse({"ok": True, "id": cid})
 
@@ -330,6 +331,19 @@ async def api_validation_labels_update(cid: int, request: Request):
 def api_validation_labels_delete(cid: int):
     validation_cases.delete_case(cid)
     return JSONResponse({"ok": True})
+
+
+@app.get("/api/validation-labels/run")
+def api_validation_labels_run(id: int = 0):
+    """Run the LIVE production validator for a stored case and grade actual vs expected status."""
+    if not id:
+        return JSONResponse({"error": "id is required"}, status_code=400)
+    try:
+        return JSONResponse(validation_cases.run_validation_case(CONFIG, id))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
 
 
 @app.post("/api/coverage/run")
