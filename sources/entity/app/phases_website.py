@@ -12,7 +12,6 @@ Combined into EntityLookup via multiple inheritance. On ``self`` this mixin uses
     - self.config['max_page_chars']
     - self.log(phase, message, detail)
     - self.tools.curl_fetch_multi(urls) -> {url: {'text','http_code','html'}}
-    - self.tools.whois_lookup(domain) -> str
     - self.tools.scraping_browser_fetch_parallel(urls) -> {url: {'text','html'}}
       (snake_case of PHP scrapingBrowserFetchParallel; provided by a tools mixin)
 
@@ -144,13 +143,9 @@ class WebsiteFetchMixin:
         base = url.rstrip('/')
         max_chars = self.config['max_page_chars']
 
-        # ── WHOIS (runs independently) ──
-        self.log('fetch', f"WHOIS lookup: {domain}")
-        whois = self.tools.whois_lookup(domain)
-        self.log('fetch', f"WHOIS: {len(whois)} chars", {
-            'expandable': True,
-            'sections': [{'label': 'WHOIS Data', 'content': whois}],
-        })
+        # WHOIS removed: across 71 real lookups it never once yielded a name that wasn't already
+        # available from the website or a registry (post-GDPR the registrant is redacted, leaving
+        # only registrar noise — GoDaddy/Amazon/Tucows — that can only mislead name extraction).
 
         # ── Fallback URL guesses (only used for categories NOT discovered from homepage) ──
         fallback_urls = {
@@ -276,7 +271,7 @@ class WebsiteFetchMixin:
         # If everything resolved with curl, skip fallbacks
         if not pending:
             pages = self.fetch_news_articles(pages, page_urls, curl_results, categories, base, max_chars)
-            return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls, 'whois': whois}
+            return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls}
 
         # ── LEVEL 2: Bright Data Scraping Browser (JS rendering + bot bypass, parallel) ──
         sbr_urls = {}
@@ -349,7 +344,7 @@ class WebsiteFetchMixin:
                 still_pending[cat] = cat_urls
 
         if not still_pending:
-            return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls, 'whois': whois}
+            return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls}
 
         # ── LEVELS 3-5 DISABLED ──
         #  Level 3: Bright Data Web Unlocker
@@ -368,7 +363,7 @@ class WebsiteFetchMixin:
         # ── News articles: if we got a news index page, extract and fetch up to 3 articles ──
         pages = self.fetch_news_articles(pages, page_urls, curl_results, categories, base, max_chars)
 
-        return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls, 'whois': whois}
+        return {'url': url, 'domain': domain, 'pages': pages, 'pageUrls': page_urls}
 
     def fetch_news_articles(self, pages: dict, page_urls: dict, curl_results: dict,
                             categories: dict, base: str, max_chars: int) -> dict:

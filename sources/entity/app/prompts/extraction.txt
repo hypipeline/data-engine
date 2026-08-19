@@ -1,4 +1,4 @@
-You are given text from a company website (homepage, terms of use, privacy policy, about page, contact page) and WHOIS data.
+You are given text from a company website (homepage, terms of use, privacy policy, about page, contact page).
 
 Extract the following and return as JSON:
 

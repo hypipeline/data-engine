@@ -194,7 +194,6 @@ class ExtractionMixin:
                 if len(trimmed) >= 30:
                     seen_lines[trimmed] = True
             parts.append("=== " + page_name.upper() + " ===\n" + "\n".join(filtered))
-        parts.append("=== WHOIS ===\n" + self.scrub_blocked_names(website_data['whois']))
 
         # Include Google Intelligence data (LinkedIn, Yahoo Finance, Google results)
         for key, data in google_intel_registries.items():

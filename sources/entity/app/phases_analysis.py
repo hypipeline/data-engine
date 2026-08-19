@@ -365,7 +365,6 @@ class EvidenceAnalysisMixin:
                 + "\nCANDIDATE ENTITY NAMES: " + _php_json_encode(_isset(entity_info, 'entity_names', []))
                 + "\nJURISDICTION: " + _php_json_encode([_isset(entity_info, 'jurisdiction', 'unknown')])
                 + "\nADDRESSES: " + _php_json_encode(_coalesce(entity_info, 'addresses', 'address', []))},
-            {'label': 'WHOIS', 'content': self.scrub_blocked_names(_isset(website_data, 'whois', 'Not available'))},
         ]
         for page_name, text in website_data['pages'].items():
             truncated = text[:4000]
@@ -424,11 +423,6 @@ class EvidenceAnalysisMixin:
         parts.append(f"DOMAIN: {domain}")
         parts.append("CANDIDATE ENTITY NAMES: " + _php_json_encode(_isset(entity_info, 'entity_names', [])))
         parts.append("LIKELY JURISDICTIONS: " + _php_json_encode([_isset(entity_info, 'jurisdiction', 'unknown')]))
-
-        whois_source = f"whois lookup for {domain}"
-        parts.append("\n=== WHOIS ===")
-        parts.append(f"source: {whois_source}")
-        parts.append(self.scrub_blocked_names(_isset(website_data, 'whois', 'Not available')))
 
         for page_name, text in website_data['pages'].items():
             truncated = text[:4000]
