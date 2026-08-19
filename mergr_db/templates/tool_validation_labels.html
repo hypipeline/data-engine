@@ -104,7 +104,7 @@ function rvInfo(status, registry_status){
     case 'verified':               return {cls:'badge-high',         label:'Registry Verified'};
     case 'name_verified':          return {cls:'badge-info',         label:'Name Verified — No Registry ID'};
     case 'no_registry_access':     return {cls:'badge-neutral',      label:'Registry Not Available — Verify Manually'};
-    case 'name_match_bad_status':  return {cls:'badge-low',          label:'Inactive in Registry'+(registry_status?(' — '+registry_status):'')};
+    case 'name_match_bad_status':  return {cls:'badge-insufficient',  label:'Inactive in Registry'+(registry_status?(' — '+registry_status):'')};
     case 'name_mismatch':          return {cls:'badge-insufficient', label:'Registry Mismatch'};
     case 'not_found':              return {cls:'badge-insufficient', label:'Not Found in Registry'};
     default:                       return {cls:'badge-insufficient', label:'Not Verified'};
