@@ -238,8 +238,10 @@ def run_case(config: dict, case: dict, models: list, refresh_input: bool = False
         with ThreadPoolExecutor(max_workers=min(10, len(to_run))) as ex:
             results.extend(ex.map(lambda m: run_one_model(config, inp, m, targets, cid), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
-    scored = [r for r in results if r["score"].get("scored")]
     _mark_grounding(results, eio.get("user") or "")
+    _mark_jurisdiction(results, case.get("jurisdiction"))     # folds jurisdiction into score.ok
+    targets["expected_jurisdiction"] = _norm_juris(case.get("jurisdiction"))
+    scored = [r for r in results if r["score"].get("scored")]
     return {"case_id": cid, "input_meta": meta, "targets": targets,
             "summary": {"models": len(results), "scored": len(scored),
                         "pass": sum(1 for r in scored if r["score"].get("ok")),
@@ -271,14 +273,63 @@ def _mark_grounding(results, user_text) -> None:
         }
 
 
+# ── jurisdiction scoring — did the model get the entity's country right? ─────────────────────────
+# Scored (unlike the ✅ marks): the case carries an authoritative `jurisdiction` label; we compare
+# the model's extracted `jurisdiction` (a free-text best guess) to it, and fold correctness into the
+# pass gate. Computed at SERVE time from the stored row + case label, so old cached rows get it too.
+_JURIS = {
+    "us": "US", "usa": "US", "unitedstates": "US", "unitedstatesofamerica": "US", "america": "US",
+    "uk": "GB", "gb": "GB", "unitedkingdom": "GB", "greatbritain": "GB", "britain": "GB",
+    "england": "GB", "englandandwales": "GB", "wales": "GB", "scotland": "GB", "northernireland": "GB",
+    "germany": "DE", "de": "DE", "deutschland": "DE",
+    "france": "FR", "fr": "FR",
+    "netherlands": "NL", "nl": "NL", "holland": "NL",
+    "singapore": "SG", "sg": "SG",
+    "newzealand": "NZ", "nz": "NZ",
+    "finland": "FI", "fi": "FI",
+    "ireland": "IE", "ie": "IE",
+    "switzerland": "CH", "ch": "CH", "swiss": "CH",
+    "austria": "AT", "at": "AT", "belgium": "BE", "be": "BE",
+    "luxembourg": "LU", "lu": "LU", "italy": "IT", "it": "IT",
+    "spain": "ES", "es": "ES", "denmark": "DK", "dk": "DK",
+    "sweden": "SE", "se": "SE", "norway": "NO", "no": "NO",
+    "poland": "PL", "pl": "PL", "czech": "CZ", "czechia": "CZ", "czechrepublic": "CZ", "cz": "CZ",
+    "canada": "CA", "ca": "CA", "australia": "AU", "au": "AU",
+}
+
+
+def _norm_juris(s):
+    if not s:
+        return None
+    t = str(s).strip().lower().replace(".", "").replace(" ", "")
+    return _JURIS.get(t, t.upper())
+
+
+def _mark_jurisdiction(results, expected) -> None:
+    exp = _norm_juris(expected)
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        got = _norm_juris(r.get("jurisdiction"))
+        ok = (exp is None) or (got == exp)
+        sc = r.get("score") or {}
+        sc["jurisdiction"] = {"expected": exp, "got": got, "ok": ok}
+        if sc.get("scored"):
+            # remember the data-only verdict once, then fold jurisdiction into the pass gate
+            sc.setdefault("ok_data", sc.get("ok"))
+            sc["ok"] = bool(sc.get("ok_data") and ok)
+        r["score"] = sc
+
+
 # ── overview + cached reads ────────────────────────────────────────────────────────────────────
 def matrix():
     out = []
     for c in coverage.list_cases():
         cid = c["id"]
-        cached = get_cached(cid)
+        cached = get_cached(cid, expect_juris=c.get("jurisdiction"))
         out.append({
             "id": cid, "name": c["name"], "url": c.get("url"), "names": c.get("names"),
+            "jurisdiction": c.get("jurisdiction"),
             "targets": cached.get("targets"), "input_meta": cached.get("input_meta"),
             "stage1_na": not bool(c.get("url")),      # no website → no extraction stage
             "results": {r["model"]: r for r in (cached.get("results") or [])},
@@ -286,7 +337,7 @@ def matrix():
     return {"cases": out, "models": DEFAULT_MODELS}
 
 
-def get_cached(cid):
+def get_cached(cid, expect_juris=None):
     content = coverage.content_cache_get(cid)
     meta = (content or {}).get("meta")
     targets = reference_targets(content) if content else {"entity_names": [], "key_people": [], "addresses": []}
@@ -294,7 +345,13 @@ def get_cached(cid):
         with c.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT result FROM entity.extract_compare_results WHERE case_id=%s ORDER BY model", (cid,))
             rows = [r["result"] for r in cur.fetchall()]
+            if expect_juris is None:                       # not supplied by caller → look it up
+                cur.execute("SELECT jurisdiction FROM entity.coverage_cases WHERE id=%s", (cid,))
+                jr = cur.fetchone()
+                expect_juris = jr["jurisdiction"] if jr else None
     _mark_grounding(rows, ((content or {}).get("extraction_io") or {}).get("user") or "")
+    _mark_jurisdiction(rows, expect_juris)
+    targets["expected_jurisdiction"] = _norm_juris(expect_juris)
     return {"case_id": cid, "input_meta": meta, "targets": targets, "results": rows}
 
 

@@ -508,8 +508,10 @@ _SEED = [
      "expect_in_source": {"acra": ["200904830K"],
                           "northdata_network": ["OWNED BY", "Quest Global Engineering"]}},
     {"name": "Alianza LLC → Delaware parent (branch triangulation)", "names": ["Alianza, LLC"],
+     "url": "https://alianza.com",
      "jurisdiction": "us", "expect": ["ALIANZA, L.L.C.", "2987760"], "max_calls": {"bizapedia": 12}},
     {"name": "NexPhase Capital → Delaware LPs (Bizapedia)", "names": ["NexPhase Capital"],
+     "url": "https://nexphase.com",
      "jurisdiction": "us", "expect": ["NEXPHASE CAPITAL", "DE"]},
     # UK private company — exercises Companies House + the deep PSC ownership-chain traversal all
     # the way to the ULTIMATE parent (a listed company would lean on Yahoo Finance and not really
@@ -517,7 +519,7 @@ _SEED = [
     # NOTE: this is also the NorthData-network CONTROL case — ABCA has NO NorthData network, so
     # ownership must resolve via the Companies House PSC chain (asserted below), not a graph.
     {"name": "ABCA Systems → Companies House + ownership chain to ultimate parent (UK private)",
-     "names": ["ABCA Systems Ltd"], "jurisdiction": "uk",
+     "names": ["ABCA Systems Ltd"], "url": "https://www.abcasystems.co.uk", "jurisdiction": "uk",
      "expect": ["ABCA SYSTEMS LIMITED", "06294877", "VULCAN1 TOPCO", "16483240"],
      "expect_in_source": {"companies_house": ["06294877"], "ownership_chain": ["16483240"]}},
     # German listed company via URL → exercises NorthData; the LEI is a stable anchor. Note the

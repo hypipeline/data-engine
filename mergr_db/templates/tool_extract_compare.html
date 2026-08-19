@@ -141,7 +141,8 @@ function matrixCell(r){
     +'<div class="cost">'+money2(r.cost_usd)+'</div>';
   var pct=Math.round((sc.recall||0)*100);
   var b=(sc.ok?'<span class="pill pass">✓ '+pct+'%</span>':'<span class="pill fail">'+pct+'%</span>');
-  return b+hbadge(hc)+'<div class="cost" title="'+sc.hit+'/'+sc.total+' good-data items · '+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
+  var ju=sc.jurisdiction, jb=(ju&&ju.expected!=null&&!ju.ok)?' <span style="font-size:10px;color:#991b1b" title="wrong jurisdiction: got '+esc(ju.got||'—')+', expected '+esc(ju.expected)+'">🌐✗</span>':'';
+  return b+jb+hbadge(hc)+'<div class="cost" title="'+sc.hit+'/'+sc.total+' good-data items · '+per1k(r.cost_usd)+'">'+money2(r.cost_usd)+'</div>';
 }
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
@@ -203,7 +204,10 @@ function renderTargets(cs){
     return '<div class="tgt-row"><span class="tgt-lbl">'+d[1]+' ('+items.length+')</span>'
       +(items.length?items.map(function(x){return '<span class="chip">'+esc(x)+'</span>';}).join(''):'<span class="muted">— none grounded —</span>')+'</div>';
   }).join('');
-  q('tgt-panel').innerHTML='<b>Good-data targets to recover</b> <span class="muted">('+tot+' items — the live model\'s extraction, kept only where the text actually appears on the site; rebuild input to refresh)</span>'+rows;
+  var ej=t.expected_jurisdiction;
+  var jrow='<div class="tgt-row"><span class="tgt-lbl">Jurisdiction</span>'
+    +(ej?('<span class="chip" style="background:#e0e7ff;color:#3730a3">expected: '+esc(ej)+'</span>'):'<span class="muted">— no expected jurisdiction set —</span>')+'</div>';
+  q('tgt-panel').innerHTML='<b>Good-data targets to recover</b> <span class="muted">('+tot+' items — the live model\'s extraction, kept only where the text actually appears on the site; rebuild input to refresh)</span>'+rows+jrow;
 }
 function openCase(cid){
   SELECTED=cid; var cs=caseById(cid); if(!cs) return;
@@ -253,7 +257,12 @@ function outCard(r, targets){
       var lbl=d[1]+(dm?(' <span class="muted">'+dm.hit+'/'+dm.total+'</span>'):'');
       return '<div class="tgt-row"><span class="tgt-lbl" style="min-width:105px">'+lbl+'</span>'+dimChips((targets||{})[d[0]], got[d[0]], (r.gmark||{})[d[0]])+'</div>';
     }).join('');
-    if(r.jurisdiction) body+='<div class="dimline">jurisdiction: '+esc(r.jurisdiction)+'</div>';
+    var ju=sc.jurisdiction;
+    if(ju){
+      var jm = ju.expected==null ? '<span class="muted">(no expected)</span>'
+        : (ju.ok?'<span style="color:#166534;font-weight:600">✓</span>':'<span style="color:#991b1b;font-weight:600">✗ expected '+esc(ju.expected)+'</span>');
+      body+='<div class="tgt-row"><span class="tgt-lbl" style="min-width:105px">Jurisdiction</span><span class="chip'+(ju.expected!=null?(ju.ok?' hit':' miss'):'')+'">'+esc(ju.got||'—')+'</span> '+jm+'</div>';
+    } else if(r.jurisdiction){ body+='<div class="dimline">jurisdiction: '+esc(r.jurisdiction)+'</div>'; }
   }
   return '<div class="out-card"><h4>'+esc(short(r.model))+' '+badge+'</h4>'+body
     +'<div class="muted" style="margin-top:7px">'+(r.cost_usd!=null?('<b>'+money2(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
@@ -271,7 +280,7 @@ function renderOut(cs){
   var avgr=scored.length?Math.round(scored.reduce(function(a,r){return a+(r.score.recall||0);},0)/scored.length*100):0;
   var cost=rows.reduce(function(a,r){return a+(r.cost_usd||0);},0);
   q('summary').innerHTML='<b>'+pass+'/'+scored.length+'</b> models passed · avg recall <b>'+avgr+'%</b> · total run cost '+money2(cost)
-    +' <span class="muted">— green = recovered a target · red = missed a target · blue = extra data not in the reference set · ✅ matched in the website input · ❓ not found (suspected hallucination)</span>';
+    +' <span class="muted">— green = recovered a target · red = missed a target · blue = extra data not in the reference set · ✅ matched in the website input · ❓ not found (suspected hallucination) · jurisdiction is scored and folded into pass/fail</span>';
   q('out').innerHTML='<div class="out-grid">'+rows.map(function(r){return outCard(r, cs.targets);}).join('')+'</div>';
 }
 function run(){
