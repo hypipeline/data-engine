@@ -105,6 +105,7 @@
       <a class="tool-link cov-link" href="/entity/tools/coverage" title="Test that expected entities appear in the registry evidence"><span class="tl-desc" style="font-size:11.5px">🧪 Search coverage tests</span></a>
       <a class="tool-link cov-link" href="/entity/tools/extract-compare" title="Stage 1: feed the same website text to different models and compare the NAMES each extracts"><span class="tl-desc" style="font-size:11.5px">⚖️ Model comparison · Stage 1 (Extraction)</span></a>
       <a class="tool-link cov-link" href="/entity/tools/model-compare" title="Stage 2: feed the same analysis input to different models and compare the recommended ENTITY"><span class="tl-desc" style="font-size:11.5px">⚖️ Model comparison · Stage 2 (Analysis)</span></a>
+      <a class="tool-link cov-link" href="/entity/tools/analysis-noext" title="A/B: Stage 2 analysis WITHOUT the extraction-layer input (website pages stripped) — does quality hold and what does it save?"><span class="tl-desc" style="font-size:11.5px">🧪 Stage 2 A/B · no extraction input</span></a>
       <a class="tool-link cov-link" href="/entity/tools/northdata" title="Test the NorthData ownership-network parser against saved pages"><span class="tl-desc" style="font-size:11.5px">🕸️ NorthData network tests</span></a>
       <a class="tool-link cov-link" href="/entity/tools/validation-labels" title="Preview the registry-validation label scheme"><span class="tl-desc" style="font-size:11.5px">🏷️ Validation labels</span></a>
     </div>
@@ -450,11 +451,13 @@ function parseModelJSON(raw){
   if(a!==-1 && b>a){ try{ return JSON.parse(s.slice(a,b+1)); }catch(e){} }
   return null;
 }
-// Test-only: render a Model-compare stored result via the existing entity card.
-function loadModelResult(cid, model, url){
+// Test-only: render a stored model-compare result via the existing entity card.
+// endpoint defaults to the Stage-2 tool; the noext A/B tool passes '/api/noext/result' + a label.
+function loadModelResult(cid, model, url, endpoint, label){
+  endpoint = endpoint || '/api/modelcompare/result';
   document.getElementById('url').value = url||'';
-  document.getElementById('meta').innerHTML = 'Model-compare test result · <b>'+esc(model)+'</b> · <span style="color:#856404">stored analysis output — not a live run</span>';
-  fetch(EBASE+'/api/modelcompare/result?case_id='+encodeURIComponent(cid)+'&model='+encodeURIComponent(model))
+  document.getElementById('meta').innerHTML = (label||'Model-compare test result')+' · <b>'+esc(model)+'</b> · <span style="color:#856404">stored analysis output — not a live run</span>';
+  fetch(EBASE+endpoint+'?case_id='+encodeURIComponent(cid)+'&model='+encodeURIComponent(model))
     .then(function(r){return r.json();})
     .then(function(res){
       var rpt=document.getElementById('report');
@@ -472,6 +475,8 @@ loadHistory();
 var _mcq = new URLSearchParams(location.search);
 if(_mcq.get('mccase') && _mcq.get('mcmodel')){                     // test-only full-result view
   loadModelResult(_mcq.get('mccase'), _mcq.get('mcmodel'), _mcq.get('mcurl')||'');
+} else if(_mcq.get('noextcase') && _mcq.get('noextmodel')){        // A/B: analysis WITHOUT extraction input
+  loadModelResult(_mcq.get('noextcase'), _mcq.get('noextmodel'), _mcq.get('noexturl')||'', '/api/noext/result', 'Analysis · NO extraction input');
 } else if(INITIAL_RESULT){ renderStored(INITIAL_RESULT, INITIAL_URL); }   // /entity/<domain>/<id> permalink
 else if(INITIAL_URL){ runLookup(INITIAL_URL, false); }             // deep-link: replay latest, don't push
 </script>

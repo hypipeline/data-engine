@@ -510,6 +510,18 @@ def tool_extract_compare(request: Request):
     return render(request, "tool_extract_compare.html", "entity")
 
 
+# ── Stage-2 analysis WITHOUT extraction input (A/B) — self-contained; delete with the noext feature
+@app.get("/entity/tools/analysis-noext", response_class=HTMLResponse)
+def tool_analysis_noext(request: Request):
+    return render(request, "tool_analysis_noext.html", "entity")
+
+
+@app.get("/entity/tools/analysis-noext/result", response_class=HTMLResponse)
+def tool_analysis_noext_result(request: Request):
+    # deep-dive: reuse entity.html; its ?noextcase/?noextmodel branch renders the stripped output
+    return render(request, "entity.html", "entity", initial_url="", initial_result=None)
+
+
 @app.get("/entity/tools/model-compare/result", response_class=HTMLResponse)
 def tool_model_compare_result(request: Request):
     # Test-only full-result view: reuses entity.html; empty initials so its

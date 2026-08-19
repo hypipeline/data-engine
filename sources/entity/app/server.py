@@ -26,6 +26,7 @@ import linkedin_cache
 import coverage
 import model_compare
 import extract_compare
+import analysis_noext_compare
 import northdata_cases
 import validation_cases
 
@@ -59,6 +60,10 @@ def _startup():
         extract_compare.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[extract_compare] schema init skipped: {e}")
+    try:
+        analysis_noext_compare.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[analysis_noext] schema init skipped: {e}")
     try:
         northdata_cases.ensure_schema()
     except Exception as e:  # noqa: BLE001
@@ -439,6 +444,53 @@ async def api_modelcompare_run(request: Request):
         out = model_compare.run_case(CONFIG, c, models,
                                      refresh_input=bool(body.get("refresh_input")),
                                      refresh_models=bool(body.get("refresh_models")))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}",
+                             "trace": traceback.format_exc()[-1200:]}, status_code=500)
+    return JSONResponse(out)
+
+
+# ── STAGE 2 analysis WITHOUT the extraction input (A/B) — /api/noext/* ─────────────────────────
+@app.get("/api/noext/matrix")
+def api_noext_matrix():
+    return JSONResponse(analysis_noext_compare.matrix())
+
+
+@app.get("/api/noext/input")
+def api_noext_input(case_id: int):
+    c = coverage.get_case(int(case_id))
+    if not c:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    try:
+        return JSONResponse(analysis_noext_compare.input_for(CONFIG, c))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-1200:]}, status_code=500)
+
+
+@app.get("/api/noext/result")
+def api_noext_result(case_id: int, model: str = ""):
+    r = analysis_noext_compare.result_for(int(case_id), model)
+    return JSONResponse(r or {"error": "no stored result for this case/model"})
+
+
+@app.post("/api/noext/run")
+async def api_noext_run(request: Request):
+    body = await request.json() if await request.body() else {}
+    models = body.get("models") or analysis_noext_compare.DEFAULT_MODELS
+    if body.get("id"):
+        c = coverage.get_case(int(body["id"]))
+        if not c:
+            return JSONResponse({"error": "case not found"}, status_code=404)
+    elif body.get("case"):
+        c = body["case"]
+    else:
+        return JSONResponse({"error": "provide an id or a case"}, status_code=400)
+    try:
+        out = analysis_noext_compare.run_case(CONFIG, c, models,
+                                              refresh_input=bool(body.get("refresh_input")),
+                                              refresh_models=bool(body.get("refresh_models")))
     except Exception as e:  # noqa: BLE001
         import traceback
         return JSONResponse({"error": f"{type(e).__name__}: {e}",

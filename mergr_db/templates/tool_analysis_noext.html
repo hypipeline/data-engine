@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Stage 2 A/B · no extraction input — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .tool-back { font-size:13px; color:var(--link); display:inline-block; margin-bottom:14px; }
+  .mc-fg { display:flex; flex-direction:column; gap:5px; }
+  .mc-fg label { font-size:12px; font-weight:600; color:var(--muted); }
+  .mc-fg textarea { width:100%; max-width:640px; height:96px; font-family:var(--mono); font-size:12px; white-space:pre;
+    padding:8px 10px; border:1px solid var(--border-2); border-radius:7px; background:#fff; color:var(--text); }
+  .mc-opts { font-size:12px; color:var(--muted); display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .btn { padding:9px 18px; border:1px solid var(--border-2); border-radius:7px; background:#fff; color:var(--text); cursor:pointer; font-size:13px; }
+  .btn:hover { background:#eef2f7; }
+  .btn.primary { background:#4a90d9; color:#fff; border-color:#4a90d9; font-weight:600; }
+  .btn.primary:hover { background:#3f7fc4; } .btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+  .btn.sm { padding:3px 9px; font-size:11px; background:#f1f5f9; color:var(--text); }
+  .muted { color:#9aa3af; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:700; }
+  .pill.pass { background:#dcfce7; color:#166534; } .pill.fail { background:#fee2e2; color:#991b1b; }
+  .pill.err { background:#fde68a; color:#92400e; } .pill.route { background:#eef2ff; color:#3730a3; }
+  .pill.na { background:#eef2f7; color:#64748b; } .pill.same { background:#dcfce7; color:#166534; } .pill.chg { background:#fef3c7; color:#92400e; }
+  .mc-grid-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:9px; margin-top:8px; }
+  table.mc { border-collapse:collapse; min-width:100%; font-size:12.5px; }
+  table.mc th, table.mc td { border:1px solid var(--border); padding:7px 10px; vertical-align:top; text-align:left; }
+  table.mc th.rowlab { background:#f7f8fa; font-weight:600; color:var(--muted); white-space:nowrap; position:sticky; left:0; z-index:1; }
+  table.mc thead th { background:#f2f5f9; font-family:var(--mono); font-size:11.5px; }
+  table.mtx td.mcell { text-align:center; min-width:104px; cursor:pointer; }
+  table.mtx td.mcell.ok { background:#f0fdf4; } table.mtx td.mcell.bad { background:#fef2f2; }
+  table.mtx td.mcell.reg { background:#fee2e2; }       /* regression: full passed, stripped failed */
+  table.mtx td.mcell.na { opacity:.4; }
+  table.mtx th.caserow { cursor:pointer; } table.mtx th.caserow:hover { color:var(--link); }
+  table.mtx tr.agg td, table.mtx tr.agg th { background:#eef2f7; font-size:12px; }
+  .cost { font-size:10px; color:#94a3b8; }
+  .run-log { font-size:12px; color:var(--muted); margin:6px 0; min-height:16px; }
+  .errbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:8px; font-size:13px; margin-top:10px; }
+  #detail { display:none; margin-top:26px; padding-top:18px; border-top:2px solid var(--border); }
+  table.ab { border-collapse:collapse; width:100%; font-size:12.5px; margin-top:10px; }
+  table.ab th, table.ab td { border:1px solid var(--border); padding:7px 9px; text-align:left; vertical-align:top; }
+  table.ab thead th { background:#f2f5f9; font-size:11.5px; }
+  .ent { font-weight:600; } .warn { color:#92400e; }
+  .llm-pre { margin:4px 0 10px; padding:10px 12px; background:#1a1a2e; color:#c9d1d9; border-radius:6px; font-family:var(--mono); font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; max-height:440px; overflow:auto; }
+  .isec { margin:4px 0; border-bottom:1px solid #f0f0f5; }
+  .isec > summary { cursor:pointer; font-size:12.5px; color:#4a90d9; font-weight:600; padding:6px 0; }
+  .isec[open] > summary { color:#1a1a2e; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="tool-back" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Stage 2 A/B · <span style="color:#4a90d9">Analysis without the extraction input</span></h1>
+<p class="sub">Runs the <b>Stage-2 analysis</b> across every model on an input with the <b>website pages stripped out</b> — the exact
+material the <a href="/entity/tools/extract-compare">Stage-1 extraction</a> already consumed. The distilled candidate names +
+jurisdiction and <b>all registry evidence</b> are kept. Each model's stripped pick is shown <b>side-by-side with its normal
+(full-input) pick</b> from <a href="/entity/tools/model-compare">Stage 2</a>, so you can see whether quality holds — and what it
+saves. Scored against the same expectations as the Stage-2 tool. <b>Click “View full result”</b> on any cell to deep-dive the
+generated report in the entity card.</p>
+
+<div class="mc-fg">
+  <label>Models (one per line — OpenRouter-style ids)</label>
+  <textarea id="models"></textarea>
+</div>
+<div class="mc-opts">
+  <span>On run:
+    <label><input type="radio" name="rerun-mode" value="missing" checked> only <b>missing</b></label>
+    <label><input type="radio" name="rerun-mode" value="failed"> retry <b>failed + missing</b></label>
+    <label><input type="radio" name="rerun-mode" value="all"> re-run <b>all</b></label>
+  </span>
+  <button class="btn primary" id="runall-btn" onclick="runAll()">▶ Run all cases</button>
+</div>
+<div class="run-log" id="runall-log"></div>
+
+<h3 class="page" style="font-size:16px;margin-top:6px">Overview — stripped-input pass/fail (vs full input)</h3>
+<div id="matrix"></div>
+<p class="muted" style="font-size:12px;margin-top:6px">✓/✗ = did the stripped run match the expected entity. <b>Δ</b> = picked a different entity than the full-input run. <b>Red cell</b> = regression (full passed, stripped failed). Click a case for the full A/B breakdown.</p>
+
+<div id="detail">
+  <h3 class="page" style="font-size:16px" id="detail-title">Detail</h3>
+  <div class="mc-opts">
+    <button class="btn primary" id="run-btn" onclick="run()">▶ Run models for this case</button>
+    <span id="detail-note" class="muted"></span>
+  </div>
+  <div class="run-log" id="summary"></div>
+  <div style="margin:4px 0 8px"><span class="btn sm" onclick="toggleInput()">▾ View stripped analysis input (system + evidence, no website pages)</span></div>
+  <div id="llm-input" style="display:none"></div>
+  <div id="ab"></div>
+</div>
+
+<script>
+var EB='/entity-app';
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function q(id){ return document.getElementById(id); }
+function getJSON(url, opts){
+  function once(){ return fetch(url, opts).then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||('HTTP '+r.status)); }); return r.json(); }); }
+  return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
+}
+function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
+function rerunScope(){ return (document.querySelector('input[name=rerun-mode]:checked')||{}).value || 'missing'; }
+function money2(c){ return c==null?'':'$'+Number(c).toFixed(2); }
+function money4(c){ return c==null?'':'$'+Number(c).toFixed(4); }
+function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }
+function short(m){ return m.split('/').pop(); }
+function norm(s){ return (s==null?'':String(s)).toLowerCase().replace(/[^a-z0-9]/g,''); }
+function entLabel(rec){ if(!rec) return null; return (rec.legal_entity_name||'?')+(rec.registry_id?(' (#'+rec.registry_id+')'):''); }
+var MATRIX={cases:[],models:[]}, SELECTED=null;
+function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
+function curCase(){ return caseById(SELECTED); }
+function loadMatrix(){ return getJSON(EB+'/api/noext/matrix').then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
+
+function cellNeedsRun(cs, model, scope){ var r=(cs.results||{})[model]; if(scope==='all')return true; if(!r)return true; if(scope==='missing')return false; return !!r.error; }
+function caseNeedsWork(cs, models, scope){ return !cs.stage1_na && models.some(function(m){return cellNeedsRun(cs,m,scope);}); }
+
+// stripped pick vs full pick
+function sameEntity(cs, m){
+  var r=(cs.results||{})[m], f=(cs.full||{})[m];
+  if(!r||!f) return null;
+  return norm(entLabel(r.recommended))===norm(f.entity||'');
+}
+function matrixCell(cs, m){
+  var r=(cs.results||{})[m], f=(cs.full||{})[m];
+  if(!r) return '<span class="muted">–</span>';
+  if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
+  var sc=r.score||{};
+  var badge=!sc.scored?'<span class="muted">·</span>':(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>');
+  var same=sameEntity(cs,m);
+  var delta=(same===false)?' <span class="pill chg" title="picked a different entity than the full-input run">Δ</span>':'';
+  return badge+delta+'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money4(r.cost_usd)+'</div>';
+}
+function cellClass(cs, m){
+  var r=(cs.results||{})[m], f=(cs.full||{})[m]; if(!r||!r.score||!r.score.scored) return '';
+  var sok=r.score.ok, fok=f&&f.ok;
+  if(fok && !sok) return ' reg';       // regression: full passed, stripped failed
+  return sok?' ok':' bad';
+}
+function renderMatrix(){
+  var models=modelsList().length?modelsList():(MATRIX.models||[]);
+  var cases=MATRIX.cases||[];
+  var head='<tr><th class="rowlab">Case</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var body=cases.map(function(cs){
+    if(cs.stage1_na) return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th><td class="mcell na" colspan="'+models.length+'"><span class="pill na">names-mode (no website to strip)</span></td></tr>';
+    var tds=models.map(function(m){ return '<td class="mcell'+cellClass(cs,m)+'" onclick="openCase('+cs.id+')">'+matrixCell(cs,m)+'</td>'; }).join('');
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.name)+'</th>'+tds+'</tr>';
+  }).join('');
+  var foot='<tr class="agg"><th class="rowlab">pass · same-pick · avg save</th>'+models.map(function(m){
+    var pass=0,scored=0,same=0,cmp=0,scost=[],fcost=[];
+    cases.forEach(function(cs){ var r=(cs.results||{})[m], f=(cs.full||{})[m];
+      if(r&&r.score&&r.score.scored){scored++; if(r.score.ok)pass++;}
+      if(r&&r.cost_usd!=null)scost.push(r.cost_usd);
+      if(f&&f.cost_usd!=null&&r&&r.cost_usd!=null){fcost.push(f.cost_usd); cmp++; if(sameEntity(cs,m))same++;}
+    });
+    var save=fcost.length?(fcost.reduce(function(a,b){return a+b;},0)-scost.slice(0,fcost.length).reduce(function(a,b){return a+b;},0))/fcost.length:null;
+    return '<td style="text-align:center">'+(scored?('<b>'+pass+'/'+scored+'</b>'):'—')+'<div class="cost">same '+same+'/'+cmp+' · save '+(save!=null?per1k(save):'—')+'</div></td>';
+  }).join('')+'</tr>';
+  q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
+}
+function updateMatrixCell(cid, r){ var cs=caseById(cid); if(!cs)return; cs.results=cs.results||{}; cs.results[r.model]=r; renderMatrix(); }
+
+function runAll(){
+  var models=modelsList(); if(!models.length){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">Add at least one model.</span>'; return; }
+  var scope=rerunScope();
+  var todo=(MATRIX.cases||[]).filter(function(cs){ return caseNeedsWork(cs, models, scope); });
+  if(!todo.length){ q('runall-log').textContent='Nothing to run for the chosen scope.'; return; }
+  var btn=q('runall-btn'); btn.disabled=true; var i=0;
+  function step(){
+    if(i>=todo.length){ btn.disabled=false; btn.textContent='▶ Run all cases'; q('runall-log').textContent='Done — ran '+todo.length+' case(s).'; loadMatrix(); return; }
+    var cs=todo[i]; q('runall-log').textContent='Running '+(i+1)+'/'+todo.length+': '+cs.name+' … (analysis calls are slow)';
+    getJSON(EB+'/api/noext/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id, models:models, refresh_models:scope==='all'})})
+    .then(function(res){ (res.results||[]).forEach(function(r){ updateMatrixCell(cs.id, r); }); i++; step(); })
+    .catch(function(e){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">'+esc(cs.name)+': '+esc(e.message||e)+'</span>'; btn.disabled=false; });
+  }
+  step();
+}
+
+// ── detail A/B ────────────────────────────────────────────────────────────────
+function openCase(cid){
+  SELECTED=cid; var cs=caseById(cid); if(!cs)return;
+  q('detail').style.display='block';
+  q('detail-title').textContent='A/B detail: '+cs.name;
+  var ib=q('llm-input'); if(ib){ib.style.display='none';ib.innerHTML='';}
+  q('run-btn').disabled=!!cs.stage1_na;
+  q('detail-note').textContent = cs.stage1_na ? 'Names-mode case — no website to strip.' : '';
+  renderAB(cs); q('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function dom(cs){ try{ return (cs.url||'').replace(/^https?:\/\//,'').replace(/^www\./,'').replace(/\/.*$/,''); }catch(e){ return ''; } }
+function renderAB(cs){
+  var models=modelsList().length?modelsList():(MATRIX.models||[]);
+  var rows=models.map(function(m){ return {m:m, r:(cs.results||{})[m], f:(cs.full||{})[m]}; }).filter(function(x){return x.r;});
+  if(!rows.length){ q('ab').innerHTML='<p class="muted">No stripped results yet — click “Run models for this case”.</p>'; q('summary').innerHTML=''; return; }
+  var kept=0,cmp=0,reg=0,scost=0,fcost=0;
+  var body=rows.map(function(x){
+    var r=x.r,f=x.f,sc=r.score||{};
+    var sEnt=entLabel(r.recommended)||'— none —', fEnt=(f&&f.entity)||'—';
+    var same=f?(norm(sEnt)===norm(fEnt)):null;
+    if(f){cmp++; if(same)kept++; if(f.ok&&!sc.ok)reg++; if(f.cost_usd!=null){fcost+=f.cost_usd; scost+=(r.cost_usd||0);} }
+    var link='/entity/tools/analysis-noext/result?noextcase='+encodeURIComponent(cs.id)+'&noextmodel='+encodeURIComponent(r.model)+'&noexturl='+encodeURIComponent(dom(cs));
+    return '<tr>'
+      +'<td>'+esc(short(r.model))+(r.error?' <span class="pill err">err</span>':'')+'</td>'
+      +'<td class="ent">'+esc(fEnt)+' '+(f?(f.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>'):'<span class="muted">—</span>')+'</td>'
+      +'<td class="ent">'+esc(sEnt)+' '+(sc.scored?(sc.ok?'<span class="pill pass">✓</span>':'<span class="pill fail">✗</span>'):'')+'</td>'
+      +'<td>'+(same==null?'<span class="muted">—</span>':(same?'<span class="pill same">same</span>':'<span class="pill chg">changed</span>'))+(f&&f.ok&&!sc.ok?' <span class="pill fail">regression</span>':'')+'</td>'
+      +'<td>'+money4(f&&f.cost_usd)+' → '+money4(r.cost_usd)+'</td>'
+      +'<td><a class="btn sm" target="_blank" href="'+link+'" style="text-decoration:none">View full result ↗</a></td>'
+      +'</tr>';
+  }).join('');
+  q('ab').innerHTML='<table class="ab"><thead><tr><th>model</th><th>full-input pick</th><th>stripped pick</th><th>A/B</th><th>cost full→stripped</th><th></th></tr></thead><tbody>'+body+'</tbody></table>';
+  var save=fcost-scost;
+  q('summary').innerHTML='<b>'+kept+'/'+cmp+'</b> models kept the same pick · <b class="'+(reg?'warn':'')+'">'+reg+'</b> regressions · cost '+money2(fcost)+' → '+money2(scost)+' (<b>save '+money2(save)+'</b> across these '+cmp+' runs)';
+}
+function run(){
+  var cs=curCase(); if(!cs)return; var models=modelsList(); if(!models.length){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">Add a model.</span>'; return; }
+  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running… (slow)';
+  getJSON(EB+'/api/noext/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id, models:models, refresh_models:rerunScope()==='all'})})
+  .then(function(res){ cs.results=cs.results||{}; (res.results||[]).forEach(function(r){ cs.results[r.model]=r; updateMatrixCell(cs.id,r); }); renderAB(cs); btn.disabled=false; btn.textContent='▶ Run models for this case'; })
+  .catch(function(e){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">'+esc(e.message||e)+'</span>'; btn.disabled=false; btn.textContent='▶ Run models for this case'; });
+}
+function toggleInput(){
+  var box=q('llm-input'), cs=curCase(); if(!cs)return;
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  box.style.display='block'; box.innerHTML='<div class="muted" style="margin:6px 0">Loading…</div>';
+  getJSON(EB+'/api/noext/input?case_id='+cs.id).then(function(d){
+    var m=d.meta||{};
+    var gi=(m.google_intel_present||[]).length?'<div class="warn" style="font-size:12px;margin:4px 0">⚠️ this case also fed Google intel to extraction; it is kept here (folded into registry evidence): '+esc((m.google_intel_present||[]).join(', '))+'</div>':'';
+    var secs=[{label:'System prompt', content:d.system||''},{label:'User message — evidence WITHOUT website pages ('+((d.user||'').length).toLocaleString()+' chars vs '+(m.full_user_chars||'?')+' full)', content:d.user||''}];
+    box.innerHTML=gi+secs.map(function(s){ return '<details class="isec"><summary>'+esc(s.label)+'</summary><pre class="llm-pre">'+esc(s.content||'')+'</pre></details>'; }).join('');
+  }).catch(function(e){ box.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
+}
+loadMatrix();
+</script>
+{% endblock %}
