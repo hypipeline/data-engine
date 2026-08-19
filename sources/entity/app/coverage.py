@@ -496,6 +496,7 @@ def delete_case(cid: int) -> None:
 # Starter fixtures — seeded once, from cases we've already validated this session.
 _SEED = [
     {"name": "herculite → Aberdeen (DBA owner + call budget)", "url": "https://herculite.com",
+     "jurisdiction": "us",
      "expect": ["ABERDEEN ROAD COMPANY", "2887899"], "max_calls": {"bizapedia": 20}},
     # questglobal also exercises the NorthData ownership GRAPH (Browserbase graph-follow via
     # northdata_network) — distinct from the inline direct-page network. The branch-skip fix
@@ -503,7 +504,7 @@ _SEED = [
     # BR 999506259, and the render must surface the parent graph. Ground truth confirmed on box:
     # "Quest Global Services PTE. Ltd. [ROOT] … OWNED BY: … Quest Global Engineering Services Ltd."
     {"name": "questglobal → Quest Global Services Pte. Ltd. (Singapore UEN from ACRA)",
-     "url": "https://questglobal.com",
+     "url": "https://questglobal.com", "jurisdiction": "sg",
      "expect": ["200904830K", "QUEST GLOBAL SERVICES PTE. LTD."],
      "expect_in_source": {"acra": ["200904830K"],
                           "northdata_network": ["OWNED BY", "Quest Global Engineering"]}},
@@ -529,10 +530,12 @@ _SEED = [
     # truth confirmed on box: the northdata block carries "### Subsidiaries & Relationships"
     # (Adidas Sverige AB, adidas sport GmbH, Goldman Sachs shareholding).
     {"name": "adidas.com → adidas AG (Germany · NorthData LEI)", "url": "http://www.adidas.com/",
+     "jurisdiction": "de",
      "expect": ["adidas AG", "549300JSX0Z4CW0V5023"],
      "expect_in_source": {"northdata": ["adidas AG", "Subsidiaries & Relationships"]}},
     # Finnish listed company (Oyj) via URL → exercises NorthData; LEI + Business ID as stable anchors.
     {"name": "scanfil.com → Scanfil Oyj (Finland · NorthData LEI)", "url": "https://www.scanfil.com/",
+     "jurisdiction": "fi",
      "expect": ["Scanfil Oyj", "7437004XD6U0FFDCT507", "2422742-9"],
      "expect_in_source": {"northdata": ["Scanfil Oyj"]}},
     # New Zealand company via URL → exercises the (key-less) NZ Companies Office registry for the
@@ -540,7 +543,7 @@ _SEED = [
     # shareholdings with %). Ground truth: PIONEER CAPITAL MANAGEMENT LIMITED, NZ company 1585146,
     # NZBN 9429035043362; shareholdings include the related PIONEER CAPITAL INVESTMENTS LIMITED.
     {"name": "pioneercapital.co.nz → Pioneer Capital Management Ltd (NZ Companies Office + shareholdings)",
-     "url": "https://pioneercapital.co.nz/",
+     "url": "https://pioneercapital.co.nz/", "jurisdiction": "nz",
      "expect": ["PIONEER CAPITAL MANAGEMENT LIMITED", "1585146"],
      # nzco source must carry the registry ids AND a real owner surfaced by the Browserbase
      # shareholdings fetch (PIONEER CAPITAL INVESTMENTS LIMITED is a 25% corporate shareholder).
@@ -550,7 +553,7 @@ _SEED = [
     # SREP Capital Management, LLC — a Delaware LLC (domestic file 4334492) with a New York foreign
     # registration (Bizapedia file 3523012, reg. agent 150 East 52nd Street, New York).
     {"name": "silfern.com → SREP Capital Management, LLC (US · Delaware LLC + NY foreign)",
-     "url": "https://silfern.com/",
+     "url": "https://silfern.com/", "jurisdiction": "us",
      "expect": ["SREP CAPITAL MANAGEMENT, LLC", "4334492"],
      "expect_in_source": {"bizapedia": ["SREP CAPITAL MANAGEMENT", "3523012"], "delaware": ["4334492"]}},
 ]
