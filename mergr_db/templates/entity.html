@@ -267,10 +267,16 @@ function renderReport(rep, meta, url){
         line += ah
           ? ' <a href="'+esc(ah)+'" target="_blank" class="badge badge-high" style="text-decoration:none;">Registry Verified</a>'
           : ' <span class="badge badge-high">Registry Verified</span>';
+      } else if(!a.validation_status){
+        // validation was never run for this affiliate (e.g. the model-compare view only runs
+        // analysis, not Phase-7 validation) — that's "not checked", NOT a failure. Neutral, not red.
+        line += ah
+          ? ' <a href="'+esc(ah)+'" target="_blank" class="badge badge-neutral" style="text-decoration:none;">Not Validated</a>'
+          : ' <span class="badge badge-neutral">Not Validated</span>';
       } else {
         var fl = {inactive:'Inactive in Registry',
                   name_mismatch:'Registry Name Mismatch'+(a.registry_name?' ("'+esc(a.registry_name)+'")':''),
-                  not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status||'']||'Validation Failed';
+                  not_found:'Not Found in Registry',no_registry_id:'No Registry ID'}[a.validation_status]||'Validation Failed';
         line += ah
           ? ' <a href="'+esc(ah)+'" target="_blank" class="badge badge-insufficient" style="text-decoration:none;">'+fl+'</a>'
           : ' <span class="badge badge-insufficient">'+fl+'</span>';
