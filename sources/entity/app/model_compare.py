@@ -37,7 +37,8 @@ DEFAULT_MODELS = [
     "openai/gpt-5.6-sol",                   # top OpenAI flagship tier (5/30)
     "google/gemini-2.5-pro",                # frontier (1.25/10)
     "anthropic/claude-haiku-4.5",           # cheaper candidate (~1/3 of Sonnet)
-    "google/gemini-2.5-flash",              # ~10x cheaper
+    "google/gemini-2.5-flash",              # ~10x cheaper — CURRENT production model
+    "google/gemini-3.7-flash",              # newer Flash: $0.375/$1.875, ~cost-neutral vs 2.5-flash, stronger reasoner
     "deepseek/deepseek-chat",               # ~15x cheaper
     "moonshotai/kimi-k2-thinking",          # Kimi K2 (reasoning) — cheap reasoner (~$30/1k)
     "moonshotai/kimi-k3",                    # Kimi K3 — newer/bigger (1M ctx) but Sonnet-tier price
