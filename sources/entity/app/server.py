@@ -26,6 +26,7 @@ import linkedin_cache
 import coverage
 import model_compare
 import northdata_cases
+import validation_cases
 
 # Countries validated via NorthData (faithful to validate.php).
 NORTHDATA_COUNTRIES = ['DE', 'NL', 'FR', 'AT', 'CH', 'BE', 'LU', 'IT', 'ES', 'DK',
@@ -57,6 +58,10 @@ def _startup():
         northdata_cases.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[northdata] schema init skipped: {e}")
+    try:
+        validation_cases.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[validation_labels] schema init skipped: {e}")
 
 
 def _domain(url: str) -> str:
@@ -295,6 +300,36 @@ def api_northdata_resolve(id: int = 0):
         import traceback
         return JSONResponse({"error": f"{type(e).__name__}: {e}",
                              "trace": traceback.format_exc()[-1200:]}, status_code=500)
+
+
+# ── Registry-validation LABEL cases (editable; render-only — the badge is computed from the
+#    stored registry facts, no pipeline run). Curate the validation-label scheme here. ─────
+@app.get("/api/validation-labels/cases")
+def api_validation_labels_cases():
+    return JSONResponse({"cases": validation_cases.list_cases()})
+
+
+@app.post("/api/validation-labels/cases")
+async def api_validation_labels_add(request: Request):
+    body = await request.json()
+    if not (body.get("name") and body.get("status")):
+        return JSONResponse({"error": "provide name and status"}, status_code=400)
+    return JSONResponse({"id": validation_cases.add_case(body)})
+
+
+@app.put("/api/validation-labels/cases/{cid}")
+async def api_validation_labels_update(cid: int, request: Request):
+    body = await request.json()
+    if not (body.get("name") and body.get("status")):
+        return JSONResponse({"error": "provide name and status"}, status_code=400)
+    validation_cases.update_case(cid, body)
+    return JSONResponse({"ok": True, "id": cid})
+
+
+@app.delete("/api/validation-labels/cases/{cid}")
+def api_validation_labels_delete(cid: int):
+    validation_cases.delete_case(cid)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/coverage/run")

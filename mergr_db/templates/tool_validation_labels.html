@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Registry Validation Labels — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .rv-intro { color:#555; font-size:13.5px; line-height:1.6; max-width:920px; margin:2px 0 16px; }
+  .rv-intro code { background:#f1f3f6; padding:1px 5px; border-radius:4px; }
+  /* Exact badge rules copied from entity.html so the label colours match the entity card. */
+  .badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; }
+  .badge-high { background:#d4edda; color:#155724; } .badge-medium { background:#fff3cd; color:#856404; }
+  .badge-low { background:#ffeeba; color:#856404; } .badge-insufficient { background:#f8d7da; color:#721c24; }
+  .badge-neutral { background:#e2e3e5; color:#383d41; }
+  .rv-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:12px; max-width:1000px; }
+  .rv-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rv-name { font-weight:700; font-size:15px; }
+  .rv-meta { color:#888; font-size:12px; }
+  .rv-facts { color:#555; font-size:12.5px; margin:6px 0 0; display:flex; flex-wrap:wrap; gap:6px 14px; }
+  .rv-facts .k { color:#9aa3af; }
+  .rv-note { color:#666; font-size:12.5px; margin:8px 0 0; }
+  .rv-conf { display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px; font-weight:700; background:#f1f3f6; color:#555; text-transform:uppercase; }
+  .rv-btn { padding:5px 12px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:7px; font-size:13px; cursor:pointer; }
+  .rv-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .rv-btn.link { border:none; background:none; color:#2563eb; padding:5px 6px; }
+  .rv-btn.danger { color:#b91c1c; border-color:#fecaca; background:#fff5f5; }
+  .grow { flex:1; }
+  .rv-err { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; font-size:12.5px; padding:6px 10px; border-radius:7px; margin-top:8px; }
+  .rv-form { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; margin-bottom:18px; max-width:1000px; }
+  .rv-form label { display:block; font-size:12px; font-weight:600; color:#555; margin:8px 0 3px; }
+  .rv-form input, .rv-form textarea, .rv-form select { width:100%; box-sizing:border-box; padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; font-family:inherit; }
+  .rv-form .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .fh { font-size:11.5px; color:#9aa3af; font-weight:400; }
+</style>
+{% endblock %}
+{% block body %}
+<h2 style="margin:6px 0 2px">🏷️ Registry validation labels</h2>
+<p class="rv-intro">
+  Each row is an entity + the <b>registry facts</b> that were (or would be) found, and shows the resulting
+  <b>validation badge</b> — the exact badge rendered on the entity card. This is a <b>render-only</b> curation
+  view: it does <b>not</b> run the pipeline, it just maps each case's stored <code>status</code> (and registry
+  status) to a label. Use it to review/curate the label scheme so the entity-card labels stay coherent.
+</p>
+
+<div class="rv-row" style="margin-bottom:14px">
+  <button class="rv-btn" onclick="showForm()">＋ Add case</button>
+  <span id="summary" class="rv-meta"></span>
+</div>
+
+<div class="rv-form" id="form" style="display:none">
+  <div class="rv-row"><b id="form-title">New label case</b><span class="grow"></span>
+    <span class="rv-meta" id="form-msg"></span></div>
+  <div class="two">
+    <div><label>Entity name</label>
+      <input id="f-name" placeholder="e.g. SREP Capital Management, LLC"></div>
+    <div><label>Jurisdiction <span class="fh">(optional)</span></label>
+      <input id="f-jurisdiction" placeholder="US · Delaware"></div>
+  </div>
+  <div class="two">
+    <div><label>Registry ID <span class="fh">(optional; blank / — if none)</span></label>
+      <input id="f-registry_id" placeholder="4334492"></div>
+    <div><label>Source <span class="fh">(registry / provider)</span></label>
+      <input id="f-source" placeholder="Delaware Div. of Corps."></div>
+  </div>
+  <label>Registry status <span class="fh">(what the registry says — Active, Dissolved, …)</span></label>
+  <input id="f-registry_status" placeholder="Active">
+  <div class="two">
+    <div><label>Status <span class="fh">(drives the badge)</span></label>
+      <select id="f-status">
+        <option value="verified">verified</option>
+        <option value="name_verified">name_verified</option>
+        <option value="no_registry_access">no_registry_access</option>
+        <option value="name_match_bad_status">name_match_bad_status</option>
+        <option value="name_mismatch">name_mismatch</option>
+        <option value="not_found">not_found</option>
+      </select></div>
+    <div><label>Confidence</label>
+      <select id="f-confidence">
+        <option value="high">high</option>
+        <option value="medium">medium</option>
+        <option value="low">low</option>
+        <option value="keep">keep</option>
+      </select></div>
+  </div>
+  <label>Note</label>
+  <textarea id="f-note" rows="2" placeholder="why this case maps to this label"></textarea>
+  <div class="rv-row" style="margin-top:12px">
+    <button class="rv-btn primary" onclick="saveCase()">Save</button>
+    <button class="rv-btn link" onclick="hideForm()">Cancel</button>
+  </div>
+</div>
+
+<div id="cases"></div>
+
+<script>
+var EB='/entity-app';
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];}); }
+function getJSON(url,opts){ return fetch(url,opts).then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j; }); }); }
+var CASES=[], editingId=null;
+
+// Map a stored status (+ registry status) to the entity-card validation badge.
+function rvInfo(status, registry_status){
+  switch(status){
+    case 'verified':               return {cls:'badge-high',         label:'Registry Verified'};
+    case 'name_verified':          return {cls:'badge-medium',       label:'Name Verified — No Registry ID'};
+    case 'no_registry_access':     return {cls:'badge-neutral',      label:'Registry Not Available — Verify Manually'};
+    case 'name_match_bad_status':  return {cls:'badge-low',          label:'Inactive in Registry'+(registry_status?(' — '+registry_status):'')};
+    case 'name_mismatch':          return {cls:'badge-insufficient', label:'Registry Mismatch'};
+    case 'not_found':              return {cls:'badge-insufficient', label:'Not Found in Registry'};
+    default:                       return {cls:'badge-insufficient', label:'Not Verified'};
+  }
+}
+
+function showForm(){ editingId=null; document.getElementById('form-title').textContent='New label case';
+  ['name','jurisdiction','registry_id','source','registry_status','note'].forEach(function(k){ document.getElementById('f-'+k).value=''; });
+  document.getElementById('f-status').value='verified'; document.getElementById('f-confidence').value='high';
+  document.getElementById('form-msg').textContent=''; document.getElementById('form').style.display='block'; }
+function hideForm(){ document.getElementById('form').style.display='none'; }
+function editCase(id){ var c=CASES.filter(function(x){return x.id===id;})[0]; if(!c) return;
+  editingId=id; document.getElementById('form-title').textContent='Edit case #'+id;
+  ['name','jurisdiction','registry_id','source','registry_status','note'].forEach(function(k){ document.getElementById('f-'+k).value=c[k]||''; });
+  document.getElementById('f-status').value=c.status||'verified';
+  document.getElementById('f-confidence').value=c.confidence||'high';
+  document.getElementById('form-msg').textContent=''; document.getElementById('form').style.display='block';
+  window.scrollTo(0,0);
+}
+function saveCase(){
+  var body={ name:document.getElementById('f-name').value.trim(),
+    jurisdiction:document.getElementById('f-jurisdiction').value.trim(),
+    registry_id:document.getElementById('f-registry_id').value.trim(),
+    source:document.getElementById('f-source').value.trim(),
+    registry_status:document.getElementById('f-registry_status').value.trim(),
+    status:document.getElementById('f-status').value,
+    confidence:document.getElementById('f-confidence').value,
+    note:document.getElementById('f-note').value.trim() };
+  if(!body.name){ document.getElementById('form-msg').textContent='Entity name is required.'; return; }
+  if(!body.status){ document.getElementById('form-msg').textContent='Status is required.'; return; }
+  var url=editingId?EB+'/api/validation-labels/cases/'+editingId:EB+'/api/validation-labels/cases';
+  getJSON(url,{method:editingId?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(){ hideForm(); loadCases(); })
+    .catch(function(e){ document.getElementById('form-msg').textContent=e.message; });
+}
+function delCase(id){ if(!confirm('Delete this case?')) return;
+  getJSON(EB+'/api/validation-labels/cases/'+id,{method:'DELETE'}).then(loadCases); }
+
+function render(){
+  if(!CASES.length){ document.getElementById('cases').innerHTML='<div class="rv-meta">No cases yet — add one above.</div>'; return; }
+  document.getElementById('summary').textContent=CASES.length+' case'+(CASES.length===1?'':'s');
+  var h='';
+  CASES.forEach(function(c){
+    var info=rvInfo(c.status, c.registry_status);
+    var badge='<span class="badge '+info.cls+'">'+esc(info.label)+'</span>';
+    var rid=(c.registry_id && c.registry_id!=='—' && c.registry_id!=='')?esc(c.registry_id):'— none';
+    var src=[c.source, c.registry_status].filter(function(x){return x && x!=='—';}).map(esc).join(' · ')||'—';
+    h+='<div class="rv-card" id="card-'+c.id+'">'
+     + '<div class="rv-row"><span class="rv-name">'+esc(c.name)+'</span>'
+     +   (c.jurisdiction?'<span class="rv-meta">'+esc(c.jurisdiction)+'</span>':'')
+     +   '<span class="grow"></span>'+badge
+     +   (c.confidence?' <span class="rv-conf">'+esc(c.confidence)+'</span>':'')
+     +   '<button class="rv-btn link" onclick="editCase('+c.id+')">Edit</button>'
+     +   '<button class="rv-btn danger" onclick="delCase('+c.id+')">Delete</button></div>'
+     + '<div class="rv-facts">'
+     +   '<span><span class="k">registry id:</span> '+rid+'</span>'
+     +   '<span><span class="k">source · status:</span> '+src+'</span>'
+     +   '<span><span class="k">status:</span> <code>'+esc(c.status)+'</code></span>'
+     + '</div>'
+     + (c.note?'<div class="rv-note">'+esc(c.note)+'</div>':'')
+     + '</div>';
+  });
+  document.getElementById('cases').innerHTML=h;
+}
+function loadCases(){ return getJSON(EB+'/api/validation-labels/cases').then(function(d){ CASES=d.cases||[]; render(); })
+  .catch(function(e){ document.getElementById('cases').innerHTML='<div class="rv-err">Could not load cases: '+esc(e.message)+'</div>'; }); }
+loadCases();
+</script>
+{% endblock %}

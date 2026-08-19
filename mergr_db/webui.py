@@ -510,6 +510,11 @@ def tool_northdata(request: Request):
     return render(request, "tool_northdata.html", "entity")
 
 
+@app.get("/entity/tools/validation-labels", response_class=HTMLResponse)
+def tool_validation_labels(request: Request):
+    return render(request, "tool_validation_labels.html", "entity")
+
+
 _LKP_GROUP = "COALESCE(NULLIF(domain,''), url)"       # canonical dedup key (blank domain -> url)
 
 
