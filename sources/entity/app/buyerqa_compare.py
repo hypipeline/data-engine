@@ -18,6 +18,8 @@ import json
 import pathlib
 import re
 import time
+import urllib.request
+import urllib.error
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 
@@ -36,9 +38,51 @@ DEFAULT_MODELS = [
     "google/gemini-3.7-flash:online",   # latest Google flash + search
     "anthropic/claude-sonnet-4-6",      # Claude (no live search via OpenRouter — training-only)
     "anthropic/claude-haiku-4.5",       # Claude cheap
-    "openai/gpt-4.1-mini",              # active OpenAI (training-only; search-preview line is dead)
+    "openai/gpt-4o:web",                # closest cousin to the retired gpt-4o-search-preview — gpt-4o
+                                        # WITH web search via OpenAI's Responses API (:web = that path)
+    "openai/gpt-4.1-mini",              # active OpenAI (training-only)
     "openai/gpt-5-mini",                # active OpenAI (training-only)
 ]
+
+
+# ── OpenAI Responses API + web_search (the current replacement for the *-search-preview models) ──
+def _call_openai_web(config, model, prompt):
+    """gpt-4o (or other) WITH live web search via OpenAI's Responses API. This is the proper way to
+    give a standard OpenAI model search now that the chat-completions *-search-preview models are
+    retired (and OpenRouter :online / +web don't work for OpenAI). Model id convention: '...:web'."""
+    key = config.get("openai_api_key")
+    if not key:
+        return {"error": "no OpenAI API key", "route": "openai-responses", "provider": "OpenAI"}
+    base = model.split("/")[-1].replace(":web", "")
+    body = {"model": base, "tools": [{"type": "web_search"}], "input": prompt}
+    req = urllib.request.Request("https://api.openai.com/v1/responses", data=json.dumps(body).encode(),
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    t0 = time.time()
+    try:
+        d = json.load(urllib.request.urlopen(req, timeout=150))
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:150]}",
+                "route": "openai-responses", "provider": "OpenAI", "latency_ms": int((time.time() - t0) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}", "route": "openai-responses", "provider": "OpenAI"}
+    txt = d.get("output_text") or ""
+    if not txt:
+        for o in d.get("output", []):
+            for cp in (o.get("content") or []):
+                if cp.get("type") == "output_text":
+                    txt += cp.get("text", "")
+    u = d.get("usage") or {}
+    it, ot = u.get("input_tokens", 0), u.get("output_tokens", 0)
+    # gpt-4o token rates + a rough web_search tool fee (~$0.025/call) — search context inflates input
+    cost = round(it * 2.5 / 1e6 + ot * 10.0 / 1e6 + 0.025, 4)
+    return {"text": txt, "cost_usd": cost, "input_tokens": it, "output_tokens": ot,
+            "route": "openai-responses", "provider": "OpenAI web_search", "latency_ms": int((time.time() - t0) * 1000)}
+
+
+def _dispatch(config, prompt, model):
+    if model.endswith(":web"):
+        return _call_openai_web(config, model, prompt)
+    return call_model(model, "", prompt, config)   # no system; whole prompt is the user msg
 
 # the 12 real completed domains from bulk_add_reports (a mix of well-known + obscure/foreign)
 SEED_DOMAINS = [
@@ -114,7 +158,7 @@ def run_one_model(config, prompt, model, cid=None) -> dict:
     raw = {}
     for attempt in range(3):
         try:
-            raw = call_model(model, "", prompt, config)   # no system; the whole prompt is the user msg
+            raw = _dispatch(config, prompt, model)
         except Exception as e:  # noqa: BLE001
             raw = {"model": model, "error": f"{type(e).__name__}: {e}"}
         if (raw.get("text") or "").strip():
