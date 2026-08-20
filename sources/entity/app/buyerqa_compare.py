@@ -76,21 +76,26 @@ def _loads_loose(text):
     return None
 
 
-def _truecount(d):
+def _selected(d):
+    """The LABELS a model set to true — for showing preference chips (regions/industries/etc)."""
     if not isinstance(d, dict):
-        return 0
-    return sum(1 for v in d.values() if v is True or (isinstance(v, str) and v.strip().lower() == "true"))
+        return []
+    return [k for k, v in d.items() if v is True or (isinstance(v, str) and v.strip().lower() == "true")]
 
 
 def signals(report) -> dict:
-    """Objective comparison signals — no single 'right' profile, so we surface what each model produced."""
+    """Objective comparison signals — no single 'right' profile, so we surface what each model produced,
+    including the SELECTED preference labels (not just counts) so the UI can show them as chips."""
     if not isinstance(report, dict):
         return {"json_ok": False, "is_pe": None, "official_name": None, "leadership_page": None,
-                "names": [], "names_count": 0, "industries_n": 0, "regions_n": 0, "ebitda_n": 0, "deal_n": 0}
+                "names": [], "names_count": 0,
+                "industries_sel": [], "regions_sel": [], "ebitda_sel": [], "deal_sel": []}
     names = report.get("names") if isinstance(report.get("names"), list) else []
     pe = report.get("is_a_private_equity_firm_or_family_office")
     if isinstance(pe, str):
         pe = pe.strip().lower() == "true"
+    ind, reg, eb, dl = (_selected(report.get("industries")), _selected(report.get("regions")),
+                        _selected(report.get("ebitda_ranges")), _selected(report.get("deal_types")))
     return {
         "json_ok": True,
         "is_pe": pe,
@@ -99,10 +104,8 @@ def signals(report) -> dict:
         "names": [{"first_name": n.get("first_name"), "last_name": n.get("last_name")}
                   for n in names if isinstance(n, dict)],
         "names_count": len([n for n in names if isinstance(n, dict) and (n.get("first_name") or n.get("last_name"))]),
-        "industries_n": _truecount(report.get("industries")),
-        "regions_n": _truecount(report.get("regions")),
-        "ebitda_n": _truecount(report.get("ebitda_ranges")),
-        "deal_n": _truecount(report.get("deal_types")),
+        "industries_sel": ind, "regions_sel": reg, "ebitda_sel": eb, "deal_sel": dl,
+        "industries_n": len(ind), "regions_n": len(reg), "ebitda_n": len(eb), "deal_n": len(dl),
     }
 
 

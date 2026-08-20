@@ -33,8 +33,14 @@
   .out-card { border:1px solid var(--border); border-radius:9px; padding:11px 13px; background:#fff; font-size:12.5px; }
   .out-card h4 { margin:0 0 7px; font-family:var(--mono); font-size:12px; }
   .kv { font-size:12px; margin:2px 0; } .kv b { color:#475569; font-weight:600; }
-  .nm-chip { display:inline-block; margin:2px 3px 0 0; padding:2px 7px; border-radius:6px; font-size:11.5px; background:#eef2f7; }
+  .nm-chip { display:inline-block; margin:2px 3px 0 0; padding:2px 7px; border-radius:6px; font-size:11.5px; background:#eef2f7; color:#334155; }
+  .nm-chip.valid { background:#dcfce7; color:#166534; }      /* Hunter-verified real email */
+  .nm-chip.invalid { background:#fee2e2; color:#991b1b; }    /* no valid email found — likely hallucinated */
+  .nm-chip.nochk { background:#f1f5f9; color:#64748b; }      /* not checked yet */
   .crit { font-size:11px; color:#64748b; margin-top:4px; }
+  .pref-row { font-size:11.5px; margin-top:3px; }
+  .pref-row .pl { display:inline-block; min-width:78px; color:#94a3b8; font-weight:600; text-transform:uppercase; font-size:10px; letter-spacing:.3px; vertical-align:top; }
+  .pref-chip { display:inline-block; margin:1px 3px 1px 0; padding:1px 7px; border-radius:5px; font-size:11px; background:#eef2ff; color:#3730a3; }
   .raw { display:none; margin-top:6px; background:#0f172a; color:#cbd5e1; border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:340px; overflow:auto; }
   .cases-edit { font-size:12px; margin:8px 0; }
   .cases-edit input { padding:5px 8px; border:1px solid var(--border-2); border-radius:6px; font-size:12px; }
@@ -49,6 +55,13 @@ booleans. The production model <code>gpt-4o-search-preview</code> is being <b>re
 candidate replacements on the <b>exact production prompt</b> across real domains. The task needs <b>web knowledge</b> (no page
 content is given), so search-capable models matter — especially for obscure/foreign domains.
 <span class="btn sm" onclick="viewPrompt()">▾ View prompt</span></p>
+<div style="font-size:12px;color:#475569;background:#f7f8fa;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:4px 0 10px;display:inline-block">
+  <b>Cost baseline</b> — the old <code>gpt-4o-search-preview</code> ran at roughly <b>~$0.035/search</b> historically
+  (≈ <b>$175/mo</b> at 5,000/mo). That's the number a replacement should beat.
+  Names show Hunter validation once graded: <span class="nm-chip valid">✅ verified email</span>
+  <span class="nm-chip invalid">❓ no valid email (likely hallucinated)</span>
+  <span class="nm-chip nochk">not checked</span>.
+</div>
 <div id="prompt-box" style="display:none"></div>
 
 <div class="mc-fg">
@@ -98,8 +111,11 @@ function matrixCell(r){
   if(!r) return '<span class="muted">–</span>';
   if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
   if(!r.json_ok) return '<span class="pill bad">✗ invalid</span>';
-  var pe = r.is_pe===true?'<span class="pill pe">PE</span>':(r.is_pe===false?'<span class="pill trade">trade</span>':'');
-  return '<span class="pill ok">✓</span> <b>'+(r.names_count||0)+'</b> names '+pe
+  var nv=(r.names||[]).filter(function(n){return n.valid==='valid';}).length;
+  var namesbit = r.names_checked
+    ? '<b style="color:#166534">'+nv+'</b>/'+ (r.names_count||0)+' ✅'
+    : '<b>'+(r.names_count||0)+'</b> names';
+  return '<span class="pill ok">✓</span> '+namesbit
     +'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money4(r.cost_usd)+' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'')+'</div>';
 }
 function renderMatrix(){
@@ -141,8 +157,17 @@ function openCase(cid){
   q('detail').style.display='block'; q('detail-title').textContent='Detail: '+cs.domain; q('summary').innerHTML='';
   renderOut(cs); q('detail').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function nmeta(r){
-  return '<div class="crit">industries '+(r.industries_n||0)+' · regions '+(r.regions_n||0)+' · ebitda '+(r.ebitda_n||0)+' · deal-types '+(r.deal_n||0)+'</div>';
+function prefRow(label, arr){
+  arr=arr||[];
+  return '<div class="pref-row"><span class="pl">'+label+'</span>'
+    +(arr.length?arr.map(function(x){return '<span class="pref-chip">'+esc(x)+'</span>';}).join(''):'<span class="muted">—</span>')+'</div>';
+}
+function nameChip(n){
+  var nm=esc((n.first_name||'')+' '+(n.last_name||'')).trim();
+  // n.valid: "valid" (Hunter-verified email), "notfound" (no valid email → likely hallucinated), else not checked
+  if(n.valid==='valid')   return '<span class="nm-chip valid" title="Hunter: valid verified email">✅ '+nm+'</span>';
+  if(n.valid==='notfound')return '<span class="nm-chip invalid" title="Hunter: no valid email found — likely hallucinated">❓ '+nm+'</span>';
+  return '<span class="nm-chip nochk" title="not checked">'+nm+'</span>';
 }
 function outCard(r){
   var rid='rw'+Math.random().toString(36).slice(2,8);
@@ -151,12 +176,16 @@ function outCard(r){
   if(r.error){ body='<div style="color:#991b1b;font-size:12px;margin-top:6px">'+esc(r.error)+'</div>'; }
   else {
     var pe = r.is_pe===true?'<span class="pill pe">PE / family office</span>':(r.is_pe===false?'<span class="pill trade">trade buyer</span>':'<span class="muted">?</span>');
-    var names=(r.names||[]).map(function(n){ return '<span class="nm-chip">'+esc((n.first_name||'')+' '+(n.last_name||'')).trim()+'</span>'; }).join('')||'<span class="muted">— none —</span>';
+    var names=(r.names||[]).map(nameChip).join('')||'<span class="muted">— none —</span>';
+    var nv=(r.names||[]).filter(function(n){return n.valid==='valid';}).length;
+    var vlabel=(r.names_checked)?(' — <b style="color:#166534">'+nv+' verified</b>'):'';
     body='<div class="kv"><b>Type:</b> '+pe+'</div>'
         +'<div class="kv"><b>Official name:</b> '+esc(r.official_name||'—')+'</div>'
         +'<div class="kv"><b>Leadership page:</b> '+(r.leadership_page?'<a href="'+esc(r.leadership_page)+'" target="_blank">'+esc(r.leadership_page).slice(0,44)+'</a>':'—')+'</div>'
-        +'<div class="kv"><b>Names ('+(r.names_count||0)+'):</b> '+names+'</div>'
-        +nmeta(r);
+        +'<div class="kv"><b>Names ('+(r.names_count||0)+')'+vlabel+':</b> '+names+'</div>'
+        +'<div style="margin-top:6px">'
+        +prefRow('Regions', r.regions_sel)+prefRow('Industries', r.industries_sel)
+        +prefRow('EBITDA', r.ebitda_sel)+prefRow('Deal types', r.deal_sel)+'</div>';
   }
   return '<div class="out-card"><h4>'+esc(short(r.model))+' '+badge+'</h4>'+body
     +'<div class="muted" style="margin-top:7px">'+(r.cost_usd!=null?('<b>'+money4(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
