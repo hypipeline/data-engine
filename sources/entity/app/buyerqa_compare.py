@@ -40,8 +40,8 @@ DEFAULT_MODELS = [
     "perplexity/sonar",                 # native web search — the leader so far
     "google/gemini-2.5-flash:online",   # Google flash + OpenRouter web search
     "google/gemini-3.7-flash:online",   # latest Google flash + search
-    "anthropic/claude-sonnet-4-6",      # Claude (no live search via OpenRouter — training-only)
-    "anthropic/claude-haiku-4.5",       # Claude cheap
+    "anthropic/claude-sonnet-4-6:web",  # Claude WITH Anthropic's native web_search tool
+    "anthropic/claude-haiku-4.5:web",   # Claude cheap, WITH web_search
     "openai/gpt-4o:web",                # closest cousin to the retired gpt-4o-search-preview — gpt-4o
                                         # WITH web search via OpenAI's Responses API (:web = that path)
     "openai/gpt-4.1-mini:web",          # OpenAI mini WITH web search (Responses API)
@@ -112,7 +112,44 @@ def _call_openai_search_api(config, model, prompt):
             "route": "openai-search-api", "provider": "OpenAI gpt-5-search-api", "latency_ms": int((time.time() - t0) * 1000)}
 
 
+_ANTHROPIC_RATES = {"claude-sonnet-4-6": (3.0, 15.0), "claude-opus-4-8": (5.0, 25.0),
+                    "claude-haiku-4-5": (1.0, 5.0)}
+
+
+def _call_anthropic_web(config, model, prompt):
+    """Claude WITH Anthropic's native server-side web_search tool — the fix for Claude refusing
+    ('I can't browse the internet') when handed only a URL. Mirrors _call_openai_web. Model id
+    convention: 'anthropic/<model>:web'. Cost = tokens + $0.01 per web search."""
+    key = config.get("anthropic_api_key")
+    if not key:
+        return {"error": "no Anthropic API key", "route": "anthropic-web", "provider": "Anthropic"}
+    base = model.split("/")[-1].replace(":web", "").replace(".", "-")
+    body = {"model": base, "max_tokens": 4096, "messages": [{"role": "user", "content": prompt}],
+            "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}]}
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
+                                 headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                                          "content-type": "application/json"})
+    t0 = time.time()
+    try:
+        d = json.load(urllib.request.urlopen(req, timeout=180))
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:150]}",
+                "route": "anthropic-web", "provider": "Anthropic", "latency_ms": int((time.time() - t0) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}", "route": "anthropic-web", "provider": "Anthropic"}
+    txt = "".join(b.get("text", "") for b in (d.get("content") or []) if b.get("type") == "text")
+    u = d.get("usage") or {}
+    it, ot = u.get("input_tokens", 0), u.get("output_tokens", 0)
+    searches = ((u.get("server_tool_use") or {}).get("web_search_requests")) or 0
+    ci, co = _ANTHROPIC_RATES.get(base, (3.0, 15.0))
+    cost = round(it * ci / 1e6 + ot * co / 1e6 + searches * 0.01, 4)
+    return {"text": txt, "cost_usd": cost, "input_tokens": it, "output_tokens": ot,
+            "route": "anthropic-web", "provider": "Anthropic web_search", "latency_ms": int((time.time() - t0) * 1000)}
+
+
 def _dispatch(config, prompt, model):
+    if model.startswith("anthropic/") and model.endswith(":web"):
+        return _call_anthropic_web(config, model, prompt)
     if model.endswith("-search-api"):
         return _call_openai_search_api(config, model, prompt)
     if model.endswith(":web"):
