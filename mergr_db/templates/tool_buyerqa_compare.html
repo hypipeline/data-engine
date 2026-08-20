@@ -130,9 +130,21 @@ function matrixCell(r){
   return '<span class="pill ok">✓</span> '+namesbit
     +'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money4(r.cost_usd)+' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'')+'</div>';
 }
+function modelValidScore(m, cases){
+  var valid=0, names=0, graded=false;
+  cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r&&r.json_ok&&!r.error){
+    (r.names||[]).forEach(function(nm){ if(nm.first_name||nm.last_name){ names++; if(nm.valid==='valid')valid++; if(nm.valid)graded=true; } });
+  }});
+  return {valid:valid, names:names, graded:graded};
+}
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
   var cases=MATRIX.cases||[];
+  // sort columns best-first: by Hunter-validated valid contacts, then by names found
+  models=models.slice().sort(function(a,b){
+    var sa=modelValidScore(a,cases), sb=modelValidScore(b,cases);
+    return (sb.valid-sa.valid) || (sb.names-sa.names);
+  });
   var head='<tr><th class="rowlab">Domain</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
   var body=cases.map(function(cs){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
