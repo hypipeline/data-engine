@@ -31,12 +31,13 @@ _PROMPT_PATH = pathlib.Path(__file__).parent / "prompts" / "buyerqa.txt"
 # candidate replacement models (editable from the UI). The task needs web knowledge; search-capable
 # models are preferred. The retired current model is kept as a baseline (it 404s — proof it's dead).
 DEFAULT_MODELS = [
-    "perplexity/sonar",                 # native web search — cheap
-    "perplexity/sonar-pro",             # native web search — stronger
-    "google/gemini-2.5-flash:online",   # flash + OpenRouter web-search plugin
-    "openai/gpt-4o-mini-search-preview",# OpenAI's smaller search model (likely successor)
-    "google/gemini-2.5-flash",          # training-only control (no live search)
-    "openai/gpt-4o-search-preview",     # RETIRED current model — baseline (expect 404)
+    "perplexity/sonar",                 # native web search — the leader so far
+    "google/gemini-2.5-flash:online",   # Google flash + OpenRouter web search
+    "google/gemini-3.7-flash:online",   # latest Google flash + search
+    "anthropic/claude-sonnet-4-6",      # Claude (no live search via OpenRouter — training-only)
+    "anthropic/claude-haiku-4.5",       # Claude cheap
+    "openai/gpt-4.1-mini",              # active OpenAI (training-only; search-preview line is dead)
+    "openai/gpt-5-mini",                # active OpenAI (training-only)
 ]
 
 # the 12 real completed domains from bulk_add_reports (a mix of well-known + obscure/foreign)
