@@ -168,16 +168,38 @@ function renderMatrix(){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
     return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+'</tr>';
   }).join('');
-  var foot='<tr style="background:#eef2f7;font-size:12px"><th class="rowlab">TOTAL valid contacts · names found · avg cost</th>'+models.map(function(m){
-    var ok=0,n=0,totNames=0,valid=0,graded=false,costs=[];
-    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ n++; if(r.json_ok&&!r.error){ ok++;
-      (r.names||[]).forEach(function(nm){ if(nm.first_name||nm.last_name){ totNames++; if(nm.valid==='valid')valid++; if(nm.valid)graded=true; } });
-    } if(r.cost_usd!=null)costs.push(r.cost_usd); } });
-    var ac=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
-    var big=graded?'<b style="color:#166534;font-size:16px">'+valid+'</b> <span class="muted">valid</span>':'<b>'+totNames+'</b> <span class="muted">names</span>';
-    return '<td style="text-align:center">'+big+'<div class="cost">'+ok+'/'+n+' ok · '+totNames+' names · '+(ac!=null?per1k(ac):'—')+'</div></td>';
-  }).join('')+'</tr>';
-  q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
+  // per-model totals over the (filtered) cases — one metric per labelled footer row
+  var T=models.map(function(m){
+    var t={valid:0,tvalid:0,pvalid:0,names:0,ok:0,n:0,graded:false,costs:[]};
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(!r)return; t.n++;
+      if(r.cost_usd!=null)t.costs.push(r.cost_usd);
+      if(r.json_ok&&!r.error){ t.ok++;
+        (r.names||[]).forEach(function(nm){ if(nm.first_name||nm.last_name){ t.names++;
+          if(nm.valid)t.graded=true;
+          if(nm.valid==='valid'){ t.valid++; if(cs.buyer_type==='pe')t.pvalid++; else t.tvalid++; }
+        }});
+      }
+    });
+    t.avg=t.costs.length?t.costs.reduce(function(a,b){return a+b;},0)/t.costs.length:null;
+    return t;
+  });
+  function frow(label,tip,cell,style){ return '<tr style="'+(style||'')+'"><th class="rowlab" title="'+esc(tip)+'">'+label+'</th>'
+    +T.map(function(t){return '<td style="text-align:center">'+cell(t)+'</td>';}).join('')+'</tr>'; }
+  var foot=
+     frow('✅ VALID contacts','Hunter-verified emails across the shown domains — the headline metric',
+        function(t){return t.graded?'<b style="color:#166534;font-size:16px">'+t.valid+'</b>':'<span class="muted" title="not Hunter-graded yet">—</span>';},
+        'background:#e7f2ea;font-weight:600')
+    +frow('&nbsp;&nbsp;↳ Trade / Strategic','valid contacts at trade (operating-company) buyers',
+        function(t){return t.graded?'<span style="color:#166534">'+t.tvalid+'</span>':'<span class="muted">—</span>';},'font-size:12px;background:#f4f9f5')
+    +frow('&nbsp;&nbsp;↳ PE / Financial','valid contacts at PE firms / family offices',
+        function(t){return t.graded?'<span style="color:#166534">'+t.pvalid+'</span>':'<span class="muted">—</span>';},'font-size:12px;background:#f4f9f5')
+    +frow('Names found','total leadership/contact names returned (before validation)',
+        function(t){return '<b>'+t.names+'</b>';},'font-size:12px;background:#eef2f7')
+    +frow('Valid JSON','domains where the model returned parseable JSON',
+        function(t){return t.ok+'/'+t.n;},'font-size:12px;background:#eef2f7')
+    +frow('Avg cost / 1k','average cost projected to 1,000 lookups',
+        function(t){return t.avg!=null?per1k(t.avg):'—';},'font-size:12px;background:#eef2f7');
+  q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table></div>';
 }
 function updateCell(cid, r){ var cs=caseById(cid); if(!cs)return; cs.results=cs.results||{}; cs.results[r.model]=r; renderMatrix(); }
 
