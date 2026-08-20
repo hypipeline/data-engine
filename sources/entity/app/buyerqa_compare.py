@@ -40,8 +40,8 @@ DEFAULT_MODELS = [
     "anthropic/claude-haiku-4.5",       # Claude cheap
     "openai/gpt-4o:web",                # closest cousin to the retired gpt-4o-search-preview — gpt-4o
                                         # WITH web search via OpenAI's Responses API (:web = that path)
-    "openai/gpt-4.1-mini",              # active OpenAI (training-only)
-    "openai/gpt-5-mini",                # active OpenAI (training-only)
+    "openai/gpt-4.1-mini:web",          # OpenAI mini WITH web search (Responses API)
+    "openai/gpt-5-mini:web",            # OpenAI mini WITH web search (Responses API)
 ]
 
 
