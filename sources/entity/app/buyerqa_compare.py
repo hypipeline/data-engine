@@ -28,7 +28,11 @@ from psycopg2.extras import RealDictCursor
 import coverage
 from model_compare import call_model, _is_transient_err
 
-_PROMPT_PATH = pathlib.Path(__file__).parent / "prompts" / "buyerqa.txt"
+_PROMPT_PATHS = {
+    "full": pathlib.Path(__file__).parent / "prompts" / "buyerqa.txt",     # full buyer profile
+    "names": pathlib.Path(__file__).parent / "prompts" / "buyerqa_names.txt",  # contacts-only (find new names)
+}
+_PROMPT_PATH = _PROMPT_PATHS["full"]  # backwards compat
 
 # candidate replacement models (editable from the UI). The task needs web knowledge; search-capable
 # models are preferred. The retired current model is kept as a baseline (it 404s — proof it's dead).
@@ -92,26 +96,30 @@ SEED_DOMAINS = [
 ]
 
 
-def prompt_template():
-    return _PROMPT_PATH.read_text(encoding="utf-8")
+def prompt_template(mode="full"):
+    return _PROMPT_PATHS.get(mode, _PROMPT_PATHS["full"]).read_text(encoding="utf-8")
 
 
-def build_prompt(domain):
+def build_prompt(domain, mode="full"):
     url = domain if re.match(r"^https?://", domain) else ("https://" + domain)
     dom = re.sub(r"^https?://(www\.)?", "", domain).rstrip("/")
-    return prompt_template().replace("{url}", url).replace("{domain}", dom)
+    return prompt_template(mode).replace("{url}", url).replace("{domain}", dom)
 
 
 # ── parse the model's JSON + extract comparison signals ─────────────────────────────────────────
 def _loads_loose(text):
+    """Parse the model output as JSON — tolerating fences, and BOTH an object (full profile) and a
+    bare array (contacts-only prompt returns a JSON array of names)."""
     s = (text or "").strip()
-    m = re.search(r"```(?:json)?\s*(\{[\s\S]*\})\s*```", s)
+    m = re.search(r"```(?:json)?\s*([\[{][\s\S]*[\]}])\s*```", s)
     if m:
         s = m.group(1)
     try:
         return json.loads(s)
     except Exception:  # noqa: BLE001
-        a, b = s.find("{"), s.rfind("}")
+        pass
+    for op, cl in (("{", "}"), ("[", "]")):
+        a, b = s.find(op), s.rfind(cl)
         if a != -1 and b > a:
             try:
                 return json.loads(s[a:b + 1])
@@ -127,13 +135,32 @@ def _selected(d):
     return [k for k, v in d.items() if v is True or (isinstance(v, str) and v.strip().lower() == "true")]
 
 
-def signals(report) -> dict:
-    """Objective comparison signals — no single 'right' profile, so we surface what each model produced,
-    including the SELECTED preference labels (not just counts) so the UI can show them as chips."""
+def _blank_signals():
+    return {"json_ok": False, "is_pe": None, "official_name": None, "leadership_page": None,
+            "names": [], "names_count": 0,
+            "industries_sel": [], "regions_sel": [], "ebitda_sel": [], "deal_sel": [],
+            "industries_n": 0, "regions_n": 0, "ebitda_n": 0, "deal_n": 0}
+
+
+def _names_from(items):
+    return [{"first_name": n.get("first_name"), "last_name": n.get("last_name")}
+            for n in items if isinstance(n, dict)]
+
+
+def signals(report, mode="full") -> dict:
+    """Objective comparison signals. mode='names' → the output is a bare JSON ARRAY of contacts (no
+    profile fields). mode='full' → the profile object with the selected preference labels for chips."""
+    if mode == "names":
+        items = report if isinstance(report, list) else (report.get("names") if isinstance(report, dict) else None)
+        if not isinstance(items, list):
+            return _blank_signals()
+        nms = _names_from(items)
+        s = _blank_signals()
+        s.update({"json_ok": True, "names": nms,
+                  "names_count": len([n for n in nms if n["first_name"] or n["last_name"]])})
+        return s
     if not isinstance(report, dict):
-        return {"json_ok": False, "is_pe": None, "official_name": None, "leadership_page": None,
-                "names": [], "names_count": 0,
-                "industries_sel": [], "regions_sel": [], "ebitda_sel": [], "deal_sel": []}
+        return _blank_signals()
     names = report.get("names") if isinstance(report.get("names"), list) else []
     pe = report.get("is_a_private_equity_firm_or_family_office")
     if isinstance(pe, str):
@@ -154,7 +181,7 @@ def signals(report) -> dict:
 
 
 # ── run one model / one case ─────────────────────────────────────────────────────────────────────
-def run_one_model(config, prompt, model, cid=None) -> dict:
+def run_one_model(config, prompt, model, cid=None, mode="full") -> dict:
     raw = {}
     for attempt in range(3):
         try:
@@ -170,8 +197,9 @@ def run_one_model(config, prompt, model, cid=None) -> dict:
     if not raw.get("error") and not (raw.get("text") or "").strip():
         raw["error"] = "empty response after 3 tries"
     report = _loads_loose(raw.get("text")) if raw.get("text") else None
-    sig = signals(report)
+    sig = signals(report, mode)
     row = {
+        "mode": mode,
         "model": model, "route": raw.get("route"), "provider": raw.get("provider"),
         "error": raw.get("error"),
         "cost_usd": raw.get("cost_usd"), "latency_ms": raw.get("latency_ms"),
@@ -180,27 +208,27 @@ def run_one_model(config, prompt, model, cid=None) -> dict:
         **sig,
     }
     if cid:
-        _result_put(cid, model, row)
+        _result_put(cid, model, row, mode)
     return row
 
 
-def run_case(config: dict, case: dict, models: list, refresh_models: bool = False) -> dict:
+def run_case(config: dict, case: dict, models: list, refresh_models: bool = False, mode: str = "full") -> dict:
     cid = case.get("id")
-    prompt = build_prompt(case["domain"])
+    prompt = build_prompt(case["domain"], mode)
     results, to_run = [], []
     for m in models:
         if cid and not refresh_models:
-            cached = _result_get(cid, m)
+            cached = _result_get(cid, m, mode)
             if cached and not cached.get("error"):
                 results.append(cached)
                 continue
         to_run.append(m)
     if to_run:
         with ThreadPoolExecutor(max_workers=min(8, len(to_run))) as ex:
-            results.extend(ex.map(lambda m: run_one_model(config, prompt, m, cid), to_run))
+            results.extend(ex.map(lambda m: run_one_model(config, prompt, m, cid, mode), to_run))
     total_cost = round(sum((r.get("cost_usd") or 0) for r in results), 4)
     ok = [r for r in results if r.get("json_ok") and not r.get("error")]
-    return {"case_id": cid, "domain": case["domain"],
+    return {"case_id": cid, "domain": case["domain"], "mode": mode,
             "summary": {"models": len(results), "json_ok": len(ok),
                         "avg_names": round(sum(r.get("names_count", 0) for r in ok) / len(ok), 1) if ok else 0,
                         "cost_usd": total_cost},
@@ -208,21 +236,21 @@ def run_case(config: dict, case: dict, models: list, refresh_models: bool = Fals
 
 
 # ── overview + reads ─────────────────────────────────────────────────────────────────────────────
-def matrix():
+def matrix(mode="full"):
     out = []
     for c in list_cases():
-        rows = _rows(c["id"])
+        rows = _rows(c["id"], mode)
         out.append({"id": c["id"], "domain": c["domain"], "note": c.get("note"),
                     "results": {r["model"]: r for r in rows}})
-    return {"cases": out, "models": DEFAULT_MODELS, "prompt_chars": len(prompt_template())}
+    return {"cases": out, "models": DEFAULT_MODELS, "mode": mode, "prompt_chars": len(prompt_template(mode))}
 
 
-def input_for(domain):
-    return {"domain": domain, "prompt": build_prompt(domain)}
+def input_for(domain, mode="full"):
+    return {"domain": domain, "prompt": build_prompt(domain, mode)}
 
 
-def result_for(cid, model):
-    return _result_get(cid, model)
+def result_for(cid, model, mode="full"):
+    return _result_get(cid, model, mode)
 
 
 # ── schema + storage ──────────────────────────────────────────────────────────────────────────────
@@ -245,6 +273,19 @@ def ensure_schema():
                     created_at timestamptz NOT NULL DEFAULT now(),
                     PRIMARY KEY (case_id, model)
                 );
+                ALTER TABLE entity.buyerqa_results ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'full';
+            """)
+            # widen the PK to include mode so 'full' and 'names' runs coexist per (case, model)
+            cur.execute("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.table_constraints
+                               WHERE constraint_name='buyerqa_results_pkey' AND table_schema='entity') THEN
+                        BEGIN
+                            ALTER TABLE entity.buyerqa_results DROP CONSTRAINT buyerqa_results_pkey;
+                            ALTER TABLE entity.buyerqa_results ADD PRIMARY KEY (case_id, model, mode);
+                        EXCEPTION WHEN others THEN NULL; END;
+                    END IF;
+                END $$;
             """)
         c.commit()
     _seed_if_empty()
@@ -298,26 +339,26 @@ def delete_case(cid):
         c.commit()
 
 
-def _rows(cid):
+def _rows(cid, mode="full"):
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s ORDER BY model", (cid,))
+            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s AND mode=%s ORDER BY model", (cid, mode))
             return [r["result"] for r in cur.fetchall()]
 
 
-def _result_get(cid, model):
+def _result_get(cid, model, mode="full"):
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s AND model=%s", (cid, model))
+            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s AND model=%s AND mode=%s", (cid, model, mode))
             r = cur.fetchone()
             return r["result"] if r else None
 
 
-def _result_put(cid, model, row):
+def _result_put(cid, model, row, mode="full"):
     with closing(coverage._conn()) as c:
         with c.cursor() as cur:
             cur.execute(
-                "INSERT INTO entity.buyerqa_results (case_id, model, result) VALUES (%s,%s,%s) "
-                "ON CONFLICT (case_id, model) DO UPDATE SET result=EXCLUDED.result, created_at=now()",
-                (cid, model, json.dumps(row, default=str)))
+                "INSERT INTO entity.buyerqa_results (case_id, model, mode, result) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT (case_id, model, mode) DO UPDATE SET result=EXCLUDED.result, created_at=now()",
+                (cid, model, mode, json.dumps(row, default=str)))
         c.commit()

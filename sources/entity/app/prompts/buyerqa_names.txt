@@ -1,0 +1,14 @@
+I am going to provide a URL. For this given URL, I would like you to respond only with a JSON array of objects containing the names of employees at that organization who have the title of founder, partner, co-founder, CEO, CFO, M&A, acquisitions, corporate development. Please strip out the comments from the final json output. It should be in the format below.
+[
+    {
+      "first_name": "value",
+      "last_name": "value",
+      "domain": "domain.com"
+    },
+    {
+      "first_name": "value",
+      "last_name": "value",
+      "domain": "domain.com"
+    }
+  ]
+{url}

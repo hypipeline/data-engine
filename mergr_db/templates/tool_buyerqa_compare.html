@@ -64,6 +64,12 @@ content is given), so search-capable models matter — especially for obscure/fo
 </div>
 <div id="prompt-box" style="display:none"></div>
 
+<div style="margin:6px 0 12px;font-size:13px">
+  <b>Prompt:</b>
+  <span class="btn sm" id="mode-full" onclick="setMode('full')">Full profile</span>
+  <span class="btn sm" id="mode-names" onclick="setMode('names')">Contacts only</span>
+  <span class="muted" id="mode-note"></span>
+</div>
 <div class="mc-fg">
   <label>Models (one per line — OpenRouter-style ids)</label>
   <textarea id="models"></textarea>
@@ -102,10 +108,16 @@ function modelsList(){ return q('models').value.split('\n').map(function(s){retu
 function money4(c){ return c==null?'':'$'+Number(c).toFixed(4); }
 function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }
 function short(m){ return m.split('/').pop(); }
-var MATRIX={cases:[],models:[]}, SELECTED=null;
+var MATRIX={cases:[],models:[]}, SELECTED=null, MODE='full';
+function setMode(m){ MODE=m;
+  q('mode-full').className='btn sm'+(m==='full'?' primary':'');
+  q('mode-names').className='btn sm'+(m==='names'?' primary':'');
+  q('mode-note').textContent = m==='names' ? '— contacts-only prompt (just find new leadership names for an existing record)' : '— full buyer profile (PE/trade + criteria + names)';
+  q('detail').style.display='none'; loadMatrix();
+}
 function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
 function curCase(){ return caseById(SELECTED); }
-function loadMatrix(){ return getJSON(EB+'/api/buyerqa/matrix').then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
+function loadMatrix(){ return getJSON(EB+'/api/buyerqa/matrix?mode='+MODE).then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
 
 function matrixCell(r){
   if(!r) return '<span class="muted">–</span>';
@@ -144,7 +156,7 @@ function runAll(){
   function step(){
     if(i>=todo.length){ btn.disabled=false; btn.textContent='▶ Run all domains'; q('runall-log').textContent='Done — '+todo.length+' domains.'; loadMatrix(); return; }
     var cs=todo[i]; q('runall-log').textContent='Running '+(i+1)+'/'+todo.length+': '+cs.domain+' …';
-    getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:refresh})})
+    getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:refresh,mode:MODE})})
     .then(function(res){ (res.results||[]).forEach(function(r){ updateCell(cs.id,r); }); i++; step(); })
     .catch(function(e){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">'+esc(cs.domain)+': '+esc(e.message||e)+'</span>'; btn.disabled=false; });
   }
@@ -205,7 +217,7 @@ function renderOut(cs){
 function run(){
   var cs=curCase(); if(!cs)return; var models=modelsList(); if(!models.length){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">Add a model.</span>'; return; }
   var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running…';
-  getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:q('refresh-models').checked})})
+  getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:q('refresh-models').checked,mode:MODE})})
   .then(function(res){ cs.results=cs.results||{}; (res.results||[]).forEach(function(r){ cs.results[r.model]=r; updateCell(cs.id,r); }); renderOut(cs); btn.disabled=false; btn.textContent='▶ Run models for this domain'; })
   .catch(function(e){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">'+esc(e.message||e)+'</span>'; btn.disabled=false; btn.textContent='▶ Run models for this domain'; });
 }
@@ -221,8 +233,8 @@ function viewPrompt(){
   var b=q('prompt-box'); if(b.style.display==='block'){ b.style.display='none'; return; }
   b.style.display='block'; b.innerHTML='<div class="muted">Loading…</div>';
   var cs=(MATRIX.cases||[])[0];
-  getJSON(EB+'/api/buyerqa/input?id='+(cs?cs.id:0)).then(function(d){ b.innerHTML='<pre class="raw" style="display:block">'+esc(d.prompt||'')+'</pre>'; }).catch(function(e){ b.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
+  getJSON(EB+'/api/buyerqa/input?id='+(cs?cs.id:0)+'&mode='+MODE).then(function(d){ b.innerHTML='<pre class="raw" style="display:block">'+esc(d.prompt||'')+'</pre>'; }).catch(function(e){ b.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
 }
-loadMatrix();
+setMode('full');
 </script>
 {% endblock %}

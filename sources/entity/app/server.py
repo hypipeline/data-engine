@@ -458,21 +458,21 @@ async def api_modelcompare_run(request: Request):
 
 # ── Buyer Quick Add — model comparison — /api/buyerqa/* ────────────────────────────────────────
 @app.get("/api/buyerqa/matrix")
-def api_buyerqa_matrix():
-    return JSONResponse(buyerqa_compare.matrix())
+def api_buyerqa_matrix(mode: str = "full"):
+    return JSONResponse(buyerqa_compare.matrix(mode))
 
 
 @app.get("/api/buyerqa/input")
-def api_buyerqa_input(id: int = 0):
+def api_buyerqa_input(id: int = 0, mode: str = "full"):
     c = buyerqa_compare.get_case(int(id))
     if not c:
         return JSONResponse({"error": "case not found"}, status_code=404)
-    return JSONResponse(buyerqa_compare.input_for(c["domain"]))
+    return JSONResponse(buyerqa_compare.input_for(c["domain"], mode))
 
 
 @app.get("/api/buyerqa/result")
-def api_buyerqa_result(case_id: int, model: str = ""):
-    r = buyerqa_compare.result_for(int(case_id), model)
+def api_buyerqa_result(case_id: int, model: str = "", mode: str = "full"):
+    r = buyerqa_compare.result_for(int(case_id), model, mode)
     return JSONResponse(r or {"error": "no stored result for this case/model"})
 
 
@@ -486,7 +486,8 @@ async def api_buyerqa_run(request: Request):
     if not c:
         return JSONResponse({"error": "case not found"}, status_code=404)
     try:
-        return JSONResponse(buyerqa_compare.run_case(CONFIG, c, models, refresh_models=bool(body.get("refresh_models"))))
+        return JSONResponse(buyerqa_compare.run_case(CONFIG, c, models,
+                            refresh_models=bool(body.get("refresh_models")), mode=body.get("mode", "full")))
     except Exception as e:  # noqa: BLE001
         import traceback
         return JSONResponse({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-1200:]}, status_code=500)
