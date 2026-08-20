@@ -138,12 +138,14 @@ function renderMatrix(){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
     return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+'</tr>';
   }).join('');
-  var foot='<tr style="background:#eef2f7;font-size:12px"><th class="rowlab">valid · avg names · avg cost</th>'+models.map(function(m){
-    var ok=0,n=0,names=[],costs=[];
-    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ n++; if(r.json_ok&&!r.error){ok++; names.push(r.names_count||0);} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
-    var an=names.length?(names.reduce(function(a,b){return a+b;},0)/names.length).toFixed(1):'—';
+  var foot='<tr style="background:#eef2f7;font-size:12px"><th class="rowlab">TOTAL valid contacts · names found · avg cost</th>'+models.map(function(m){
+    var ok=0,n=0,totNames=0,valid=0,graded=false,costs=[];
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ n++; if(r.json_ok&&!r.error){ ok++;
+      (r.names||[]).forEach(function(nm){ if(nm.first_name||nm.last_name){ totNames++; if(nm.valid==='valid')valid++; if(nm.valid)graded=true; } });
+    } if(r.cost_usd!=null)costs.push(r.cost_usd); } });
     var ac=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
-    return '<td style="text-align:center"><b>'+ok+'/'+n+'</b><div class="cost">'+an+' names · '+(ac!=null?per1k(ac):'—')+'</div></td>';
+    var big=graded?'<b style="color:#166534;font-size:16px">'+valid+'</b> <span class="muted">valid</span>':'<b>'+totNames+'</b> <span class="muted">names</span>';
+    return '<td style="text-align:center">'+big+'<div class="cost">'+ok+'/'+n+' ok · '+totNames+' names · '+(ac!=null?per1k(ac):'—')+'</div></td>';
   }).join('')+'</tr>';
   q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
 }

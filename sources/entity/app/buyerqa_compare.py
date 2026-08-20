@@ -46,6 +46,7 @@ DEFAULT_MODELS = [
                                         # WITH web search via OpenAI's Responses API (:web = that path)
     "openai/gpt-4.1-mini:web",          # OpenAI mini WITH web search (Responses API)
     "openai/gpt-5-mini:web",            # OpenAI mini WITH web search (Responses API)
+    "openai/gpt-5:web",                 # full GPT-5 WITH web search (Responses API) — "gpt-5-search-api"
 ]
 
 
@@ -107,25 +108,70 @@ def build_prompt(domain, mode="full"):
 
 
 # ── parse the model's JSON + extract comparison signals ─────────────────────────────────────────
+def _json_candidates(s):
+    """Every balanced {..}/[..] span in s, honoring string quoting so stray brackets in prose (and
+    search-model citation markers like [1]) don't derail extraction."""
+    out = []
+    for oc, cc in (("{", "}"), ("[", "]")):
+        i, n = 0, len(s)
+        while i < n:
+            if s[i] == oc:
+                depth = 0
+                in_str = False
+                esc = False
+                j = i
+                while j < n:
+                    ch = s[j]
+                    if in_str:
+                        if esc:
+                            esc = False
+                        elif ch == "\\":
+                            esc = True
+                        elif ch == '"':
+                            in_str = False
+                    else:
+                        if ch == '"':
+                            in_str = True
+                        elif ch == oc:
+                            depth += 1
+                        elif ch == cc:
+                            depth -= 1
+                            if depth == 0:
+                                out.append(s[i:j + 1])
+                                break
+                    j += 1
+                i = j + 1
+            else:
+                i += 1
+    return out
+
+
 def _loads_loose(text):
-    """Parse the model output as JSON — tolerating fences, and BOTH an object (full profile) and a
-    bare array (contacts-only prompt returns a JSON array of names)."""
+    """Parse the model output as JSON — tolerating fences, prose preambles ("Here is the JSON..."),
+    citation markers, and BOTH an object (full profile) and a bare array (contacts-only names)."""
     s = (text or "").strip()
     m = re.search(r"```(?:json)?\s*([\[{][\s\S]*[\]}])\s*```", s)
     if m:
-        s = m.group(1)
+        try:
+            return json.loads(m.group(1))
+        except Exception:  # noqa: BLE001
+            pass
     try:
         return json.loads(s)
     except Exception:  # noqa: BLE001
         pass
-    for op, cl in (("{", "}"), ("[", "]")):
-        a, b = s.find(op), s.rfind(cl)
-        if a != -1 and b > a:
-            try:
-                return json.loads(s[a:b + 1])
-            except Exception:  # noqa: BLE001
-                pass
-    return None
+    best, best_score = None, -1
+    for c in _json_candidates(s):
+        try:
+            v = json.loads(c)
+        except Exception:  # noqa: BLE001
+            continue
+        score = len(c)
+        if isinstance(v, list) and v and not all(isinstance(x, dict) for x in v):
+            score = 0  # e.g. a bare [1] citation array — not the names payload
+        if score > best_score:
+            best, best_score = v, score
+    return best
 
 
 def _selected(d):
