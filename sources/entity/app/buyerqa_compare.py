@@ -46,7 +46,8 @@ DEFAULT_MODELS = [
                                         # WITH web search via OpenAI's Responses API (:web = that path)
     "openai/gpt-4.1-mini:web",          # OpenAI mini WITH web search (Responses API)
     "openai/gpt-5-mini:web",            # OpenAI mini WITH web search (Responses API)
-    "openai/gpt-5:web",                 # full GPT-5 WITH web search (Responses API) — "gpt-5-search-api"
+    "openai/gpt-5:web",                 # full GPT-5 WITH web search (Responses API)
+    "openai/gpt-5-search-api",          # OpenAI's dedicated search model (chat/completions, search built in)
 ]
 
 
@@ -84,7 +85,36 @@ def _call_openai_web(config, model, prompt):
             "route": "openai-responses", "provider": "OpenAI web_search", "latency_ms": int((time.time() - t0) * 1000)}
 
 
+def _call_openai_search_api(config, model, prompt):
+    """OpenAI's dedicated gpt-5-search-api model — search is BUILT IN (no tool to attach), called via
+    chat/completions. Faster (~7s vs ~3min for gpt-5+web_search) and not reasoning-heavy. The injected
+    web-search results are billed as prompt tokens; gpt-5 token rates, no separate tool fee."""
+    key = config.get("openai_api_key")
+    if not key:
+        return {"error": "no OpenAI API key", "route": "openai-search-api", "provider": "OpenAI"}
+    base = model.split("/")[-1]
+    body = {"model": base, "messages": [{"role": "user", "content": prompt}]}
+    req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    t0 = time.time()
+    try:
+        d = json.load(urllib.request.urlopen(req, timeout=150))
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:150]}",
+                "route": "openai-search-api", "provider": "OpenAI", "latency_ms": int((time.time() - t0) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}", "route": "openai-search-api", "provider": "OpenAI"}
+    txt = ((d.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+    u = d.get("usage") or {}
+    it, ot = u.get("prompt_tokens", 0), u.get("completion_tokens", 0)
+    cost = round(it * 1.25 / 1e6 + ot * 10.0 / 1e6, 4)  # gpt-5 rates; search results billed as input
+    return {"text": txt, "cost_usd": cost, "input_tokens": it, "output_tokens": ot,
+            "route": "openai-search-api", "provider": "OpenAI gpt-5-search-api", "latency_ms": int((time.time() - t0) * 1000)}
+
+
 def _dispatch(config, prompt, model):
+    if model.endswith("-search-api"):
+        return _call_openai_search_api(config, model, prompt)
     if model.endswith(":web"):
         return _call_openai_web(config, model, prompt)
     return call_model(model, "", prompt, config)   # no system; whole prompt is the user msg
@@ -282,11 +312,28 @@ def run_case(config: dict, case: dict, models: list, refresh_models: bool = Fals
 
 
 # ── overview + reads ─────────────────────────────────────────────────────────────────────────────
+def _buyer_type(cid):
+    """Classify a domain as 'pe' (PE firm / family office) or 'trade' (operating company) by majority
+    vote of the models' is_pe in FULL mode — stable regardless of which view mode is being rendered."""
+    yes = no = 0
+    for r in _rows(cid, "full"):
+        if r.get("error") or not r.get("json_ok"):
+            continue
+        if r.get("is_pe") is True:
+            yes += 1
+        elif r.get("is_pe") is False:
+            no += 1
+    if yes == 0 and no == 0:
+        return None
+    return "pe" if yes > no else "trade"
+
+
 def matrix(mode="full"):
     out = []
     for c in list_cases():
         rows = _rows(c["id"], mode)
         out.append({"id": c["id"], "domain": c["domain"], "note": c.get("note"),
+                    "buyer_type": _buyer_type(c["id"]),
                     "results": {r["model"]: r for r in rows}})
     return {"cases": out, "models": DEFAULT_MODELS, "mode": mode, "prompt_chars": len(prompt_template(mode))}
 

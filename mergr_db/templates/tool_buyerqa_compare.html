@@ -70,6 +70,13 @@ content is given), so search-capable models matter — especially for obscure/fo
   <span class="btn sm" id="mode-names" onclick="setMode('names')">Contacts only</span>
   <span class="muted" id="mode-note"></span>
 </div>
+<div style="margin:6px 0 12px;font-size:13px">
+  <b>Buyer type:</b>
+  <span class="btn sm" id="bt-all" onclick="setBuyerType('all')">All</span>
+  <span class="btn sm" id="bt-trade" onclick="setBuyerType('trade')">Trade / Strategic</span>
+  <span class="btn sm" id="bt-pe" onclick="setBuyerType('pe')">PE / Financial</span>
+  <span class="muted" id="bt-note"></span>
+</div>
 <div class="mc-fg">
   <label>Models (one per line — OpenRouter-style ids)</label>
   <textarea id="models"></textarea>
@@ -108,13 +115,20 @@ function modelsList(){ return q('models').value.split('\n').map(function(s){retu
 function money4(c){ return c==null?'':'$'+Number(c).toFixed(4); }
 function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }
 function short(m){ return m.split('/').pop(); }
-var MATRIX={cases:[],models:[]}, SELECTED=null, MODE='full';
+var MATRIX={cases:[],models:[]}, SELECTED=null, MODE='full', BTYPE='all';
 function setMode(m){ MODE=m;
   q('mode-full').className='btn sm'+(m==='full'?' primary':'');
   q('mode-names').className='btn sm'+(m==='names'?' primary':'');
   q('mode-note').textContent = m==='names' ? '— contacts-only prompt (just find new leadership names for an existing record)' : '— full buyer profile (PE/trade + criteria + names)';
   q('detail').style.display='none'; loadMatrix();
 }
+function setBuyerType(t){ BTYPE=t;
+  q('bt-all').className='btn sm'+(t==='all'?' primary':'');
+  q('bt-trade').className='btn sm'+(t==='trade'?' primary':'');
+  q('bt-pe').className='btn sm'+(t==='pe'?' primary':'');
+  renderMatrix();  // buyer_type is in the payload — no reload needed
+}
+function btFilter(cs){ return BTYPE==='all' || cs.buyer_type===BTYPE; }
 function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
 function curCase(){ return caseById(SELECTED); }
 function loadMatrix(){ return getJSON(EB+'/api/buyerqa/matrix?mode='+MODE).then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
@@ -139,7 +153,11 @@ function modelValidScore(m, cases){
 }
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
-  var cases=MATRIX.cases||[];
+  var allCases=MATRIX.cases||[];
+  var cases=allCases.filter(btFilter);
+  var nTrade=allCases.filter(function(c){return c.buyer_type==='trade';}).length;
+  var nPE=allCases.filter(function(c){return c.buyer_type==='pe';}).length;
+  var btn=q('bt-note'); if(btn) btn.textContent='— showing '+cases.length+' of '+allCases.length+' domains ('+nTrade+' trade · '+nPE+' PE)';
   // sort columns best-first: by Hunter-validated valid contacts, then by names found
   models=models.slice().sort(function(a,b){
     var sa=modelValidScore(a,cases), sb=modelValidScore(b,cases);
@@ -249,6 +267,7 @@ function viewPrompt(){
   var cs=(MATRIX.cases||[])[0];
   getJSON(EB+'/api/buyerqa/input?id='+(cs?cs.id:0)+'&mode='+MODE).then(function(d){ b.innerHTML='<pre class="raw" style="display:block">'+esc(d.prompt||'')+'</pre>'; }).catch(function(e){ b.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
 }
+q('bt-all').className='btn sm primary';
 setMode('full');
 </script>
 {% endblock %}
