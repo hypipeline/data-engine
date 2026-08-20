@@ -433,16 +433,24 @@ def delete_case(cid):
 
 
 def _rows(cid, mode="full"):
+    # Trust the JSON result->>'mode' (what the result actually IS) over the `mode` column — historical
+    # rows were mislabeled (early names-arrays got stamped mode='full'). Dedupe to the latest per model.
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s AND mode=%s ORDER BY model", (cid, mode))
+            cur.execute(
+                "SELECT DISTINCT ON (model) result FROM entity.buyerqa_results "
+                "WHERE case_id=%s AND COALESCE(result->>'mode', 'full')=%s "
+                "ORDER BY model, created_at DESC", (cid, mode))
             return [r["result"] for r in cur.fetchall()]
 
 
 def _result_get(cid, model, mode="full"):
     with closing(coverage._conn()) as c:
         with c.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT result FROM entity.buyerqa_results WHERE case_id=%s AND model=%s AND mode=%s", (cid, model, mode))
+            cur.execute(
+                "SELECT result FROM entity.buyerqa_results "
+                "WHERE case_id=%s AND model=%s AND COALESCE(result->>'mode', 'full')=%s "
+                "ORDER BY created_at DESC LIMIT 1", (cid, model, mode))
             r = cur.fetchone()
             return r["result"] if r else None
 
