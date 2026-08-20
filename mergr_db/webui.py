@@ -510,6 +510,11 @@ def tool_extract_compare(request: Request):
     return render(request, "tool_extract_compare.html", "entity")
 
 
+@app.get("/entity/tools/buyer-quick-add", response_class=HTMLResponse)
+def tool_buyer_quick_add(request: Request):
+    return render(request, "tool_buyerqa_compare.html", "entity")
+
+
 # ── Stage-2 analysis WITHOUT extraction input (A/B) — self-contained; delete with the noext feature
 @app.get("/entity/tools/analysis-noext", response_class=HTMLResponse)
 def tool_analysis_noext(request: Request):

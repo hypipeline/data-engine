@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Buyer Quick Add — Model Comparison — Data Engine{% endblock %}
+{% block head %}
+<style>
+  .tool-back { font-size:13px; color:var(--link); display:inline-block; margin-bottom:14px; }
+  .mc-fg { display:flex; flex-direction:column; gap:5px; }
+  .mc-fg label { font-size:12px; font-weight:600; color:var(--muted); }
+  .mc-fg textarea { width:100%; max-width:640px; height:110px; font-family:var(--mono); font-size:12px; white-space:pre;
+    padding:8px 10px; border:1px solid var(--border-2); border-radius:7px; background:#fff; color:var(--text); }
+  .mc-opts { font-size:12px; color:var(--muted); display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .btn { padding:9px 18px; border:1px solid var(--border-2); border-radius:7px; background:#fff; color:var(--text); cursor:pointer; font-size:13px; }
+  .btn:hover { background:#eef2f7; }
+  .btn.primary { background:#4a90d9; color:#fff; border-color:#4a90d9; font-weight:600; }
+  .btn.primary:hover { background:#3f7fc4; } .btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+  .btn.sm { padding:3px 9px; font-size:11px; background:#f1f5f9; color:var(--text); }
+  .muted { color:#9aa3af; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:700; }
+  .pill.ok { background:#dcfce7; color:#166534; } .pill.bad { background:#fee2e2; color:#991b1b; } .pill.err { background:#fde68a; color:#92400e; }
+  .pill.pe { background:#eef2ff; color:#3730a3; } .pill.trade { background:#f1f5f9; color:#475569; }
+  .mc-grid-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:9px; margin-top:8px; }
+  table.mc { border-collapse:collapse; min-width:100%; font-size:12.5px; }
+  table.mc th, table.mc td { border:1px solid var(--border); padding:7px 10px; vertical-align:top; text-align:left; }
+  table.mc th.rowlab { background:#f7f8fa; font-weight:600; color:var(--muted); white-space:nowrap; position:sticky; left:0; z-index:1; }
+  table.mc thead th { background:#f2f5f9; font-family:var(--mono); font-size:11.5px; }
+  table.mtx td.mcell { text-align:center; min-width:104px; cursor:pointer; }
+  table.mtx td.mcell.ok { background:#f0fdf4; } table.mtx td.mcell.bad { background:#fef2f2; }
+  table.mtx th.caserow { cursor:pointer; } table.mtx th.caserow:hover { color:var(--link); }
+  .cost { font-size:10px; color:#94a3b8; }
+  .run-log { font-size:12px; color:var(--muted); margin:6px 0; min-height:16px; }
+  .errbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:10px 12px; border-radius:8px; font-size:13px; margin-top:10px; }
+  #detail { display:none; margin-top:26px; padding-top:18px; border-top:2px solid var(--border); }
+  .out-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; margin-top:10px; }
+  .out-card { border:1px solid var(--border); border-radius:9px; padding:11px 13px; background:#fff; font-size:12.5px; }
+  .out-card h4 { margin:0 0 7px; font-family:var(--mono); font-size:12px; }
+  .kv { font-size:12px; margin:2px 0; } .kv b { color:#475569; font-weight:600; }
+  .nm-chip { display:inline-block; margin:2px 3px 0 0; padding:2px 7px; border-radius:6px; font-size:11.5px; background:#eef2f7; }
+  .crit { font-size:11px; color:#64748b; margin-top:4px; }
+  .raw { display:none; margin-top:6px; background:#0f172a; color:#cbd5e1; border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px; white-space:pre-wrap; max-height:340px; overflow:auto; }
+  .cases-edit { font-size:12px; margin:8px 0; }
+  .cases-edit input { padding:5px 8px; border:1px solid var(--border-2); border-radius:6px; font-size:12px; }
+</style>
+{% endblock %}
+{% block body %}
+<a class="tool-back" href="/entity">← Back to Entity Lookup</a>
+<h1 class="page">Buyer Quick Add · <span style="color:#4a90d9">Model Comparison</span></h1>
+<p class="sub">The Origination Network <b>Buyer Quick Add</b> task: given only a company <b>URL</b>, an LLM returns a structured
+buyer profile — PE-vs-trade, official name, leadership <b>names</b> (contacts), and industry / EBITDA / deal-type / region
+booleans. The production model <code>gpt-4o-search-preview</code> is being <b>retired</b> (returns 404), so this compares
+candidate replacements on the <b>exact production prompt</b> across real domains. The task needs <b>web knowledge</b> (no page
+content is given), so search-capable models matter — especially for obscure/foreign domains.
+<span class="btn sm" onclick="viewPrompt()">▾ View prompt</span></p>
+<div id="prompt-box" style="display:none"></div>
+
+<div class="mc-fg">
+  <label>Models (one per line — OpenRouter-style ids)</label>
+  <textarea id="models"></textarea>
+</div>
+<div class="mc-opts">
+  <label><input type="checkbox" id="refresh-models"> re-run all (ignore cached)</label>
+  <button class="btn primary" id="runall-btn" onclick="runAll()">▶ Run all domains</button>
+  <span class="cases-edit"><input id="new-domain" placeholder="add a domain…" size="20"> <span class="btn sm" onclick="addCase()">+ add</span></span>
+</div>
+<div class="run-log" id="runall-log"></div>
+
+<h3 class="page" style="font-size:16px;margin-top:6px">Overview — domains × models</h3>
+<div id="matrix"></div>
+<p class="muted" style="font-size:12px;margin-top:6px">Each cell: ✓/✗ valid JSON · <b>N</b> leadership names found · PE/trade · cost. <span class="pill err">err</span> = model failed (e.g. the retired 404). Click a domain for full side-by-side profiles.</p>
+
+<div id="detail">
+  <h3 class="page" style="font-size:16px" id="detail-title">Detail</h3>
+  <div class="mc-opts">
+    <button class="btn primary" id="run-btn" onclick="run()">▶ Run models for this domain</button>
+    <span class="btn sm" onclick="delCase()" style="color:#991b1b">🗑 delete domain</span>
+    <span id="detail-note" class="muted"></span>
+  </div>
+  <div class="run-log" id="summary"></div>
+  <div id="out"></div>
+</div>
+
+<script>
+var EB='/entity-app';
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function q(id){ return document.getElementById(id); }
+function getJSON(url, opts){
+  function once(){ return fetch(url, opts).then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||('HTTP '+r.status)); }); return r.json(); }); }
+  return once().catch(function(){ return new Promise(function(res){ setTimeout(res,500); }).then(once); });
+}
+function modelsList(){ return q('models').value.split('\n').map(function(s){return s.trim();}).filter(Boolean); }
+function money4(c){ return c==null?'':'$'+Number(c).toFixed(4); }
+function per1k(c){ return c==null?'':'$'+(Number(c)*1000).toFixed(2)+'/1k'; }
+function short(m){ return m.split('/').pop(); }
+var MATRIX={cases:[],models:[]}, SELECTED=null;
+function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
+function curCase(){ return caseById(SELECTED); }
+function loadMatrix(){ return getJSON(EB+'/api/buyerqa/matrix').then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
+
+function matrixCell(r){
+  if(!r) return '<span class="muted">–</span>';
+  if(r.error) return '<span class="pill err" title="'+esc(r.error)+'">err</span>';
+  if(!r.json_ok) return '<span class="pill bad">✗ invalid</span>';
+  var pe = r.is_pe===true?'<span class="pill pe">PE</span>':(r.is_pe===false?'<span class="pill trade">trade</span>':'');
+  return '<span class="pill ok">✓</span> <b>'+(r.names_count||0)+'</b> names '+pe
+    +'<div class="cost" title="'+per1k(r.cost_usd)+'">'+money4(r.cost_usd)+' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'')+'</div>';
+}
+function renderMatrix(){
+  var models=modelsList().length?modelsList():(MATRIX.models||[]);
+  var cases=MATRIX.cases||[];
+  var head='<tr><th class="rowlab">Domain</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var body=cases.map(function(cs){
+    var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+'</tr>';
+  }).join('');
+  var foot='<tr style="background:#eef2f7;font-size:12px"><th class="rowlab">valid · avg names · avg cost</th>'+models.map(function(m){
+    var ok=0,n=0,names=[],costs=[];
+    cases.forEach(function(cs){ var r=(cs.results||{})[m]; if(r){ n++; if(r.json_ok&&!r.error){ok++; names.push(r.names_count||0);} if(r.cost_usd!=null)costs.push(r.cost_usd);} });
+    var an=names.length?(names.reduce(function(a,b){return a+b;},0)/names.length).toFixed(1):'—';
+    var ac=costs.length?(costs.reduce(function(a,b){return a+b;},0)/costs.length):null;
+    return '<td style="text-align:center"><b>'+ok+'/'+n+'</b><div class="cost">'+an+' names · '+(ac!=null?per1k(ac):'—')+'</div></td>';
+  }).join('')+'</tr>';
+  q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+foot+'</tbody></table></div>';
+}
+function updateCell(cid, r){ var cs=caseById(cid); if(!cs)return; cs.results=cs.results||{}; cs.results[r.model]=r; renderMatrix(); }
+
+function runAll(){
+  var models=modelsList(); if(!models.length){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">Add a model.</span>'; return; }
+  var refresh=q('refresh-models').checked, todo=(MATRIX.cases||[]).slice();
+  var btn=q('runall-btn'); btn.disabled=true; var i=0;
+  function step(){
+    if(i>=todo.length){ btn.disabled=false; btn.textContent='▶ Run all domains'; q('runall-log').textContent='Done — '+todo.length+' domains.'; loadMatrix(); return; }
+    var cs=todo[i]; q('runall-log').textContent='Running '+(i+1)+'/'+todo.length+': '+cs.domain+' …';
+    getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:refresh})})
+    .then(function(res){ (res.results||[]).forEach(function(r){ updateCell(cs.id,r); }); i++; step(); })
+    .catch(function(e){ q('runall-log').innerHTML='<span class="errbox" style="display:inline-block">'+esc(cs.domain)+': '+esc(e.message||e)+'</span>'; btn.disabled=false; });
+  }
+  step();
+}
+
+// ── detail ──────────────────────────────────────────────────────────────────
+function openCase(cid){
+  SELECTED=cid; var cs=caseById(cid); if(!cs)return;
+  q('detail').style.display='block'; q('detail-title').textContent='Detail: '+cs.domain; q('summary').innerHTML='';
+  renderOut(cs); q('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function nmeta(r){
+  return '<div class="crit">industries '+(r.industries_n||0)+' · regions '+(r.regions_n||0)+' · ebitda '+(r.ebitda_n||0)+' · deal-types '+(r.deal_n||0)+'</div>';
+}
+function outCard(r){
+  var rid='rw'+Math.random().toString(36).slice(2,8);
+  var badge=r.error?'<span class="pill err">error</span>':(r.json_ok?'<span class="pill ok">✓ valid JSON</span>':'<span class="pill bad">✗ invalid JSON</span>');
+  var body;
+  if(r.error){ body='<div style="color:#991b1b;font-size:12px;margin-top:6px">'+esc(r.error)+'</div>'; }
+  else {
+    var pe = r.is_pe===true?'<span class="pill pe">PE / family office</span>':(r.is_pe===false?'<span class="pill trade">trade buyer</span>':'<span class="muted">?</span>');
+    var names=(r.names||[]).map(function(n){ return '<span class="nm-chip">'+esc((n.first_name||'')+' '+(n.last_name||'')).trim()+'</span>'; }).join('')||'<span class="muted">— none —</span>';
+    body='<div class="kv"><b>Type:</b> '+pe+'</div>'
+        +'<div class="kv"><b>Official name:</b> '+esc(r.official_name||'—')+'</div>'
+        +'<div class="kv"><b>Leadership page:</b> '+(r.leadership_page?'<a href="'+esc(r.leadership_page)+'" target="_blank">'+esc(r.leadership_page).slice(0,44)+'</a>':'—')+'</div>'
+        +'<div class="kv"><b>Names ('+(r.names_count||0)+'):</b> '+names+'</div>'
+        +nmeta(r);
+  }
+  return '<div class="out-card"><h4>'+esc(short(r.model))+' '+badge+'</h4>'+body
+    +'<div class="muted" style="margin-top:7px">'+(r.cost_usd!=null?('<b>'+money4(r.cost_usd)+'</b> · '+per1k(r.cost_usd)):'cost n/a')
+      +' · '+(r.latency_ms!=null?Math.round(r.latency_ms/100)/10+'s':'—')+'</div>'
+    +'<div style="margin-top:4px"><span class="pill" style="background:#eef2ff;color:#3730a3">'+esc(r.route||'')+'</span> <span class="muted">'+esc(r.provider||'')+'</span>'
+      +' <span class="btn sm" onclick="var e=document.getElementById(\''+rid+'\');e.style.display=e.style.display==\'none\'?\'block\':\'none\'">raw ▾</span></div>'
+    +'<div class="raw" id="'+rid+'">'+esc(r.raw||'(no output)')+'</div></div>';
+}
+function renderOut(cs){
+  var models=modelsList().length?modelsList():(MATRIX.models||[]);
+  var rows=models.map(function(m){ return (cs.results||{})[m]; }).filter(Boolean);
+  if(!rows.length){ q('out').innerHTML='<p class="muted">No results — click “Run models for this domain”.</p>'; return; }
+  var ok=rows.filter(function(r){return r.json_ok&&!r.error;});
+  q('summary').innerHTML='<b>'+ok.length+'/'+rows.length+'</b> models returned valid JSON · avg '+(ok.length?(ok.reduce(function(a,r){return a+(r.names_count||0);},0)/ok.length).toFixed(1):0)+' names';
+  q('out').innerHTML='<div class="out-grid">'+rows.map(outCard).join('')+'</div>';
+}
+function run(){
+  var cs=curCase(); if(!cs)return; var models=modelsList(); if(!models.length){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">Add a model.</span>'; return; }
+  var btn=q('run-btn'); btn.disabled=true; btn.textContent='Running…';
+  getJSON(EB+'/api/buyerqa/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cs.id,models:models,refresh_models:q('refresh-models').checked})})
+  .then(function(res){ cs.results=cs.results||{}; (res.results||[]).forEach(function(r){ cs.results[r.model]=r; updateCell(cs.id,r); }); renderOut(cs); btn.disabled=false; btn.textContent='▶ Run models for this domain'; })
+  .catch(function(e){ q('summary').innerHTML='<span class="errbox" style="display:inline-block">'+esc(e.message||e)+'</span>'; btn.disabled=false; btn.textContent='▶ Run models for this domain'; });
+}
+function addCase(){
+  var d=q('new-domain').value.trim(); if(!d)return;
+  getJSON(EB+'/api/buyerqa/cases',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domain:d})}).then(function(){ q('new-domain').value=''; loadMatrix(); });
+}
+function delCase(){
+  var cs=curCase(); if(!cs||!confirm('Delete '+cs.domain+'?'))return;
+  getJSON(EB+'/api/buyerqa/cases/'+cs.id,{method:'DELETE'}).then(function(){ q('detail').style.display='none'; loadMatrix(); });
+}
+function viewPrompt(){
+  var b=q('prompt-box'); if(b.style.display==='block'){ b.style.display='none'; return; }
+  b.style.display='block'; b.innerHTML='<div class="muted">Loading…</div>';
+  var cs=(MATRIX.cases||[])[0];
+  getJSON(EB+'/api/buyerqa/input?id='+(cs?cs.id:0)).then(function(d){ b.innerHTML='<pre class="raw" style="display:block">'+esc(d.prompt||'')+'</pre>'; }).catch(function(e){ b.innerHTML='<div class="errbox">'+esc(e.message||e)+'</div>'; });
+}
+loadMatrix();
+</script>
+{% endblock %}

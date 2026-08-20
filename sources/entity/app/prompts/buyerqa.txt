@@ -1,0 +1,77 @@
+I am going to provide a URL. For this given URL, I would like you to respond only with a JSON following the comments. Please strip out the comments from the final json output. 
+{
+  // true if a private equity/family office or if a trade buyer select false
+  "is_a_private_equity_firm_or_family_office": "boolean",
+
+
+  // company name as it would appear on contracts. Will usually end in LLC, LLP, Limited, Inc etc
+  "official_company_name": "value",
+
+
+  "leadership_page_on_website": "value",
+
+
+  // array of objects containing the names of employees at that organization who have the title of founder, partner, co-founder, CEO, CFO, M&A, acquisitions, corporate development.
+  // if a private equity firm also include investment manager and associate
+  "names": [
+    {
+      "first_name": "value",
+      "last_name": "value",
+      "domain": "domain.com"
+    },
+    {
+      "first_name": "value",
+      "last_name": "value",
+      "domain": "domain.com"
+    }
+  ],
+
+
+  // select the applicable industry for the entity in question, making sure to select at least one
+  "industries": {
+    "Business Services": "boolean",
+    "Consumer": "boolean",
+    "Finance & Insurance": "boolean",
+    "Healthcare": "boolean",
+    "Industrials": "boolean",
+    "Public sector & Infrastructure": "boolean",
+    "Natural Resources": "boolean",
+    "Real Estate": "boolean",
+    "TMT": "boolean"
+  },
+
+
+  // select the EBITDA ranges of companies they wish to invest in/acquire, making sure to select at least one
+  "ebitda_ranges": {
+    "< $2m": "boolean",
+    "$2m–$5m": "boolean",
+    "$5m–$15m": "boolean",
+    "$15m–$30m": "boolean",
+    "$30m–$60m": "boolean",
+    "$60m–$120m": "boolean",
+    "$120m–$250m": "boolean",
+    "$250m–$1bn": "boolean",
+    "$1bn >": "boolean"
+  },
+
+
+  // select the deal types of companies they wish to invest in/acquire, making sure to select at least one
+  "deal_types": {
+    "M&A": "boolean",
+    "Debt": "boolean",
+    "Fundraising": "boolean",
+    "Secondary": "boolean"
+  },
+
+
+  // select the applicable regions they operate/invest in, making sure to select at least one
+  "regions": {
+    "Asia-Pacific": "boolean",
+    "Europe": "boolean",
+    "North America": "boolean",
+    "Latin/South America": "boolean",
+    "Africa & Middle East": "boolean"
+  }
+}
+{url}
+

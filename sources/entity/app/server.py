@@ -27,6 +27,7 @@ import coverage
 import model_compare
 import extract_compare
 import analysis_noext_compare
+import buyerqa_compare
 import northdata_cases
 import validation_cases
 
@@ -64,6 +65,10 @@ def _startup():
         analysis_noext_compare.ensure_schema()
     except Exception as e:  # noqa: BLE001
         print(f"[analysis_noext] schema init skipped: {e}")
+    try:
+        buyerqa_compare.ensure_schema()
+    except Exception as e:  # noqa: BLE001
+        print(f"[buyerqa] schema init skipped: {e}")
     try:
         northdata_cases.ensure_schema()
     except Exception as e:  # noqa: BLE001
@@ -449,6 +454,70 @@ async def api_modelcompare_run(request: Request):
         return JSONResponse({"error": f"{type(e).__name__}: {e}",
                              "trace": traceback.format_exc()[-1200:]}, status_code=500)
     return JSONResponse(out)
+
+
+# ── Buyer Quick Add — model comparison — /api/buyerqa/* ────────────────────────────────────────
+@app.get("/api/buyerqa/matrix")
+def api_buyerqa_matrix():
+    return JSONResponse(buyerqa_compare.matrix())
+
+
+@app.get("/api/buyerqa/input")
+def api_buyerqa_input(id: int = 0):
+    c = buyerqa_compare.get_case(int(id))
+    if not c:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    return JSONResponse(buyerqa_compare.input_for(c["domain"]))
+
+
+@app.get("/api/buyerqa/result")
+def api_buyerqa_result(case_id: int, model: str = ""):
+    r = buyerqa_compare.result_for(int(case_id), model)
+    return JSONResponse(r or {"error": "no stored result for this case/model"})
+
+
+@app.post("/api/buyerqa/run")
+async def api_buyerqa_run(request: Request):
+    body = await request.json() if await request.body() else {}
+    models = body.get("models") or buyerqa_compare.DEFAULT_MODELS
+    if not body.get("id"):
+        return JSONResponse({"error": "id is required"}, status_code=400)
+    c = buyerqa_compare.get_case(int(body["id"]))
+    if not c:
+        return JSONResponse({"error": "case not found"}, status_code=404)
+    try:
+        return JSONResponse(buyerqa_compare.run_case(CONFIG, c, models, refresh_models=bool(body.get("refresh_models"))))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        return JSONResponse({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-1200:]}, status_code=500)
+
+
+@app.get("/api/buyerqa/cases")
+def api_buyerqa_cases():
+    return JSONResponse({"cases": buyerqa_compare.list_cases()})
+
+
+@app.post("/api/buyerqa/cases")
+async def api_buyerqa_add(request: Request):
+    body = await request.json()
+    if not body.get("domain"):
+        return JSONResponse({"error": "domain required"}, status_code=400)
+    return JSONResponse({"id": buyerqa_compare.add_case(body["domain"], body.get("note"))})
+
+
+@app.put("/api/buyerqa/cases/{cid}")
+async def api_buyerqa_update(cid: int, request: Request):
+    body = await request.json()
+    if not body.get("domain"):
+        return JSONResponse({"error": "domain required"}, status_code=400)
+    buyerqa_compare.update_case(cid, body["domain"], body.get("note"))
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/buyerqa/cases/{cid}")
+def api_buyerqa_delete(cid: int):
+    buyerqa_compare.delete_case(cid)
+    return JSONResponse({"ok": True})
 
 
 # ── STAGE 2 analysis WITHOUT the extraction input (A/B) — /api/noext/* ─────────────────────────
