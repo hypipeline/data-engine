@@ -185,8 +185,11 @@ function renderMatrix(){
   });
   function frow(label,tip,cell,style){ return '<tr style="'+(style||'')+'"><th class="rowlab" title="'+esc(tip)+'">'+label+'</th>'
     +T.map(function(t){return '<td style="text-align:center">'+cell(t)+'</td>';}).join('')+'</tr>'; }
-  var foot=
-     frow('✅ VALID contacts','Hunter-verified emails across the shown domains — the headline metric',
+  // repeat the model names above the totals so you don't have to scroll back up past 21 rows
+  var modelRow='<tr style="background:#dde6f2;font-weight:600;font-size:11px"><th class="rowlab">Model ↓</th>'
+    +models.map(function(m){return '<td style="text-align:center" title="'+esc(m)+'">'+esc(short(m))+'</td>';}).join('')+'</tr>';
+  var foot=modelRow
+    +frow('✅ VALID contacts','Hunter-verified emails across the shown domains — the headline metric',
         function(t){return t.graded?'<b style="color:#166534;font-size:16px">'+t.valid+'</b>':'<span class="muted" title="not Hunter-graded yet">—</span>';},
         'background:#e7f2ea;font-weight:600')
     +frow('&nbsp;&nbsp;↳ Trade / Strategic','valid contacts at trade (operating-company) buyers',
