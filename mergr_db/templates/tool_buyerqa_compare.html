@@ -164,6 +164,15 @@ function modelValidScore(m, cases){
   }});
   return {valid:valid, names:names, graded:graded};
 }
+function nmKey(nm){ return ((nm.first_name||'')+' '+(nm.last_name||'')).trim().toLowerCase().replace(/\s+/g,' '); }
+// deduplicated UNION of Hunter-VALID contacts for one domain across the given (visible) models
+function uniqueValid(cs, models){
+  var set={};
+  models.forEach(function(m){ var r=(cs.results||{})[m]; if(r&&r.json_ok&&!r.error){
+    (r.names||[]).forEach(function(nm){ if(nm.valid==='valid'){ var k=nmKey(nm); if(k)set[k]=1; } });
+  }});
+  return Object.keys(set).length;
+}
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
   var allCases=MATRIX.cases||[];
@@ -178,10 +187,14 @@ function renderMatrix(){
   });
   renderColToggles(models);                                  // toggles reflect the full sorted set
   models=models.filter(function(m){return !HIDDEN[m];});     // drop hidden columns from the display
-  var head='<tr><th class="rowlab">Domain</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
+  var uniHdr='<th title="Deduplicated UNION of Hunter-valid contacts across the visible models — how many distinct usable people you’d get by combining them" style="background:#eaf5ee;border-left:2px solid #b8dcc4">∪ unique<br>valid</th>';
+  var head='<tr><th class="rowlab">Domain</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+uniHdr+'</tr>';
+  var grandUnique=0;
   var body=cases.map(function(cs){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
-    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+'</tr>';
+    var u=uniqueValid(cs,models); grandUnique+=u;
+    var uCell='<td style="text-align:center;font-weight:600;background:#eaf5ee;border-left:2px solid #b8dcc4">'+(u?'<span style="color:#166534">'+u+'</span>':'<span class="muted">0</span>')+'</td>';
+    return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+uCell+'</tr>';
   }).join('');
   // per-model totals over the (filtered) cases — one metric per labelled footer row
   var T=models.map(function(m){
@@ -198,15 +211,18 @@ function renderMatrix(){
     t.avg=t.costs.length?t.costs.reduce(function(a,b){return a+b;},0)/t.costs.length:null;
     return t;
   });
-  function frow(label,tip,cell,style){ return '<tr style="'+(style||'')+'"><th class="rowlab" title="'+esc(tip)+'">'+label+'</th>'
-    +T.map(function(t){return '<td style="text-align:center">'+cell(t)+'</td>';}).join('')+'</tr>'; }
+  function frow(label,tip,cell,style,extra){ return '<tr style="'+(style||'')+'"><th class="rowlab" title="'+esc(tip)+'">'+label+'</th>'
+    +T.map(function(t){return '<td style="text-align:center">'+cell(t)+'</td>';}).join('')
+    +'<td style="text-align:center;background:#eaf5ee;border-left:2px solid #b8dcc4">'+(extra||'')+'</td></tr>'; }
   // repeat the model names above the totals so you don't have to scroll back up past 21 rows
   var modelRow='<tr style="background:#dde6f2;font-weight:600;font-size:11px"><th class="rowlab">Model ↓</th>'
-    +models.map(function(m){return '<td style="text-align:center" title="'+esc(m)+'">'+esc(short(m))+'</td>';}).join('')+'</tr>';
+    +models.map(function(m){return '<td style="text-align:center" title="'+esc(m)+'">'+esc(short(m))+'</td>';}).join('')
+    +'<td style="text-align:center;background:#eaf5ee;border-left:2px solid #b8dcc4">∪ unique</td></tr>';
   var foot=modelRow
     +frow('✅ VALID contacts','Hunter-verified emails across the shown domains — the headline metric',
         function(t){return t.graded?'<b style="color:#166534;font-size:16px">'+t.valid+'</b>':'<span class="muted" title="not Hunter-graded yet">—</span>';},
-        'background:#e7f2ea;font-weight:600')
+        'background:#e7f2ea;font-weight:600',
+        '<b style="color:#166534;font-size:16px" title="total distinct Hunter-valid contacts across the visible models, summed over the shown domains">'+grandUnique+'</b>')
     +frow('&nbsp;&nbsp;↳ Trade / Strategic','valid contacts at trade (operating-company) buyers',
         function(t){return t.graded?'<span style="color:#166534">'+t.tvalid+'</span>':'<span class="muted">—</span>';},'font-size:12px;background:#f4f9f5')
     +frow('&nbsp;&nbsp;↳ PE / Financial','valid contacts at PE firms / family offices',
