@@ -1073,6 +1073,73 @@ def api_linkedin_profiles(input: str = ""):
                          "api_calls": t.get_api_calls(), "cost": _bd_cost(t)})
 
 
+@app.get("/api/linkedin-profiles/stream")
+def api_linkedin_profiles_stream(input: str = ""):
+    """Same flow as /api/linkedin-profiles but STREAMS a live log (SSE) — one `log` event per step as
+    it happens, a `result` event with the full payload, then `done`."""
+    def sse(event, data):
+        return "event: %s\ndata: %s\n\n" % (event, json.dumps(data, default=str))
+
+    def gen():
+        inp = (input or "").strip()
+        if not inp:
+            yield sse("fail", {"error": "Enter a website URL or a LinkedIn company URL."}); yield sse("done", {}); return
+        t = _tools()
+        low, company_url = inp.lower(), None
+        try:
+            # ── Step 1: company LinkedIn page ──
+            if "linkedin.com/company/" in low:
+                company_url = inp if inp.startswith("http") else "https://" + inp
+                yield sse("log", {"step": 1, "msg": "Input is a LinkedIn company URL — skipping website resolution", "ok": True, "result": company_url})
+            elif "linkedin.com/in/" in low:
+                yield sse("fail", {"error": "That's a personal profile URL. Enter a website or a LinkedIn company URL."}); yield sse("done", {}); return
+            else:
+                q = _norm_query(inp)
+                yield sse("log", {"step": 1, "msg": "Website → find LinkedIn company page (Bright Data Google)", "detail": q, "running": True})
+                company_url = t.find_linkedin_url(q)
+                if not company_url:
+                    yield sse("log", {"step": 1, "msg": "No LinkedIn company page found for that website.", "ok": False})
+                    yield sse("result", {"input": inp, "error": "No LinkedIn company page found for that website.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
+                yield sse("log", {"step": 1, "msg": "Found LinkedIn company page", "ok": True, "result": company_url})
+
+            # ── Step 2: company name ──
+            yield sse("log", {"step": 2, "msg": "Read company name from LinkedIn (Bright Data)", "detail": company_url, "running": True})
+            data = t.linkedin_company_data(company_url)
+            company_name = data.get("name") if data else None
+            employees = data.get("employees") if data else None
+            if not company_name:
+                yield sse("log", {"step": 2, "msg": "Found the page but couldn't read the company name.", "ok": False})
+                yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
+            yield sse("log", {"step": 2, "msg": "Company name", "ok": True, "result": company_name + (" (%s employees)" % employees if employees else "")})
+
+            # ── Step 3: Google site:linkedin.com/in/ ──
+            query = 'site:linkedin.com/in/ "%s"' % company_name
+            yield sse("log", {"step": 3, "msg": "Google people search (Bright Data)", "detail": query, "running": True})
+            html = t._google_serp_html(query)
+            profiles, seen = [], set()
+            for title, url in t._parse_serp_organic(html or ""):
+                if "linkedin.com/in/" not in url.lower():
+                    continue
+                clean = url.split("?")[0].rstrip("/")
+                if clean in seen:
+                    continue
+                seen.add(clean)
+                name = re.split(r"\s[–|\-]\s", title)[0].strip()
+                profiles.append({"name": name, "title": title, "url": clean})
+            yield sse("log", {"step": 3, "msg": "People search complete", "ok": True, "result": "%d profiles" % len(profiles)})
+
+            cost = _bd_cost(t)
+            yield sse("log", {"step": 0, "msg": "Total: %d Bright Data calls · ~$%s" % (cost["brightdata_calls"], cost["usd"]), "ok": True})
+            yield sse("result", {"input": inp, "company_url": company_url, "company_name": company_name,
+                                 "employees": employees, "query": query, "profiles": profiles,
+                                 "cost": cost, "api_calls": t.get_api_calls()})
+        except Exception as e:  # noqa: BLE001
+            yield sse("fail", {"error": str(e)})
+        yield sse("done", {})
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
 @app.get("/api/linkedin/history")
 def api_linkedin_history(limit: int = 100):
     return JSONResponse({"history": linkedin_cache.history(limit)})

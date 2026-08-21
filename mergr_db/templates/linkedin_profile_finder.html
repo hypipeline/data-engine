@@ -54,6 +54,7 @@
   <button id="lp-btn" class="lp-btn" type="submit">Find profiles</button>
 </form>
 <div id="lp-status" class="lp-hint"></div>
+<div id="lp-log"></div>
 <div id="lp-out"></div>
 
 <script>
@@ -61,19 +62,18 @@ var EBASE='/entity-app';
 function q(id){return document.getElementById(id);}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
-function stepHtml(s){
-  var cls = s.error?'bad':(s.ok?'ok':'pend');
-  var ico = s.error?'✗':(s.ok?'✓':'…');
-  var res = s.error ? '<div class="det" style="color:#b91c1c">'+esc(s.error)+'</div>'
-          : (s.result?'<div class="res">→ '+esc(s.result)+'</div>':'');
-  var det = s.detail?'<div class="det">'+esc(s.detail)+'</div>':'';
-  return '<div class="step '+cls+'"><div class="ico">'+ico+'</div><div><div class="lab">'
-    +'Step '+s.n+' · '+esc(s.label)+'</div>'+det+res+'</div></div>';
+function logLine(m){
+  var running=m.running, bad=(m.ok===false)||m.error, ok=(m.ok===true);
+  var ico = running?'…':(bad?'✗':(ok?'✓':'·'));
+  var cls = running?'pend':(bad?'bad':(ok?'ok':'pend'));
+  var label = (m.step?('Step '+m.step+' · '):'')+esc(m.msg||'');
+  var det = m.detail?'<div class="det">'+esc(m.detail)+'</div>':'';
+  var res = m.result?'<div class="res">→ '+esc(m.result)+'</div>':'';
+  return '<div class="step '+cls+'"><div class="ico">'+ico+'</div><div><div class="lab">'+label+'</div>'+det+res+'</div></div>';
 }
 
-function render(d){
+function render(d){   // company card + profiles; the step log is shown live in #lp-log
   var h='';
-  if(d.steps && d.steps.length){ h+='<div class="steps">'+d.steps.map(stepHtml).join('')+'</div>'; }
   if(d.error){ h+='<div class="error-box">'+esc(d.error)+'</div>'; }
   if(d.company_name){
     var cost=d.cost||{};
@@ -102,13 +102,24 @@ function run(e){
   e.preventDefault();
   var v=q('lp-in').value.trim();
   if(!v) return;
-  q('lp-btn').disabled=true; q('lp-status').textContent='Running… (resolve → company name → Google people search — a few Bright Data calls)';
-  q('lp-out').innerHTML='';
-  fetch(EBASE+'/api/linkedin-profiles?input='+encodeURIComponent(v))
-    .then(function(r){return r.json();})
-    .then(function(d){ q('lp-status').textContent=''; render(d); })
-    .catch(function(err){ q('lp-status').textContent=''; q('lp-out').innerHTML='<div class="error-box">'+esc(err.message||err)+'</div>'; })
-    .finally(function(){ q('lp-btn').disabled=false; });
+  q('lp-btn').disabled=true; q('lp-status').textContent='Running…';
+  q('lp-out').innerHTML=''; q('lp-log').innerHTML='';
+  var logs=[];
+  function paint(){ q('lp-log').innerHTML='<div class="steps">'+logs.map(logLine).join('')+'</div>'; }
+  var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v));
+  es.addEventListener('log', function(ev){
+    var m=JSON.parse(ev.data);
+    var last=logs[logs.length-1];
+    // a resolved line replaces the "running…" line for the same step
+    if(last && last.running && last.step===m.step){ logs[logs.length-1]=m; } else { logs.push(m); }
+    paint();
+  });
+  es.addEventListener('result', function(ev){ q('lp-status').textContent=''; render(JSON.parse(ev.data)); });
+  es.addEventListener('fail', function(ev){ q('lp-status').textContent='';
+    try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
+  });
+  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; });
+  es.onerror=function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; };  // also stops auto-reconnect
 }
 </script>
 {% endblock %}
