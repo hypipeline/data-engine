@@ -197,7 +197,13 @@ function renderMatrix(){
         function(t){return '<b>'+t.names+'</b>';},'font-size:12px;background:#eef2f7')
     +frow('Valid JSON','domains where the model returned parseable JSON',
         function(t){return t.ok+'/'+t.n;},'font-size:12px;background:#eef2f7')
-    +frow('Avg cost / 1k','average cost projected to 1,000 lookups',
+    +frow('Total cost (runs done)','actual summed cost of all runs shown for this model',
+        function(t){var s=t.costs.reduce(function(a,b){return a+b;},0); return t.costs.length?'$'+s.toFixed(2):'—';},'font-size:12px;background:#eef2f7')
+    +frow('Avg cost / run','mean cost per domain run',
+        function(t){return t.avg!=null?money4(t.avg):'—';},'font-size:12px;background:#eef2f7')
+    +frow('Cost / valid contact','total cost ÷ Hunter-valid contacts',
+        function(t){var s=t.costs.reduce(function(a,b){return a+b;},0); return (t.graded&&t.valid)?'$'+(s/t.valid).toFixed(3):'—';},'font-size:12px;font-weight:600;background:#eef2f7')
+    +frow('Avg cost / 1k lookups','average cost projected to 1,000 lookups',
         function(t){return t.avg!=null?per1k(t.avg):'—';},'font-size:12px;background:#eef2f7');
   q('matrix').innerHTML='<div class="mc-grid-wrap"><table class="mc mtx"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table></div>';
 }
