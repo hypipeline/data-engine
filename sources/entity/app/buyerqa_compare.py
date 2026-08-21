@@ -65,7 +65,7 @@ def _call_openai_web(config, model, prompt):
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     t0 = time.time()
     try:
-        d = json.load(urllib.request.urlopen(req, timeout=150))
+        d = json.load(urllib.request.urlopen(req, timeout=600))
     except urllib.error.HTTPError as e:
         return {"error": f"HTTP {e.code}: {e.read().decode()[:150]}",
                 "route": "openai-responses", "provider": "OpenAI", "latency_ms": int((time.time() - t0) * 1000)}
