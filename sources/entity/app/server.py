@@ -11,6 +11,7 @@ import asyncio
 import json
 import queue
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -1127,17 +1128,39 @@ def api_linkedin_profiles_stream(input: str = ""):
             base = 'site:linkedin.com/in/ "%s"' % company_name
             profiles = {}   # clean_url -> {name, title, description, followers, url, hits}
 
-            def collect(qstr, pages, label):
-                new = 0
+            def search_one(qstr, pages):
+                # PURE fetch (no shared-state writes) → safe to run in a thread; merge happens in gen
+                out = []
                 for pg in range(pages):
                     got = t._google_serp_json(qstr, start=pg * 10)
-                    on_page = 0
+                    ph = 0
                     for o in got:
-                        url = o.get("link") or ""
-                        if "linkedin.com/in/" not in url.lower():
-                            continue
-                        on_page += 1
-                        clean = url.split("?")[0].rstrip("/")
+                        if "linkedin.com/in/" in (o.get("link") or "").lower():
+                            ph += 1; out.append(o)
+                    if pg > 0 and ph == 0:
+                        break   # Google exhausted
+                return out
+
+            def nice_of(lbl):
+                return "broad — all employees (3 pages)" if lbl == "broad" else ('“%s”' % lbl)
+
+            searches = [("broad", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
+            yield sse("log", {"key": "s3", "step": 3, "parent": True, "msg": "Searching Google (%d queries, in parallel)" % len(searches), "running": True})
+            for lbl, qstr, pages in searches:   # pre-list substeps in fixed order (running)
+                yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice_of(lbl), "detail": qstr, "running": True})
+
+            # run all searches concurrently; merge + emit each substep as it completes (~15s vs ~80s)
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                futs = {ex.submit(search_one, qstr, pages): lbl for lbl, qstr, pages in searches}
+                for fut in as_completed(futs):
+                    lbl = futs[fut]
+                    try:
+                        results = fut.result()
+                    except Exception:  # noqa: BLE001
+                        results = []
+                    new = 0
+                    for o in results:
+                        clean = (o.get("link") or "").split("?")[0].rstrip("/")
                         if clean not in profiles:
                             title = o.get("title") or ""
                             nm = re.split(r"\s[–|\-]\s", title)[0].strip()
@@ -1146,21 +1169,11 @@ def api_linkedin_profiles_stream(input: str = ""):
                                                "followers": o.get("display_link") or "",
                                                "url": clean, "hits": []}
                             new += 1
-                        if label not in profiles[clean]["hits"]:
-                            profiles[clean]["hits"].append(label)
-                    if pg > 0 and on_page == 0:
-                        break   # Google exhausted for this query
-                return new
-
-            searches = [("broad", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
-            yield sse("log", {"key": "s3", "step": 3, "parent": True, "msg": "Searching Google (%d queries)" % len(searches), "running": True})
-            for lbl, qstr, pages in searches:
-                nice = "broad — all employees (3 pages)" if lbl == "broad" else ('“%s”' % lbl)
-                yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice, "detail": qstr, "running": True})
-                new = collect(qstr, pages, lbl)
-                c = _bd_cost(t)
-                yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice, "ok": True,
-                                  "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
+                        if lbl not in profiles[clean]["hits"]:
+                            profiles[clean]["hits"].append(lbl)
+                    c = _bd_cost(t)
+                    yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice_of(lbl), "ok": True,
+                                      "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
 
             ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
             cost = _bd_cost(t)
