@@ -990,6 +990,17 @@ def api_linkedin_by_url(url: str = "", refresh: str = ""):
 # Bright Data Web Unlocker est. cost per request (marketplace ~$1.5/1k successful reqs → $0.0015 each).
 BRIGHTDATA_REQ_RATE = 0.0015
 
+# Targeted role qualifiers appended to `site:linkedin.com/in/ "Company" <term>` to surface decision-makers.
+# (label, google-term) — multi-word terms quoted so they match as a phrase.
+LP_ROLES = [
+    ("CXO", "CXO"), ("CEO", "CEO"), ("founder", "founder"),
+    ("corporate finance", '"corporate finance"'), ("corporate development", '"corporate development"'),
+    ("CFO", "CFO"), ("managing director", '"managing director"'), ("president", "president"),
+    ("co-founder", "co-founder"), ("partner", "partner"), ("director", "director"),
+    ("board member", '"board member"'), ("chairman", "chairman"),
+    ("Head of Corporate Finance", '"Head of Corporate Finance"'), ("Finance Director", '"Finance Director"'),
+]
+
 
 def _bd_cost(t):
     n = t.get_api_calls().get("brightdata", 0)
@@ -1112,27 +1123,49 @@ def api_linkedin_profiles_stream(input: str = ""):
                 yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
             yield sse("log", {"step": 2, "msg": "Company name", "ok": True, "result": company_name + (" (%s employees)" % employees if employees else "")})
 
-            # ── Step 3: Google site:linkedin.com/in/ ──
-            query = 'site:linkedin.com/in/ "%s"' % company_name
-            yield sse("log", {"step": 3, "msg": "Google people search (Bright Data)", "detail": query, "running": True})
-            html = t._google_serp_html(query)
-            profiles, seen = [], set()
-            for title, url in t._parse_serp_organic(html or ""):
-                if "linkedin.com/in/" not in url.lower():
-                    continue
-                clean = url.split("?")[0].rstrip("/")
-                if clean in seen:
-                    continue
-                seen.add(clean)
-                name = re.split(r"\s[–|\-]\s", title)[0].strip()
-                profiles.append({"name": name, "title": title, "url": clean})
-            yield sse("log", {"step": 3, "msg": "People search complete", "ok": True, "result": "%d profiles" % len(profiles)})
+            # ── Step 3+: broad (first 30) + 15 targeted role searches; merge, dedupe, rank by #hits ──
+            base = 'site:linkedin.com/in/ "%s"' % company_name
+            profiles = {}   # clean_url -> {name, title, url, hits:[labels]}
 
+            def collect(qstr, pages, label):
+                new = 0
+                for pg in range(pages):
+                    got = t._parse_serp_organic(t._google_serp_html(qstr, start=pg * 10) or "")
+                    on_page = 0
+                    for title, url in got:
+                        if "linkedin.com/in/" not in url.lower():
+                            continue
+                        on_page += 1
+                        clean = url.split("?")[0].rstrip("/")
+                        if clean not in profiles:
+                            nm = re.split(r"\s[–|\-]\s", title)[0].strip()
+                            profiles[clean] = {"name": nm, "title": title, "url": clean, "hits": []}
+                            new += 1
+                        if label not in profiles[clean]["hits"]:
+                            profiles[clean]["hits"].append(label)
+                    if pg > 0 and on_page == 0:
+                        break   # Google exhausted for this query
+                return new
+
+            searches = [("broad", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
+            step_n = 3
+            for lbl, qstr, pages in searches:
+                nice = "Broad (all employees)" if lbl == "broad" else ('“%s” search' % lbl)
+                yield sse("log", {"step": step_n, "msg": nice, "detail": qstr, "running": True})
+                new = collect(qstr, pages, lbl)
+                c = _bd_cost(t)
+                yield sse("log", {"step": step_n, "msg": nice, "ok": True,
+                                  "result": "%d unique so far · %d new · $%s spent" % (len(profiles), new, c["usd"])})
+                step_n += 1
+
+            ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
             cost = _bd_cost(t)
-            yield sse("log", {"step": 0, "msg": "Total: %d Bright Data calls · ~$%s" % (cost["brightdata_calls"], cost["usd"]), "ok": True})
+            yield sse("log", {"step": 0, "ok": True,
+                              "msg": "Done — %d unique profiles across %d searches · %d Bright Data calls · ~$%s"
+                                     % (len(ranked), len(searches), cost["brightdata_calls"], cost["usd"])})
             yield sse("result", {"input": inp, "company_url": company_url, "company_name": company_name,
-                                 "employees": employees, "query": query, "profiles": profiles,
-                                 "cost": cost, "api_calls": t.get_api_calls()})
+                                 "employees": employees, "base_query": base, "searches": len(searches),
+                                 "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()})
         except Exception as e:  # noqa: BLE001
             yield sse("fail", {"error": str(e)})
         yield sse("done", {})

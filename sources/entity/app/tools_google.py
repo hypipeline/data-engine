@@ -118,14 +118,15 @@ class GoogleMixin:
         })
         return result
 
-    def _google_serp_html(self, query: str):
+    def _google_serp_html(self, query: str, start: int = 0):
         """Fetch a Google results page for `query` via the Bright Data Web Unlocker (synchronous).
-        Returns raw HTML or None."""
+        `start` paginates in 10s (start=10 → page 2). Returns raw HTML or None."""
         api_key = self.config.get('brightdata_api_key') or ''
         if not api_key:
             return None
         self.count('brightdata')
-        search_url = 'https://www.google.com/search?q=' + quote_plus(query) + '&num=20'
+        search_url = ('https://www.google.com/search?q=' + quote_plus(query) + '&num=20'
+                      + (('&start=' + str(start)) if start else ''))
         payload = {
             'zone': self.config.get('brightdata_zone') or 'web_unlocker1',
             'url': search_url,

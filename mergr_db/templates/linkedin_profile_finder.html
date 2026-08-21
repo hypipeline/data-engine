@@ -39,6 +39,10 @@
   .profile .pn { font-weight:600; font-size:14.5px; }
   .profile .pt { color:var(--muted); font-size:12.5px; margin-top:2px; }
   .profile a { color:var(--accent); font-size:12.5px; word-break:break-all; }
+  .hitcount { display:inline-block; font-size:11px; font-weight:700; color:#166534; background:#e7f2ea; border-radius:10px; padding:0 7px; margin-left:4px; }
+  .profile .hits { margin:5px 0 4px; }
+  .hit { display:inline-block; font-size:10.5px; background:#eef2ff; color:#3730a3; border-radius:4px; padding:1px 6px; margin:2px 3px 2px 0; }
+  .hit.broad { background:#f1f5f9; color:#475569; }
   .muted { color:var(--muted); }
 </style>
 {% endblock %}
@@ -86,12 +90,18 @@ function render(d){   // company card + profiles; the step log is shown live in 
       +'</div>';
   }
   if(d.profiles){
-    h+='<div class="results-head">'+d.profiles.length+' LinkedIn profile'+(d.profiles.length===1?'':'s')
-      +' found for <code>'+esc(d.query||'')+'</code></div>';
+    h+='<div class="results-head">'+d.profiles.length+' unique profile'+(d.profiles.length===1?'':'s')
+      +' across '+(d.searches||1)+' searches <span class="muted" style="font-weight:400">· ranked by how many searches matched each person</span></div>';
     if(!d.profiles.length){ h+='<p class="muted">No profiles returned. Try the LinkedIn company URL directly, or a larger company.</p>'; }
     h+=d.profiles.map(function(p){
-      return '<div class="profile"><div class="pn">'+esc(p.name)+'</div>'
+      var hits=p.hits||[];
+      var chips=hits.map(function(hh){
+        return '<span class="hit'+(hh==='broad'?' broad':'')+'">'+esc(hh)+'</span>';
+      }).join(' ');
+      return '<div class="profile"><div class="pn">'+esc(p.name)
+        +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span></div>'
         +'<div class="pt">'+esc(p.title)+'</div>'
+        +(chips?'<div class="hits">'+chips+'</div>':'')
         +'<a href="'+esc(p.url)+'" target="_blank">'+esc(p.url)+'</a></div>';
     }).join('');
   }
