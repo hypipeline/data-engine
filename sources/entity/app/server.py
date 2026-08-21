@@ -987,6 +987,92 @@ def api_linkedin_by_url(url: str = "", refresh: str = ""):
     return JSONResponse(result)
 
 
+# Bright Data Web Unlocker est. cost per request (marketplace ~$1.5/1k successful reqs → $0.0015 each).
+BRIGHTDATA_REQ_RATE = 0.0015
+
+
+def _bd_cost(t):
+    n = t.get_api_calls().get("brightdata", 0)
+    return {"brightdata_calls": n, "rate": BRIGHTDATA_REQ_RATE, "usd": round(n * BRIGHTDATA_REQ_RATE, 4)}
+
+
+@app.get("/api/linkedin-profiles")
+def api_linkedin_profiles(input: str = ""):
+    """Find employee LinkedIn profiles for a company. Input = a website URL OR a LinkedIn *company* URL.
+    1) website → resolve its LinkedIn company page (skipped if a LinkedIn company URL is given)
+    2) read the company NAME off that LinkedIn page
+    3) Google `site:linkedin.com/in/ "Company Name"` via Bright Data → employee profile hits
+    Returns the per-step trail, the profile results, and Bright Data call count + est. cost."""
+    inp = (input or "").strip()
+    if not inp:
+        return JSONResponse({"error": "Enter a website URL or a LinkedIn company URL."})
+    t = _tools()
+    steps, low, company_url = [], inp.lower(), None
+
+    # ── Steps 1–2: get the company's LinkedIn page ──
+    if "linkedin.com/company/" in low:
+        company_url = inp if inp.startswith("http") else "https://" + inp
+        steps.append({"n": 1, "label": "Input is a LinkedIn company URL — skipped website resolution",
+                      "ok": True, "result": company_url})
+    elif "linkedin.com/in/" in low:
+        return JSONResponse({"input": inp, "steps": steps,
+                             "error": "That's a personal profile URL. Enter a company website or a LinkedIn company URL."})
+    else:
+        q = _norm_query(inp)
+        step = {"n": 1, "label": "Website → find LinkedIn company page (Bright Data Google)", "detail": q}
+        try:
+            company_url = t.find_linkedin_url(q)
+        except Exception as e:  # noqa: BLE001
+            step["error"] = str(e)
+        step["ok"] = bool(company_url); step["result"] = company_url
+        steps.append(step)
+        if not company_url:
+            return JSONResponse({"input": inp, "steps": steps, "error": "No LinkedIn company page found for that website.",
+                                 "api_calls": t.get_api_calls(), "cost": _bd_cost(t)})
+
+    # ── Step 3: company name from the LinkedIn page ──
+    step = {"n": 2, "label": "Read company name from LinkedIn (Bright Data)", "detail": company_url}
+    company_name = employees = None
+    try:
+        data = t.linkedin_company_data(company_url)
+    except Exception as e:  # noqa: BLE001
+        data = None; step["error"] = str(e)
+    if data:
+        company_name, employees = data.get("name"), data.get("employees")
+    step["ok"] = bool(company_name); step["result"] = company_name
+    steps.append(step)
+    if not company_name:
+        return JSONResponse({"input": inp, "company_url": company_url, "steps": steps,
+                             "error": "Found the LinkedIn page but couldn't read the company name.",
+                             "api_calls": t.get_api_calls(), "cost": _bd_cost(t)})
+
+    # ── Step 4: Google site:linkedin.com/in/ "Company Name" ──
+    query = 'site:linkedin.com/in/ "%s"' % company_name
+    step = {"n": 3, "label": "Google people search (Bright Data)", "detail": query}
+    profiles = []
+    try:
+        html = t._google_serp_html(query)
+        seen = set()
+        for title, url in t._parse_serp_organic(html or ""):
+            if "linkedin.com/in/" not in url.lower():
+                continue
+            clean = url.split("?")[0].rstrip("/")
+            if clean in seen:
+                continue
+            seen.add(clean)
+            name = re.split(r"\s[–|\-]\s", title)[0].strip()
+            profiles.append({"name": name, "title": title, "url": clean})
+        step["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        step["error"] = str(e); step["ok"] = False
+    step["result"] = "%d profiles" % len(profiles)
+    steps.append(step)
+
+    return JSONResponse({"input": inp, "company_url": company_url, "company_name": company_name,
+                         "employees": employees, "query": query, "profiles": profiles, "steps": steps,
+                         "api_calls": t.get_api_calls(), "cost": _bd_cost(t)})
+
+
 @app.get("/api/linkedin/history")
 def api_linkedin_history(limit: int = 100):
     return JSONResponse({"history": linkedin_cache.history(limit)})

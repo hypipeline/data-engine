@@ -778,9 +778,9 @@ def _lpf_save_title_net(audience, titles):
 
 @app.get("/linkedin-profiles", response_class=HTMLResponse)
 def linkedin_profiles_page(request: Request):
-    return render(request, "linkedin_profile_finder.html", "linkedin-profiles",
-                  token_set=bool(os.environ.get("BRIGHTDATA_TOKEN")),
-                  est_rate=lpf.EST_RATE)
+    # Rebuilt: website/LinkedIn URL -> company name -> Google site:linkedin.com/in via Bright Data.
+    # Backend is the entity app: GET /entity-app/api/linkedin-profiles. (Old /lpf/* dataset flow retired.)
+    return render(request, "linkedin_profile_finder.html", "linkedin-profiles")
 
 
 @app.get("/lpf/title-nets")
