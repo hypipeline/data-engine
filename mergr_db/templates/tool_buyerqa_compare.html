@@ -89,6 +89,7 @@ content is given), so search-capable models matter — especially for obscure/fo
 <div class="run-log" id="runall-log"></div>
 
 <h3 class="page" style="font-size:16px;margin-top:6px">Overview — domains × models</h3>
+<div id="col-toggles" style="margin:4px 0 8px;font-size:12px;line-height:1.9"></div>
 <div id="matrix"></div>
 <p class="muted" style="font-size:12px;margin-top:6px">Each cell: ✓/✗ valid JSON · <b>N</b> leadership names found · PE/trade · cost. <span class="pill err">err</span> = model failed (e.g. the retired 404). Click a domain for full side-by-side profiles.</p>
 
@@ -129,6 +130,18 @@ function setBuyerType(t){ BTYPE=t;
   renderMatrix();  // buyer_type is in the payload — no reload needed
 }
 function btFilter(cs){ return BTYPE==='all' || cs.buyer_type===BTYPE; }
+var HIDDEN={};
+function toggleModel(m){ if(HIDDEN[m])delete HIDDEN[m]; else HIDDEN[m]=1; renderMatrix(); }
+function showAllModels(){ HIDDEN={}; renderMatrix(); }
+function renderColToggles(all){
+  var el=q('col-toggles'); if(!el)return;
+  var nHid=all.filter(function(m){return HIDDEN[m];}).length;
+  el.innerHTML='<span class="muted">Columns (click to hide/show):</span> '
+    +all.map(function(m){ var off=HIDDEN[m];
+      return '<span class="btn sm" title="'+esc(m)+'" style="margin:1px;'+(off?'opacity:.35;text-decoration:line-through':'')+'" onclick="toggleModel(\''+m.replace(/'/g,"\\'")+'\')">'+(off?'+ ':'× ')+esc(short(m))+'</span>';
+    }).join(' ')
+    +(nHid?' <span class="btn sm" style="margin:1px;background:#eef2ff" onclick="showAllModels()">show all ('+nHid+' hidden)</span>':'');
+}
 function caseById(id){ return (MATRIX.cases||[]).filter(function(c){return c.id===id;})[0]; }
 function curCase(){ return caseById(SELECTED); }
 function loadMatrix(){ return getJSON(EB+'/api/buyerqa/matrix?mode='+MODE).then(function(d){ MATRIX=d; if(!q('models').value.trim()) q('models').value=(d.models||[]).join('\n'); renderMatrix(); }); }
@@ -163,6 +176,8 @@ function renderMatrix(){
     var sa=modelValidScore(a,cases), sb=modelValidScore(b,cases);
     return (sb.valid-sa.valid) || (sb.names-sa.names);
   });
+  renderColToggles(models);                                  // toggles reflect the full sorted set
+  models=models.filter(function(m){return !HIDDEN[m];});     // drop hidden columns from the display
   var head='<tr><th class="rowlab">Domain</th>'+models.map(function(m){return '<th title="'+esc(m)+'">'+esc(short(m))+'</th>';}).join('')+'</tr>';
   var body=cases.map(function(cs){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
