@@ -91,6 +91,12 @@ content is given), so search-capable models matter — especially for obscure/fo
 <h3 class="page" style="font-size:16px;margin-top:6px">Overview — domains × models</h3>
 <div id="col-toggles" style="margin:4px 0 8px;font-size:12px;line-height:1.9"></div>
 <div id="matrix"></div>
+<div id="uni-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;max-width:680px;margin:5vh auto;max-height:86vh;overflow:auto;border-radius:8px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <div style="text-align:right"><span class="btn sm" onclick="q('uni-modal').style.display='none'">✕ close</span></div>
+    <div id="uni-body"></div>
+  </div>
+</div>
 <p class="muted" style="font-size:12px;margin-top:6px">Each cell: ✓/✗ valid JSON · <b>N</b> leadership names found · PE/trade · cost. <span class="pill err">err</span> = model failed (e.g. the retired 404). Click a domain for full side-by-side profiles.</p>
 
 <div id="detail">
@@ -173,6 +179,34 @@ function uniqueValid(cs, models){
   }});
   return Object.keys(set).length;
 }
+function showUnique(cid){
+  var cs=caseById(cid); if(!cs)return;
+  var models=(modelsList().length?modelsList():(MATRIX.models||[])).filter(function(m){return !HIDDEN[m];});
+  var map={};
+  models.forEach(function(m){ var r=(cs.results||{})[m]; if(r&&r.json_ok&&!r.error){
+    (r.names||[]).forEach(function(nm){ if(nm.valid==='valid'){ var k=nmKey(nm); if(!k)return;
+      if(!map[k]) map[k]={name:((nm.first_name||'')+' '+(nm.last_name||'')).trim(), src:[]};
+      if(map[k].src.indexOf(short(m))<0) map[k].src.push(short(m));
+    }});
+  }});
+  var list=Object.keys(map).map(function(k){return map[k];});
+  var html='<h3 style="margin:2px 0 2px">'+esc(cs.domain)+'</h3>'
+    +'<div class="muted" style="font-size:12px;margin-bottom:8px">'+list.length+' unique Hunter-valid contacts across '+models.length+' visible models — grouped by how many models found each.</div>';
+  if(!list.length){ html+='<p class="muted">No Hunter-valid contacts for this domain.</p>'; }
+  var byCount={}; list.forEach(function(x){ (byCount[x.src.length]=byCount[x.src.length]||[]).push(x); });
+  Object.keys(byCount).map(Number).sort(function(a,b){return b-a;}).forEach(function(cnt){
+    var grp=byCount[cnt].sort(function(a,b){return a.name.localeCompare(b.name);});
+    var label = cnt===models.length ? ('★ Found by ALL '+models.length+' models') : ('Found by '+cnt+' of '+models.length+' models');
+    var col = cnt===models.length?'#166534':(cnt>1?'#b45309':'#6b7280');
+    html+='<div style="margin-top:12px;font-weight:700;color:'+col+'">'+label+' <span class="muted" style="font-weight:400">('+grp.length+')</span></div>';
+    html+=grp.map(function(x){
+      return '<div style="padding:4px 0;border-bottom:1px solid #f0f0f0"><span style="font-weight:600">'+esc(x.name)+'</span> '
+        +'<span class="muted" style="font-size:11px">— '+x.src.length+'/'+models.length+':</span> '
+        +x.src.map(function(s){return '<span class="pref-chip" style="font-size:10px">'+esc(s)+'</span>';}).join(' ')+'</div>';
+    }).join('');
+  });
+  q('uni-body').innerHTML=html; q('uni-modal').style.display='block';
+}
 function renderMatrix(){
   var models=modelsList().length?modelsList():(MATRIX.models||[]);
   var allCases=MATRIX.cases||[];
@@ -193,7 +227,7 @@ function renderMatrix(){
   var body=cases.map(function(cs){
     var tds=models.map(function(m){ var r=(cs.results||{})[m], cls=r?(r.error||!r.json_ok?' bad':' ok'):''; return '<td class="mcell'+cls+'" onclick="openCase('+cs.id+')">'+matrixCell(r)+'</td>'; }).join('');
     var u=uniqueValid(cs,models); grandUnique+=u;
-    var uCell='<td style="text-align:center;font-weight:600;background:#eaf5ee;border-left:2px solid #b8dcc4">'+(u?'<span style="color:#166534">'+u+'</span>':'<span class="muted">0</span>')+'</td>';
+    var uCell='<td onclick="showUnique('+cs.id+')" title="click: see each contact and which models found it" style="cursor:pointer;text-align:center;font-weight:600;background:#eaf5ee;border-left:2px solid #b8dcc4">'+(u?'<span style="color:#166534;text-decoration:underline">'+u+'</span>':'<span class="muted">0</span>')+'</td>';
     return '<tr><th class="rowlab caserow" onclick="openCase('+cs.id+')">'+esc(cs.domain)+'</th>'+tds+uCell+'</tr>';
   }).join('');
   // per-model totals over the (filtered) cases — one metric per labelled footer row
