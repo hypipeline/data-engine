@@ -24,6 +24,8 @@
   .step.ok { border-left:3px solid #16a34a; }
   .step.bad { border-left:3px solid #dc2626; }
   .step.pend { border-left:3px solid #cbd5e1; opacity:.7; }
+  .step.substep { margin-left:26px; padding:5px 11px; font-size:12px; border-left-width:2px; background:var(--panel); }
+  .step.substep .lab { font-weight:500; }
 
   /* company + cost banner */
   .company-card { max-width:820px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
@@ -43,6 +45,9 @@
   .profile .hits { margin:5px 0 4px; }
   .hit { display:inline-block; font-size:10.5px; background:#eef2ff; color:#3730a3; border-radius:4px; padding:1px 6px; margin:2px 3px 2px 0; }
   .hit.broad { background:#f1f5f9; color:#475569; }
+  .profile .pd { font-size:12px; color:#444; margin-top:3px; line-height:1.45; }
+  .profile .lbl { color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .foll { font-size:11px; color:var(--muted); font-weight:400; }
   .muted { color:var(--muted); }
 </style>
 {% endblock %}
@@ -69,8 +74,8 @@ function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){retu
 function logLine(m){
   var running=m.running, bad=(m.ok===false)||m.error, ok=(m.ok===true);
   var ico = running?'…':(bad?'✗':(ok?'✓':'·'));
-  var cls = running?'pend':(bad?'bad':(ok?'ok':'pend'));
-  var label = (m.step?('Step '+m.step+' · '):'')+esc(m.msg||'');
+  var cls = (running?'pend':(bad?'bad':(ok?'ok':'pend')))+(m.sub?' substep':'');
+  var label = m.sub ? esc(m.msg||'') : ((m.step?('Step '+m.step+' · '):'')+esc(m.msg||''));
   var det = m.detail?'<div class="det">'+esc(m.detail)+'</div>':'';
   var res = m.result?'<div class="res">→ '+esc(m.result)+'</div>':'';
   return '<div class="step '+cls+'"><div class="ico">'+ico+'</div><div><div class="lab">'+label+'</div>'+det+res+'</div></div>';
@@ -99,8 +104,10 @@ function render(d){   // company card + profiles; the step log is shown live in 
         return '<span class="hit'+(hh==='broad'?' broad':'')+'">'+esc(hh)+'</span>';
       }).join(' ');
       return '<div class="profile"><div class="pn">'+esc(p.name)
-        +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span></div>'
-        +'<div class="pt">'+esc(p.title)+'</div>'
+        +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
+        +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')+'</div>'
+        +'<div class="pt"><span class="lbl">title:</span> '+esc(p.title)+'</div>'
+        +(p.description?'<div class="pd"><span class="lbl">description:</span> '+esc(p.description)+'</div>':'')
         +(chips?'<div class="hits">'+chips+'</div>':'')
         +'<a href="'+esc(p.url)+'" target="_blank">'+esc(p.url)+'</a></div>';
     }).join('');
@@ -114,15 +121,14 @@ function run(e){
   if(!v) return;
   q('lp-btn').disabled=true; q('lp-status').textContent='Running…';
   q('lp-out').innerHTML=''; q('lp-log').innerHTML='';
-  var logs=[];
-  function paint(){ q('lp-log').innerHTML='<div class="steps">'+logs.map(logLine).join('')+'</div>'; }
+  var logmap={}, order=[];
+  function paint(){ q('lp-log').innerHTML='<div class="steps">'+order.map(function(k){return logLine(logmap[k]);}).join('')+'</div>'; }
   var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v));
   es.addEventListener('log', function(ev){
     var m=JSON.parse(ev.data);
-    var last=logs[logs.length-1];
-    // a resolved line replaces the "running…" line for the same step
-    if(last && last.running && last.step===m.step){ logs[logs.length-1]=m; } else { logs.push(m); }
-    paint();
+    var k=m.key||('_'+order.length);           // keyed: a resolved event replaces its running one in place
+    if(!(k in logmap)) order.push(k);
+    logmap[k]=m; paint();
   });
   es.addEventListener('result', function(ev){ q('lp-status').textContent=''; render(JSON.parse(ev.data)); });
   es.addEventListener('fail', function(ev){ q('lp-status').textContent='';

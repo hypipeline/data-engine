@@ -1101,45 +1101,50 @@ def api_linkedin_profiles_stream(input: str = ""):
             # ── Step 1: company LinkedIn page ──
             if "linkedin.com/company/" in low:
                 company_url = inp if inp.startswith("http") else "https://" + inp
-                yield sse("log", {"step": 1, "msg": "Input is a LinkedIn company URL — skipping website resolution", "ok": True, "result": company_url})
+                yield sse("log", {"key": "s1", "step": 1, "msg": "Input is a LinkedIn company URL — skipped resolution", "ok": True, "result": company_url})
             elif "linkedin.com/in/" in low:
                 yield sse("fail", {"error": "That's a personal profile URL. Enter a website or a LinkedIn company URL."}); yield sse("done", {}); return
             else:
                 q = _norm_query(inp)
-                yield sse("log", {"step": 1, "msg": "Website → find LinkedIn company page (Bright Data Google)", "detail": q, "running": True})
+                yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "detail": q, "running": True})
                 company_url = t.find_linkedin_url(q)
                 if not company_url:
-                    yield sse("log", {"step": 1, "msg": "No LinkedIn company page found for that website.", "ok": False})
+                    yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": False, "result": "no company page found"})
                     yield sse("result", {"input": inp, "error": "No LinkedIn company page found for that website.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
-                yield sse("log", {"step": 1, "msg": "Found LinkedIn company page", "ok": True, "result": company_url})
+                yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": True, "result": company_url})
 
             # ── Step 2: company name ──
-            yield sse("log", {"step": 2, "msg": "Read company name from LinkedIn (Bright Data)", "detail": company_url, "running": True})
+            yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "detail": company_url, "running": True})
             data = t.linkedin_company_data(company_url)
             company_name = data.get("name") if data else None
             employees = data.get("employees") if data else None
             if not company_name:
-                yield sse("log", {"step": 2, "msg": "Found the page but couldn't read the company name.", "ok": False})
+                yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": False, "result": "couldn't read name"})
                 yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
-            yield sse("log", {"step": 2, "msg": "Company name", "ok": True, "result": company_name + (" (%s employees)" % employees if employees else "")})
+            yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": True, "result": company_name + (" · %s employees" % employees if employees else "")})
 
-            # ── Step 3+: broad (first 30) + 15 targeted role searches; merge, dedupe, rank by #hits ──
+            # ── Step 3: Google people search — broad (30) + 15 role searches, shown as substeps ──
             base = 'site:linkedin.com/in/ "%s"' % company_name
-            profiles = {}   # clean_url -> {name, title, url, hits:[labels]}
+            profiles = {}   # clean_url -> {name, title, description, followers, url, hits}
 
             def collect(qstr, pages, label):
                 new = 0
                 for pg in range(pages):
-                    got = t._parse_serp_organic(t._google_serp_html(qstr, start=pg * 10) or "")
+                    got = t._google_serp_json(qstr, start=pg * 10)
                     on_page = 0
-                    for title, url in got:
+                    for o in got:
+                        url = o.get("link") or ""
                         if "linkedin.com/in/" not in url.lower():
                             continue
                         on_page += 1
                         clean = url.split("?")[0].rstrip("/")
                         if clean not in profiles:
+                            title = o.get("title") or ""
                             nm = re.split(r"\s[–|\-]\s", title)[0].strip()
-                            profiles[clean] = {"name": nm, "title": title, "url": clean, "hits": []}
+                            profiles[clean] = {"name": nm, "title": title,
+                                               "description": o.get("description") or "",
+                                               "followers": o.get("display_link") or "",
+                                               "url": clean, "hits": []}
                             new += 1
                         if label not in profiles[clean]["hits"]:
                             profiles[clean]["hits"].append(label)
@@ -1148,21 +1153,20 @@ def api_linkedin_profiles_stream(input: str = ""):
                 return new
 
             searches = [("broad", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
-            step_n = 3
+            yield sse("log", {"key": "s3", "step": 3, "parent": True, "msg": "Searching Google (%d queries)" % len(searches), "running": True})
             for lbl, qstr, pages in searches:
-                nice = "Broad (all employees)" if lbl == "broad" else ('“%s” search' % lbl)
-                yield sse("log", {"step": step_n, "msg": nice, "detail": qstr, "running": True})
+                nice = "broad — all employees (3 pages)" if lbl == "broad" else ('“%s”' % lbl)
+                yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice, "detail": qstr, "running": True})
                 new = collect(qstr, pages, lbl)
                 c = _bd_cost(t)
-                yield sse("log", {"step": step_n, "msg": nice, "ok": True,
-                                  "result": "%d unique so far · %d new · $%s spent" % (len(profiles), new, c["usd"])})
-                step_n += 1
+                yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice, "ok": True,
+                                  "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
 
             ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
             cost = _bd_cost(t)
-            yield sse("log", {"step": 0, "ok": True,
-                              "msg": "Done — %d unique profiles across %d searches · %d Bright Data calls · ~$%s"
-                                     % (len(ranked), len(searches), cost["brightdata_calls"], cost["usd"])})
+            yield sse("log", {"key": "s3", "step": 3, "parent": True, "ok": True,
+                              "msg": "Searching Google (%d queries)" % len(searches),
+                              "result": "%d unique profiles · %d Bright Data calls · ~$%s" % (len(ranked), cost["brightdata_calls"], cost["usd"])})
             yield sse("result", {"input": inp, "company_url": company_url, "company_name": company_name,
                                  "employees": employees, "base_query": base, "searches": len(searches),
                                  "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()})

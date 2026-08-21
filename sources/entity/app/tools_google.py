@@ -162,6 +162,26 @@ class GoogleMixin:
             out.append((title, url))
         return out
 
+    def _google_serp_json(self, query: str, start: int = 0):
+        """Fetch Google results as Bright Data-PARSED JSON (append brd_json=1) — returns the `organic`
+        list, each {title, link, description, display_link}. Cleaner + gives the snippet/description
+        (and follower count in display_link) with no fragile HTML regex. `start` paginates in 10s."""
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key:
+            return []
+        self.count('brightdata')
+        su = ('https://www.google.com/search?q=' + quote_plus(query) + '&num=20&brd_json=1'
+              + (('&start=' + str(start)) if start else ''))
+        payload = {'zone': self.config.get('brightdata_zone') or 'web_unlocker1', 'url': su, 'format': 'raw'}
+        try:
+            r = requests.post('https://api.brightdata.com/request',
+                              headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                              data=json.dumps(payload), timeout=90, allow_redirects=False)
+            d = json.loads(r.text)
+            return d.get('organic') or []
+        except Exception:  # noqa: BLE001
+            return []
+
     # ── LinkedIn company page (Bright Data Web Unlocker, raw html) ─────────────
     def fetch_linkedin_company(self, linkedin_url: str) -> str:
         api_key = self.config.get('brightdata_api_key') or ''
