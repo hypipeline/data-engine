@@ -1203,13 +1203,22 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                               "msg": "Searching Google (%d queries)" % len(searches),
                               "result": "%d unique profiles · %d Bright Data calls · ~$%s" % (len(ranked), search_cost["brightdata_calls"], search_cost["usd"])})
 
-            # ── Step 4: verify the top 20 — fetch each profile's page <title> (untruncated name + current company) ──
+            # Emit the full ranked list NOW — it renders immediately; verified titles stream onto
+            # the cards afterwards (Step 4). Cost shown here is the search-only cost so far.
+            report = {"input": inp, "company_url": company_url, "company_name": company_name,
+                      "employees": employees, "base_query": base, "searches": len(searches),
+                      "profiles": ranked, "cost": search_cost, "api_calls": t.get_api_calls()}
+            yield sse("result", report)
+
+            # ── Step 4: verify the top 20 — fetch each profile's page <title> (untruncated name +
+            # current company). Light pacing (3 workers) to stay under Bright Data's rate limit;
+            # each title is streamed back as it returns and populated onto its card in place. ──
             top = ranked[:20]
             yield sse("log", {"key": "s4", "step": 4, "parent": True,
-                              "msg": "Verifying top %d — LinkedIn page title (name + current company)" % len(top), "running": True})
-            for p in top:
-                yield sse("log", {"key": "s4." + p["url"], "sub": True, "msg": p["name"], "running": True})
-            with ThreadPoolExecutor(max_workers=6) as ex:
+                              "msg": "Verifying top %d — page titles streaming in (name + current company)…" % len(top),
+                              "running": True})
+            done_n = 0
+            with ThreadPoolExecutor(max_workers=3) as ex:
                 futs = {ex.submit(t.page_title, p["url"]): p for p in top}
                 for fut in as_completed(futs):
                     p = futs[fut]
@@ -1220,21 +1229,24 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                         pt = None
                     if pt and " | LinkedIn" in pt:
                         p["page_title"] = pt.replace(" | LinkedIn", "").strip()   # "Name - Current Company"
-                    yield sse("log", {"key": "s4." + p["url"], "sub": True, "ok": bool(p.get("page_title")),
-                                      "msg": p["name"], "result": p.get("page_title") or "no title"})
+                    done_n += 1
+                    c = _bd_cost(t)
+                    # stream the single verified title onto its card, plus the running cost
+                    yield sse("verify", {"url": p["url"], "page_title": p.get("page_title"),
+                                         "done": done_n, "total": len(top), "cost": c})
             cost = _bd_cost(t)
+            verified_n = sum(1 for p in top if p.get("page_title"))
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "ok": True,
                               "msg": "Verifying top %d" % len(top),
-                              "result": "verified · %d Bright Data calls total · ~$%s" % (cost["brightdata_calls"], cost["usd"])})
+                              "result": "%d/%d verified · %d Bright Data calls total · ~$%s" % (
+                                  verified_n, len(top), cost["brightdata_calls"], cost["usd"])})
 
-            report = {"input": inp, "company_url": company_url, "company_name": company_name,
-                      "employees": employees, "base_query": base, "searches": len(searches),
-                      "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()}
+            # persist the enriched report (profiles now carry page_title; final cost incl. verify)
+            report["cost"] = cost
             try:
                 linkedin_cache.report_save(key, report)
             except Exception as e:  # noqa: BLE001
                 print(f"[linkedin_cache] report_save failed: {e}")
-            yield sse("result", report)
         except Exception as e:  # noqa: BLE001
             yield sse("fail", {"error": str(e)})
         yield sse("done", {})

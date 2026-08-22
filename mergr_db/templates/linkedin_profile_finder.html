@@ -110,8 +110,8 @@ function render(d){   // company card + profiles; the step log is shown live in 
       +'<div class="cname">'+esc(d.company_name)+(d.from_cache?' <span class="cache-badge" title="ran '+esc(d.cached_at||'')+'">cached</span>':'')+'</div>'
       +'<div class="csub">'+(d.employees!=null?esc(d.employees)+' employees · ':'')
       +'<a href="'+esc(d.company_url)+'" target="_blank">'+esc(d.company_url)+'</a></div></div>'
-      +'<div class="cost-pill"><b>'+costMain+'</b>'
-      +'<div class="muted">'+costSub+'</div></div>'
+      +'<div class="cost-pill"><b id="lp-costnum">'+costMain+'</b>'
+      +'<div class="muted" id="lp-costsub">'+costSub+'</div></div>'
       +'</div>';
   }
   if(d.profiles){
@@ -124,7 +124,7 @@ function render(d){   // company card + profiles; the step log is shown live in 
         return '<span class="hit'+(hh==='all employees'?' broad':'')+'">'+esc(hh)+'</span>';
       }).join(' ');
       var top = i<12 ? ' top12' : '';   // highlight the top 12 (up to)
-      return '<div class="profile'+top+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
+      return '<div class="profile'+top+'" data-purl="'+esc(p.url)+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
         +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
         +(i<12?' <span class="top-badge">TOP 12</span>':'')+'</div>'
@@ -172,6 +172,21 @@ function run(e){
     logmap[k]=m; paint();
   });
   es.addEventListener('result', function(ev){ q('lp-status').textContent=''; render(JSON.parse(ev.data)); });
+  es.addEventListener('verify', function(ev){        // Step 4: titles stream in one-by-one onto the cards
+    var m=JSON.parse(ev.data);
+    if(m.cost){                                      // tick the running cost up as verify calls land
+      var cn=q('lp-costnum'); if(cn) cn.textContent='$'+Number(m.cost.usd).toFixed(4);
+      var cs=q('lp-costsub'); if(cs) cs.textContent=(m.cost.brightdata_calls||0)+' Bright Data calls @ $'+(m.cost.rate||0)+' ea (est.)';
+    }
+    q('lp-status').textContent='Verifying top titles… '+(m.done||0)+'/'+(m.total||20);
+    if(!m.page_title) return;                        // blank (rate-limited) — leave the card as-is
+    var card=q('lp-out').querySelector('.profile[data-purl="'+m.url+'"]');
+    if(!card || card.querySelector('.pv')) return;
+    var pv=document.createElement('div'); pv.className='pv';
+    pv.innerHTML='<span class="lbl">verified</span> '+esc(m.page_title)+' <span class="vtick">✓ current company</span>';
+    var pt=card.querySelector('.pt');
+    if(pt){ pt.parentNode.insertBefore(pv, pt.nextSibling); } else { card.appendChild(pv); }
+  });
   es.addEventListener('fail', function(ev){ q('lp-status').textContent='';
     try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
   });
