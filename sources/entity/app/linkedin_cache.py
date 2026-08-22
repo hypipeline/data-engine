@@ -49,7 +49,47 @@ def ensure_schema() -> None:
                 );
                 CREATE INDEX IF NOT EXISTS companies_query_created
                     ON linkedin.companies (query, created_at DESC);
+                CREATE TABLE IF NOT EXISTS linkedin.profile_reports (
+                    id           bigserial PRIMARY KEY,
+                    cache_key    text NOT NULL,       -- normalized input (web:<domain> or co:<slug>)
+                    company_name text,
+                    result       jsonb NOT NULL,      -- full report payload (profiles + cost + steps)
+                    created_at   timestamptz NOT NULL DEFAULT now()
+                );
+                CREATE INDEX IF NOT EXISTS profile_reports_key_created
+                    ON linkedin.profile_reports (cache_key, created_at DESC);
             """)
+        c.commit()
+
+
+def report_get_latest(key: str) -> dict | None:
+    """Most-recent cached LinkedIn-Profiles report for this input key, or None."""
+    if not enabled():
+        return None
+    with closing(_conn()) as c:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT result, created_at FROM linkedin.profile_reports "
+                "WHERE cache_key=%s ORDER BY created_at DESC LIMIT 1", (key,))
+            row = cur.fetchone()
+    if not row:
+        return None
+    data = dict(row["result"] or {})
+    data["from_cache"] = True
+    data["cached_at"] = row["created_at"].isoformat() if row["created_at"] else None
+    return data
+
+
+def report_save(key: str, result: dict) -> None:
+    """Append a completed LinkedIn-Profiles report to the cache."""
+    if not enabled():
+        return
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute(
+                "INSERT INTO linkedin.profile_reports (cache_key, company_name, result) "
+                "VALUES (%s,%s,%s)",
+                (key, result.get("company_name"), json.dumps(result, default=str)))
         c.commit()
 
 

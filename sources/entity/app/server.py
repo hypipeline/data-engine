@@ -1008,6 +1008,13 @@ def _bd_cost(t):
     return {"brightdata_calls": n, "rate": BRIGHTDATA_REQ_RATE, "usd": round(n * BRIGHTDATA_REQ_RATE, 4)}
 
 
+def _lp_key(inp):
+    """Cache key for a LinkedIn-Profiles report — a LinkedIn company URL keys on its slug, a website
+    on its bare domain (so re-running the same input is instant + free)."""
+    m = re.search(r"/company/([^/?#]+)", (inp or "").lower())
+    return ("co:" + m.group(1).rstrip("/")) if m else ("web:" + _norm_query(inp))
+
+
 @app.get("/api/linkedin-profiles")
 def api_linkedin_profiles(input: str = ""):
     """Find employee LinkedIn profiles for a company. Input = a website URL OR a LinkedIn *company* URL.
@@ -1086,9 +1093,10 @@ def api_linkedin_profiles(input: str = ""):
 
 
 @app.get("/api/linkedin-profiles/stream")
-def api_linkedin_profiles_stream(input: str = ""):
+def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     """Same flow as /api/linkedin-profiles but STREAMS a live log (SSE) — one `log` event per step as
-    it happens, a `result` event with the full payload, then `done`."""
+    it happens, a `result` event with the full payload, then `done`. Cached per input: a repeat run
+    replays the stored report instantly (no Bright Data calls) unless refresh=1."""
     def sse(event, data):
         return "event: %s\ndata: %s\n\n" % (event, json.dumps(data, default=str))
 
@@ -1096,6 +1104,17 @@ def api_linkedin_profiles_stream(input: str = ""):
         inp = (input or "").strip()
         if not inp:
             yield sse("fail", {"error": "Enter a website URL or a LinkedIn company URL."}); yield sse("done", {}); return
+        key = _lp_key(inp)
+        if not refresh:
+            try:
+                cached = linkedin_cache.report_get_latest(key)
+            except Exception:  # noqa: BLE001
+                cached = None
+            if cached:
+                yield sse("log", {"key": "cache", "msg": "Loaded from cache — original run %s · no Bright Data calls (tick “re-run” to refresh)" % (cached.get("cached_at") or "").replace("T", " ")[:19], "ok": True})
+                yield sse("result", cached)
+                yield sse("done", {})
+                return
         t = _tools()
         low, company_url = inp.lower(), None
         try:
@@ -1180,9 +1199,14 @@ def api_linkedin_profiles_stream(input: str = ""):
             yield sse("log", {"key": "s3", "step": 3, "parent": True, "ok": True,
                               "msg": "Searching Google (%d queries)" % len(searches),
                               "result": "%d unique profiles · %d Bright Data calls · ~$%s" % (len(ranked), cost["brightdata_calls"], cost["usd"])})
-            yield sse("result", {"input": inp, "company_url": company_url, "company_name": company_name,
-                                 "employees": employees, "base_query": base, "searches": len(searches),
-                                 "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()})
+            report = {"input": inp, "company_url": company_url, "company_name": company_name,
+                      "employees": employees, "base_query": base, "searches": len(searches),
+                      "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()}
+            try:
+                linkedin_cache.report_save(key, report)
+            except Exception as e:  # noqa: BLE001
+                print(f"[linkedin_cache] report_save failed: {e}")
+            yield sse("result", report)
         except Exception as e:  # noqa: BLE001
             yield sse("fail", {"error": str(e)})
         yield sse("done", {})

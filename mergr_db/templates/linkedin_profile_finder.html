@@ -12,6 +12,8 @@
   .lp-btn:hover { background:var(--accent-2); }
   .lp-btn:disabled { opacity:.55; cursor:default; }
   .lp-hint { font-size:12.5px; color:var(--muted); margin:0 0 16px; }
+  .lp-refresh { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:5px; cursor:pointer; user-select:none; }
+  .cache-badge { display:inline-block; font-size:11px; font-weight:600; color:#92400e; background:#fef3c7; border-radius:10px; padding:1px 8px; vertical-align:middle; margin-left:6px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:10px 0 18px; max-width:820px; }
 
   /* step trail */
@@ -61,6 +63,7 @@
 <form class="lp-form" onsubmit="run(event)">
   <input id="lp-in" class="lp-input" placeholder="stripe.com  or  linkedin.com/company/stripe" autofocus>
   <button id="lp-btn" class="lp-btn" type="submit">Find profiles</button>
+  <label class="lp-refresh"><input type="checkbox" id="lp-refresh"> re-run (ignore cache)</label>
 </form>
 <div id="lp-status" class="lp-hint"></div>
 <div id="lp-log"></div>
@@ -86,12 +89,17 @@ function render(d){   // company card + profiles; the step log is shown live in 
   if(d.error){ h+='<div class="error-box">'+esc(d.error)+'</div>'; }
   if(d.company_name){
     var cost=d.cost||{};
+    var origCost='$'+(cost.usd!=null?Number(cost.usd).toFixed(4):'0');
+    var costMain = d.from_cache ? '$0' : origCost;
+    var costSub = d.from_cache
+      ? 'cached — no Bright Data calls (orig '+origCost+')'
+      : ((cost.brightdata_calls||0)+' Bright Data calls @ $'+(cost.rate||0)+' ea (est.)');
     h+='<div class="company-card"><div>'
-      +'<div class="cname">'+esc(d.company_name)+'</div>'
+      +'<div class="cname">'+esc(d.company_name)+(d.from_cache?' <span class="cache-badge" title="ran '+esc(d.cached_at||'')+'">cached</span>':'')+'</div>'
       +'<div class="csub">'+(d.employees!=null?esc(d.employees)+' employees · ':'')
       +'<a href="'+esc(d.company_url)+'" target="_blank">'+esc(d.company_url)+'</a></div></div>'
-      +'<div class="cost-pill"><b>$'+(cost.usd!=null?Number(cost.usd).toFixed(4):'0')+'</b>'
-      +'<div class="muted">'+(cost.brightdata_calls||0)+' Bright Data calls @ $'+(cost.rate||0)+' ea (est.)</div></div>'
+      +'<div class="cost-pill"><b>'+costMain+'</b>'
+      +'<div class="muted">'+costSub+'</div></div>'
       +'</div>';
   }
   if(d.profiles){
@@ -123,7 +131,8 @@ function run(e){
   q('lp-out').innerHTML=''; q('lp-log').innerHTML='';
   var logmap={}, order=[];
   function paint(){ q('lp-log').innerHTML='<div class="steps">'+order.map(function(k){return logLine(logmap[k]);}).join('')+'</div>'; }
-  var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v));
+  var rf=(q('lp-refresh')&&q('lp-refresh').checked)?'&refresh=1':'';
+  var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v)+rf);
   es.addEventListener('log', function(ev){
     var m=JSON.parse(ev.data);
     var k=m.key||('_'+order.length);           // keyed: a resolved event replaces its running one in place
