@@ -56,6 +56,8 @@
   .profile .hits { margin:5px 0 4px; }
   .hit { display:inline-block; font-size:10.5px; background:#eef2ff; color:#3730a3; border-radius:4px; padding:1px 6px; margin:2px 3px 2px 0; }
   .hit.broad { background:#f1f5f9; color:#475569; }
+  .profile .pv { font-size:12px; color:#166534; margin-top:3px; font-weight:500; }
+  .profile .pv .vtick { font-size:10.5px; color:#059669; font-weight:600; margin-left:4px; }
   .profile .pd { font-size:12px; color:#444; margin-top:3px; line-height:1.45; }
   .profile .lbl { color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .foll { font-size:11px; color:var(--muted); font-weight:400; }
@@ -127,6 +129,7 @@ function render(d){   // company card + profiles; the step log is shown live in 
         +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
         +(i<12?' <span class="top-badge">TOP 12</span>':'')+'</div>'
         +'<div class="pt"><span class="lbl">title:</span> '+esc(p.title)+'</div>'
+        +(p.page_title?'<div class="pv"><span class="lbl">verified</span> '+esc(p.page_title)+' <span class="vtick">✓ current company</span></div>':'')
         +(p.description?'<div class="pd"><span class="lbl">description:</span> '+esc(p.description)+'</div>':'')
         +(chips?'<div class="hits">'+chips+'</div>':'')
         +'<a href="'+esc(p.url)+'" target="_blank">'+esc(p.url)+'</a></div>';

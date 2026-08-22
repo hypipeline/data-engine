@@ -182,6 +182,24 @@ class GoogleMixin:
         except Exception:  # noqa: BLE001
             return []
 
+    def page_title(self, url: str):
+        """Fetch a page via the Web Unlocker and return its <title> (untruncated). For LinkedIn
+        profiles this is 'Name - Current Company | LinkedIn' — used to verify name + current company.
+        Counts one Bright Data call."""
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key:
+            return None
+        self.count('brightdata')
+        payload = {'zone': self.config.get('brightdata_zone') or 'web_unlocker1', 'url': url, 'format': 'raw'}
+        try:
+            r = requests.post('https://api.brightdata.com/request',
+                              headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'},
+                              data=json.dumps(payload), timeout=60, allow_redirects=False)
+            m = re.search(r'<title>(.*?)</title>', r.text or '', re.S)
+            return _htmllib.unescape(m.group(1).strip()) if m else None
+        except Exception:  # noqa: BLE001
+            return None
+
     # ── LinkedIn company page (Bright Data Web Unlocker, raw html) ─────────────
     def fetch_linkedin_company(self, linkedin_url: str) -> str:
         api_key = self.config.get('brightdata_api_key') or ''

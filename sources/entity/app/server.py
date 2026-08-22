@@ -1198,10 +1198,35 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                                       "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
 
             ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
-            cost = _bd_cost(t)
+            search_cost = _bd_cost(t)
             yield sse("log", {"key": "s3", "step": 3, "parent": True, "ok": True,
                               "msg": "Searching Google (%d queries)" % len(searches),
-                              "result": "%d unique profiles · %d Bright Data calls · ~$%s" % (len(ranked), cost["brightdata_calls"], cost["usd"])})
+                              "result": "%d unique profiles · %d Bright Data calls · ~$%s" % (len(ranked), search_cost["brightdata_calls"], search_cost["usd"])})
+
+            # ── Step 4: verify the top 20 — fetch each profile's page <title> (untruncated name + current company) ──
+            top = ranked[:20]
+            yield sse("log", {"key": "s4", "step": 4, "parent": True,
+                              "msg": "Verifying top %d — LinkedIn page title (name + current company)" % len(top), "running": True})
+            for p in top:
+                yield sse("log", {"key": "s4." + p["url"], "sub": True, "msg": p["name"], "running": True})
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                futs = {ex.submit(t.page_title, p["url"]): p for p in top}
+                for fut in as_completed(futs):
+                    p = futs[fut]
+                    pt = None
+                    try:
+                        pt = fut.result()
+                    except Exception:  # noqa: BLE001
+                        pt = None
+                    if pt and " | LinkedIn" in pt:
+                        p["page_title"] = pt.replace(" | LinkedIn", "").strip()   # "Name - Current Company"
+                    yield sse("log", {"key": "s4." + p["url"], "sub": True, "ok": bool(p.get("page_title")),
+                                      "msg": p["name"], "result": p.get("page_title") or "no title"})
+            cost = _bd_cost(t)
+            yield sse("log", {"key": "s4", "step": 4, "parent": True, "ok": True,
+                              "msg": "Verifying top %d" % len(top),
+                              "result": "verified · %d Bright Data calls total · ~$%s" % (cost["brightdata_calls"], cost["usd"])})
+
             report = {"input": inp, "company_url": company_url, "company_name": company_name,
                       "employees": employees, "base_query": base, "searches": len(searches),
                       "profiles": ranked, "cost": cost, "api_calls": t.get_api_calls()}
