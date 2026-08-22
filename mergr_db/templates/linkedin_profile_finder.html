@@ -13,6 +13,11 @@
   .lp-btn:disabled { opacity:.55; cursor:default; }
   .lp-hint { font-size:12.5px; color:var(--muted); margin:0 0 16px; }
   .lp-refresh { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:5px; cursor:pointer; user-select:none; }
+  #lp-history { max-width:820px; margin:2px 0 16px; }
+  .lp-hist-head { font-size:12.5px; font-weight:600; margin:6px 0 6px; }
+  .lp-hist-item { font-size:13px; padding:6px 10px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); margin-bottom:5px; cursor:pointer; }
+  .lp-hist-item:hover { border-color:var(--accent); }
+  .lp-hist-item .hn { font-weight:600; }
   .cache-badge { display:inline-block; font-size:11px; font-weight:600; color:#92400e; background:#fef3c7; border-radius:10px; padding:1px 8px; vertical-align:middle; margin-left:6px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:10px 0 18px; max-width:820px; }
 
@@ -66,6 +71,7 @@
   <label class="lp-refresh"><input type="checkbox" id="lp-refresh"> re-run (ignore cache)</label>
 </form>
 <div id="lp-status" class="lp-hint"></div>
+<div id="lp-history"></div>
 <div id="lp-log"></div>
 <div id="lp-out"></div>
 
@@ -123,6 +129,22 @@ function render(d){   // company card + profiles; the step log is shown live in 
   q('lp-out').innerHTML=h;
 }
 
+function loadHistory(){
+  fetch(EBASE+'/api/linkedin-profiles/history?limit=40').then(function(r){return r.json();}).then(function(d){
+    var h=(d&&d.history)||[]; var el=q('lp-history'); if(!el) return;
+    if(!h.length){ el.innerHTML=''; return; }
+    el.innerHTML='<div class="lp-hist-head">Recent searches <span class="muted" style="font-weight:400">— cached, click to reopen (no cost)</span></div>'
+      +h.map(function(x){
+        var when=(x.created_at||'').replace('T',' ').slice(0,16);
+        var inp=(x.input||x.cache_key||'').replace(/'/g,"\\'");
+        return '<div class="lp-hist-item" onclick="reopen(\''+inp+'\')">'
+          +'<span class="hn">'+esc(x.company_name||x.input||x.cache_key)+'</span>'
+          +'<span class="muted"> · '+(x.profiles||0)+' profiles · '+esc(when)+'</span></div>';
+      }).join('');
+  }).catch(function(){});
+}
+function reopen(inp){ q('lp-in').value=inp; if(q('lp-refresh'))q('lp-refresh').checked=false; run({preventDefault:function(){}}); }
+
 function run(e){
   e.preventDefault();
   var v=q('lp-in').value.trim();
@@ -143,8 +165,9 @@ function run(e){
   es.addEventListener('fail', function(ev){ q('lp-status').textContent='';
     try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
   });
-  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; });
+  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; loadHistory(); });
   es.onerror=function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; };  // also stops auto-reconnect
 }
+loadHistory();   // show cached searches on load
 </script>
 {% endblock %}

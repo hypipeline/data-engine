@@ -93,6 +93,28 @@ def report_save(key: str, result: dict) -> None:
         c.commit()
 
 
+def report_history(limit: int = 50) -> list:
+    """Recent cached LinkedIn-Profiles searches — latest run per input, newest first."""
+    if not enabled():
+        return []
+    with closing(_conn()) as c:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT cache_key, company_name, result->>'input' AS input, "
+                "jsonb_array_length(COALESCE(result->'profiles', '[]'::jsonb)) AS profiles, "
+                "result->'cost'->>'usd' AS cost, created_at "
+                "FROM (SELECT DISTINCT ON (cache_key) * FROM linkedin.profile_reports "
+                "      ORDER BY cache_key, created_at DESC) t "
+                "ORDER BY created_at DESC LIMIT %s", (limit,))
+            out = []
+            for r in cur.fetchall():
+                r = dict(r)
+                if r.get("created_at"):
+                    r["created_at"] = r["created_at"].isoformat()
+                out.append(r)
+            return out
+
+
 def get_latest(query: str) -> dict | None:
     """Most-recent cached result for this normalized query, or None."""
     if not enabled():

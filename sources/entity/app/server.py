@@ -1214,6 +1214,11 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+@app.get("/api/linkedin-profiles/history")
+def api_linkedin_profiles_history(limit: int = 50):
+    return JSONResponse({"history": linkedin_cache.report_history(limit)})
+
+
 @app.get("/api/linkedin/history")
 def api_linkedin_history(limit: int = 100):
     return JSONResponse({"history": linkedin_cache.history(limit)})
