@@ -1211,47 +1211,56 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                       "profiles": ranked, "cost": search_cost, "api_calls": t.get_api_calls()}
             yield sse("result", report)
 
-            # ── Step 4: verify the top 20 — fetch each profile's page <title> (untruncated name +
-            # current company). Light pacing (3 workers), each title streamed onto its card as it
-            # lands. The misses are Bright Data rate-limits (the account is throttled after the
-            # search burst); they clear after a short pause, so we retry only the blanks with a
-            # backoff rather than re-fetching the hits. ──
+            # ── Step 4: verify the top 20 via the LinkedIn people dataset (gd_l1viktl72bvl7bjuj0) —
+            # ONE batched job returns each profile's structured CURRENT company. Far more reliable
+            # than the page <title> (which conflates location/education), and one job avoids the
+            # per-request rate-limiting of many Web Unlocker calls. LinkedIn masks the role/title
+            # for logged-out scraping (position=null), so the role stays from the Google SERP above;
+            # this step confirms whether each person is *still at the company*. ──
             top = ranked[:20]
+            urls = [p["url"] for p in top]
+            yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
+                              "msg": "Verifying top %d via LinkedIn dataset — current company…" % len(top)})
+            ds = {}
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(t.linkedin_profiles_dataset, urls)
+                waited = 0
+                while not fut.done():                    # heartbeat keeps the SSE stream alive
+                    time.sleep(3); waited += 3
+                    yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
+                                      "msg": "Collecting structured profiles from LinkedIn dataset… (%ds)" % waited})
+                try:
+                    ds = fut.result() or {}
+                except Exception:  # noqa: BLE001
+                    ds = {}
 
-            def _verify_pass(items, workers):
-                with ThreadPoolExecutor(max_workers=workers) as ex:
-                    futs = {ex.submit(t.page_title, p["url"]): p for p in items}
-                    for fut in as_completed(futs):
-                        p = futs[fut]
-                        try:
-                            pt = fut.result()
-                        except Exception:  # noqa: BLE001
-                            pt = None
-                        if pt and " | LinkedIn" in pt:
-                            p["page_title"] = pt.replace(" | LinkedIn", "").strip()   # "Name - Current Company"
-                        yield sse("verify", {"url": p["url"], "page_title": p.get("page_title"),
-                                             "verified": sum(1 for pp in top if pp.get("page_title")),
-                                             "total": len(top), "cost": _bd_cost(t)})
-
-            yield sse("log", {"key": "s4", "step": 4, "parent": True,
-                              "msg": "Verifying top %d — page titles streaming in (name + current company)…" % len(top),
-                              "running": True})
-            yield from _verify_pass(top, 3)
-            for backoff in (4, 8):                      # recover throttled blanks after a pause
-                blanks = [p for p in top if not p.get("page_title")]
-                if not blanks:
-                    break
-                yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
-                                  "msg": "Verifying top %d — retrying %d throttled (waiting %ds)…" % (len(top), len(blanks), backoff)})
-                time.sleep(backoff)
-                yield from _verify_pass(blanks, 2)
+            cn_l = (company_name or "").strip().lower()
+            for p in top:
+                row = ds.get(t._slug_of(p["url"]))
+                if row:
+                    cc, ctitle = t.row_current_company(row)
+                    if cc:
+                        p["current_company"] = cc
+                    if ctitle:
+                        p["cur_title"] = ctitle
+                    if row.get("city"):
+                        p["ds_city"] = row.get("city")
+                cc_l = (p.get("current_company") or "").strip().lower()
+                # "still at the company" if the dataset's current company overlaps the searched name
+                p["at_company"] = bool(cc_l and cn_l and (cn_l in cc_l or cc_l in cn_l))
+                yield sse("verify", {"url": p["url"], "current_company": p.get("current_company"),
+                                     "cur_title": p.get("cur_title"), "at_company": p.get("at_company"),
+                                     "city": p.get("ds_city"),
+                                     "verified": sum(1 for pp in top if pp.get("current_company") is not None),
+                                     "total": len(top), "cost": _bd_cost(t)})
 
             cost = _bd_cost(t)
-            verified_n = sum(1 for p in top if p.get("page_title"))
+            at_n = sum(1 for p in top if p.get("at_company"))
+            got_n = sum(1 for p in top if p.get("current_company"))
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "ok": True,
                               "msg": "Verifying top %d" % len(top),
-                              "result": "%d/%d verified · %d Bright Data calls total · ~$%s" % (
-                                  verified_n, len(top), cost["brightdata_calls"], cost["usd"])})
+                              "result": "%d still at %s · %d/%d with a listed current company · %d Bright Data calls total · ~$%s" % (
+                                  at_n, company_name or "company", got_n, len(top), cost["brightdata_calls"], cost["usd"])})
 
             # persist the enriched report (profiles now carry page_title; final cost incl. verify)
             report["cost"] = cost
