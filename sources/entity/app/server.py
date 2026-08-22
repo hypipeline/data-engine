@@ -1275,31 +1275,6 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-@app.get("/api/linkedin-profiles/_probe")
-def api_linkedin_profiles_probe(urls: str = ""):
-    """TEMP probe — batch-scrape a few LinkedIn profile URLs via the dataset API and return the
-    raw rows + a sanitized summary, so we can confirm the current_company schema/latency before
-    rewiring Step 4. Remove once the dataset-verify is finalized."""
-    import time as _t
-    us = [u.strip() for u in urls.split(",") if u.strip()]
-    if not us:
-        return JSONResponse({"error": "pass ?urls=comma,separated,profile,urls"})
-    t = _tools()
-    t0 = _t.time()
-    ds = t.linkedin_profiles_dataset(us)
-    elapsed = round(_t.time() - t0, 1)
-    summary = []
-    for u in us:
-        row = ds.get(t._slug_of(u)) or {}
-        cc, title = t.row_current_company(row) if row else (None, None)
-        summary.append({"url": u, "matched": bool(row), "name": row.get("name"),
-                        "current_company": cc, "current_title": title,
-                        "position": row.get("position"), "city": row.get("city"),
-                        "row_keys": sorted(row.keys())[:40]})
-    return JSONResponse({"elapsed_s": elapsed, "rows": len(ds), "summary": summary,
-                         "cost": _bd_cost(t)})
-
-
 @app.get("/api/linkedin-profiles/history")
 def api_linkedin_profiles_history(limit: int = 50):
     return JSONResponse({"history": linkedin_cache.report_history(limit)})
