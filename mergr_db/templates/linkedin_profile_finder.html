@@ -143,9 +143,10 @@ function loadHistory(){
       +h.map(function(x){
         var when=(x.created_at||'').replace('T',' ').slice(0,16);
         var inp=(x.input||x.cache_key||'').replace(/'/g,"\\'");
+        var cost=(x.cost!=null&&x.cost!=='')?' · $'+Number(x.cost).toFixed(4):'';
         return '<div class="lp-hist-item" onclick="reopen(\''+inp+'\')">'
           +'<span class="hn">'+esc(x.company_name||x.input||x.cache_key)+'</span>'
-          +'<span class="muted"> · '+(x.profiles||0)+' profiles · '+esc(when)+'</span></div>';
+          +'<span class="muted"> · '+(x.profiles||0)+' profiles'+cost+' · '+esc(when)+'</span></div>';
       }).join('');
   }).catch(function(){});
 }
