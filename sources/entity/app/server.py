@@ -944,6 +944,7 @@ def api_linkedin(q: str = "", refresh: str = ""):
         except Exception as e:  # noqa: BLE001
             print(f"[linkedin_cache] save failed: {e}")
     result["api_calls"] = t.get_api_calls()          # added after save so counts aren't persisted
+    result["cost"] = _bd_cost(t)
     return JSONResponse(result)
 
 
@@ -985,6 +986,8 @@ def api_linkedin_by_url(url: str = "", refresh: str = ""):
             linkedin_cache.save(slug, result)
         except Exception as e:  # noqa: BLE001
             print(f"[linkedin_cache] save failed: {e}")
+    result["api_calls"] = t.get_api_calls()
+    result["cost"] = _bd_cost(t)
     return JSONResponse(result)
 
 

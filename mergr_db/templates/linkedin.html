@@ -113,11 +113,12 @@ function renderResult(d){
   var desc = d.description ? '<div class="li-desc">'+esc(d.description)+'</div>' : '';
   var note = (d.error && d.linkedin_url) ? '<div class="li-addr muted">'+esc(d.error)+'</div>' : '';
   out.innerHTML = '<div class="li-card"><div class="li-head">'+empBox+main+'</div>'+note+desc+'</div>';
-  // per-request API call counts (e.g. "API calls: 2 brightdata") — cache hits make none
+  // per-request API call counts + Bright Data cost (e.g. "2 Bright Data calls · ~$0.0030") — cache = free
   var ac = d.api_calls||{}, parts=[];
   for(var svc in ac){ if(ac[svc]>0) parts.push(ac[svc]+' '+svc); }
-  meta.innerHTML = d.from_cache ? '<span style="color:#166534">cached · no API calls</span>'
-                 : (parts.length ? '<span style="color:#888">API calls: '+esc(parts.join(', '))+'</span>' : '');
+  var cost=d.cost||{}, costStr = cost.usd!=null ? ' · <b>~$'+Number(cost.usd).toFixed(4)+'</b>' : '';
+  meta.innerHTML = d.from_cache ? '<span style="color:#166534">cached · $0 (no Bright Data calls)</span>'
+                 : (parts.length ? '<span style="color:#888">API calls: '+esc(parts.join(', '))+costStr+'</span>' : '');
 }
 
 function loadHistory(){
