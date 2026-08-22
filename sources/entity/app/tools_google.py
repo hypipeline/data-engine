@@ -200,6 +200,114 @@ class GoogleMixin:
         except Exception:  # noqa: BLE001
             return None
 
+    # ── LinkedIn people profiles via the Bright Data dataset API ──────────────
+    # (dataset gd_l1viktl72bvl7bjuj0). One batched job for many URLs -> structured JSON per
+    # profile (name + current_company + position). Far more reliable for "current company" than
+    # parsing the page <title>, and one job sidesteps the per-request rate-limiting that hits
+    # many separate Web Unlocker calls. Billed ~$0.0015/record.
+    _LI_DATASET_ID = "gd_l1viktl72bvl7bjuj0"
+
+    @staticmethod
+    def _slug_of(u: str) -> str:
+        m = re.search(r'/in/([^/?#]+)', u or '')
+        return m.group(1).lower() if m else (u or '').lower()
+
+    @staticmethod
+    def _parse_dataset_rows(txt: str):
+        txt = (txt or '').strip()
+        if not txt:
+            return []
+        try:
+            j = json.loads(txt)
+            if isinstance(j, list):
+                return j
+            if isinstance(j, dict):
+                if 'snapshot_id' in j:      # async handle, not rows
+                    return []
+                return [j]
+        except Exception:  # noqa: BLE001
+            pass
+        rows = []                            # JSONL fallback (one row per line)
+        for ln in txt.splitlines():
+            ln = ln.strip()
+            if ln:
+                try:
+                    rows.append(json.loads(ln))
+                except Exception:  # noqa: BLE001
+                    pass
+        return rows
+
+    def _poll_snapshot(self, sid: str, hdr: dict, emit=None):
+        import time as _t
+        for i in range(40):                  # up to ~40*5s = 200s
+            _t.sleep(5)
+            try:
+                pr = requests.get(f'https://api.brightdata.com/datasets/v3/progress/{sid}',
+                                  headers=hdr, timeout=30)
+                st = (json.loads(pr.text or '{}') or {}).get('status')
+            except Exception:  # noqa: BLE001
+                st = None
+            if emit:
+                emit(f'dataset job status={st} ({(i + 1) * 5}s)')
+            if st == 'ready':
+                try:
+                    sr = requests.get(
+                        f'https://api.brightdata.com/datasets/v3/snapshot/{sid}?format=json',
+                        headers=hdr, timeout=120)
+                    return self._parse_dataset_rows(sr.text)
+                except Exception:  # noqa: BLE001
+                    return []
+            if st in ('failed', 'error'):
+                return []
+        return []
+
+    def linkedin_profiles_dataset(self, urls, emit=None) -> dict:
+        """Batch-scrape LinkedIn people profiles. Returns {slug: row}. Counts one Bright Data
+        record per input URL. `emit` is an optional callback(str) for progress lines."""
+        api_key = self.config.get('brightdata_api_key') or ''
+        if not api_key or not urls:
+            return {}
+        hdr = {'Content-Type': 'application/json', 'Authorization': f'Bearer {api_key}'}
+        body = json.dumps([{'url': u} for u in urls])
+        rows = []
+        try:
+            r = requests.post(
+                'https://api.brightdata.com/datasets/v3/scrape'
+                f'?dataset_id={self._LI_DATASET_ID}&include_errors=true',
+                headers=hdr, data=body, timeout=300)
+            rows = self._parse_dataset_rows(r.text)
+            if not rows:                     # sync returned a snapshot id -> poll it
+                try:
+                    sid = (json.loads(r.text or '{}') or {}).get('snapshot_id')
+                except Exception:  # noqa: BLE001
+                    sid = None
+                if sid:
+                    rows = self._poll_snapshot(sid, hdr, emit)
+        except Exception as e:  # noqa: BLE001
+            if emit:
+                emit(f'dataset error: {e}')
+            return {}
+        for _ in urls:
+            self.count('brightdata')
+        out = {}
+        for d in rows:
+            if isinstance(d, dict):
+                k = self._slug_of(d.get('input_url') or d.get('url') or d.get('linkedin_url') or '')
+                if k:
+                    out[k] = d
+        return out
+
+    @staticmethod
+    def row_current_company(d: dict):
+        """(name, title) of the profile's CURRENT company from a dataset row, best-effort across
+        the possible shapes (current_company object, flat current_company_name, or string)."""
+        cc = d.get('current_company')
+        if isinstance(cc, dict):
+            return cc.get('name') or cc.get('company_name'), cc.get('title') or d.get('position')
+        if isinstance(cc, str) and cc:
+            return cc, d.get('position')
+        return d.get('current_company_name'), d.get('position')
+
     # ── LinkedIn company page (Bright Data Web Unlocker, raw html) ─────────────
     def fetch_linkedin_company(self, linkedin_url: str) -> str:
         api_key = self.config.get('brightdata_api_key') or ''
