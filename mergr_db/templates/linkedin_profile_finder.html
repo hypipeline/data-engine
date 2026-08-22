@@ -115,7 +115,7 @@ function render(d){   // company card + profiles; the step log is shown live in 
     h+=d.profiles.map(function(p){
       var hits=p.hits||[];
       var chips=hits.map(function(hh){
-        return '<span class="hit'+(hh==='broad'?' broad':'')+'">'+esc(hh)+'</span>';
+        return '<span class="hit'+(hh==='all employees'?' broad':'')+'">'+esc(hh)+'</span>';
       }).join(' ');
       return '<div class="profile"><div class="pn">'+esc(p.name)
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'

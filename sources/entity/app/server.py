@@ -1164,9 +1164,9 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                 return out
 
             def nice_of(lbl):
-                return "broad — all employees (3 pages)" if lbl == "broad" else ('“%s”' % lbl)
+                return "all employees — everyone at the company (3 pages)" if lbl == "all employees" else ('“%s”' % lbl)
 
-            searches = [("broad", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
+            searches = [("all employees", base, 3)] + [(lbl, base + " " + term, 1) for lbl, term in LP_ROLES]
             yield sse("log", {"key": "s3", "step": 3, "parent": True, "msg": "Searching Google (%d queries, in parallel)" % len(searches), "running": True})
             for lbl, qstr, pages in searches:   # pre-list substeps in fixed order (running)
                 yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice_of(lbl), "detail": qstr, "running": True})
