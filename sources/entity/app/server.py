@@ -11,6 +11,7 @@ import asyncio
 import json
 import queue
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import FastAPI, Request
@@ -1211,29 +1212,40 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             yield sse("result", report)
 
             # ── Step 4: verify the top 20 — fetch each profile's page <title> (untruncated name +
-            # current company). Light pacing (3 workers) to stay under Bright Data's rate limit;
-            # each title is streamed back as it returns and populated onto its card in place. ──
+            # current company). Light pacing (3 workers), each title streamed onto its card as it
+            # lands. The misses are Bright Data rate-limits (the account is throttled after the
+            # search burst); they clear after a short pause, so we retry only the blanks with a
+            # backoff rather than re-fetching the hits. ──
             top = ranked[:20]
+
+            def _verify_pass(items, workers):
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    futs = {ex.submit(t.page_title, p["url"]): p for p in items}
+                    for fut in as_completed(futs):
+                        p = futs[fut]
+                        try:
+                            pt = fut.result()
+                        except Exception:  # noqa: BLE001
+                            pt = None
+                        if pt and " | LinkedIn" in pt:
+                            p["page_title"] = pt.replace(" | LinkedIn", "").strip()   # "Name - Current Company"
+                        yield sse("verify", {"url": p["url"], "page_title": p.get("page_title"),
+                                             "verified": sum(1 for pp in top if pp.get("page_title")),
+                                             "total": len(top), "cost": _bd_cost(t)})
+
             yield sse("log", {"key": "s4", "step": 4, "parent": True,
                               "msg": "Verifying top %d — page titles streaming in (name + current company)…" % len(top),
                               "running": True})
-            done_n = 0
-            with ThreadPoolExecutor(max_workers=3) as ex:
-                futs = {ex.submit(t.page_title, p["url"]): p for p in top}
-                for fut in as_completed(futs):
-                    p = futs[fut]
-                    pt = None
-                    try:
-                        pt = fut.result()
-                    except Exception:  # noqa: BLE001
-                        pt = None
-                    if pt and " | LinkedIn" in pt:
-                        p["page_title"] = pt.replace(" | LinkedIn", "").strip()   # "Name - Current Company"
-                    done_n += 1
-                    c = _bd_cost(t)
-                    # stream the single verified title onto its card, plus the running cost
-                    yield sse("verify", {"url": p["url"], "page_title": p.get("page_title"),
-                                         "done": done_n, "total": len(top), "cost": c})
+            yield from _verify_pass(top, 3)
+            for backoff in (4, 8):                      # recover throttled blanks after a pause
+                blanks = [p for p in top if not p.get("page_title")]
+                if not blanks:
+                    break
+                yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
+                                  "msg": "Verifying top %d — retrying %d throttled (waiting %ds)…" % (len(top), len(blanks), backoff)})
+                time.sleep(backoff)
+                yield from _verify_pass(blanks, 2)
+
             cost = _bd_cost(t)
             verified_n = sum(1 for p in top if p.get("page_title"))
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "ok": True,

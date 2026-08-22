@@ -178,7 +178,7 @@ function run(e){
       var cn=q('lp-costnum'); if(cn) cn.textContent='$'+Number(m.cost.usd).toFixed(4);
       var cs=q('lp-costsub'); if(cs) cs.textContent=(m.cost.brightdata_calls||0)+' Bright Data calls @ $'+(m.cost.rate||0)+' ea (est.)';
     }
-    q('lp-status').textContent='Verifying top titles… '+(m.done||0)+'/'+(m.total||20);
+    q('lp-status').textContent='Verifying top titles… '+(m.verified||0)+'/'+(m.total||20)+' confirmed';
     if(!m.page_title) return;                        // blank (rate-limited) — leave the card as-is
     var card=q('lp-out').querySelector('.profile[data-purl="'+m.url+'"]');
     if(!card || card.querySelector('.pv')) return;
