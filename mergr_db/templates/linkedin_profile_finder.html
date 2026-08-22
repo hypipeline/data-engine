@@ -45,6 +45,10 @@
   /* profile results */
   .results-head { max-width:820px; font-size:14px; font-weight:600; margin:18px 0 8px; }
   .profile { max-width:820px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); padding:12px 16px; margin-bottom:8px; }
+  .profile.top12 { border-left:3px solid #16a34a; background:#f4fbf6; }
+  .profile .rank { color:#94a3b8; font-weight:700; margin-right:3px; }
+  .profile.top12 .rank { color:#166534; }
+  .top-badge { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; color:#166534; background:#dcfce7; border-radius:4px; padding:1px 6px; vertical-align:middle; margin-left:5px; }
   .profile .pn { font-weight:600; font-size:14.5px; }
   .profile .pt { color:var(--muted); font-size:12.5px; margin-top:2px; }
   .profile a { color:var(--accent); font-size:12.5px; word-break:break-all; }
@@ -112,14 +116,16 @@ function render(d){   // company card + profiles; the step log is shown live in 
     h+='<div class="results-head">'+d.profiles.length+' unique profile'+(d.profiles.length===1?'':'s')
       +' across '+(d.searches||1)+' searches <span class="muted" style="font-weight:400">· ranked by how many searches matched each person</span></div>';
     if(!d.profiles.length){ h+='<p class="muted">No profiles returned. Try the LinkedIn company URL directly, or a larger company.</p>'; }
-    h+=d.profiles.map(function(p){
+    h+=d.profiles.map(function(p,i){
       var hits=p.hits||[];
       var chips=hits.map(function(hh){
         return '<span class="hit'+(hh==='all employees'?' broad':'')+'">'+esc(hh)+'</span>';
       }).join(' ');
-      return '<div class="profile"><div class="pn">'+esc(p.name)
+      var top = i<12 ? ' top12' : '';   // highlight the top 12 (up to)
+      return '<div class="profile'+top+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
-        +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')+'</div>'
+        +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
+        +(i<12?' <span class="top-badge">TOP 12</span>':'')+'</div>'
         +'<div class="pt"><span class="lbl">title:</span> '+esc(p.title)+'</div>'
         +(p.description?'<div class="pd"><span class="lbl">description:</span> '+esc(p.description)+'</div>':'')
         +(chips?'<div class="hits">'+chips+'</div>':'')
