@@ -196,7 +196,7 @@ def load_mandate(conn, identifier, docs_base=None):
             with conn.cursor() as cur:
                 cur.execute("UPDATE buyer_match.doc_cache SET hits=hits+1 WHERE doc_hash=%s", (dh,))
             conn.commit()
-            doc_summaries.append({"title": title, "summary": crow[0], "cached": True})
+            doc_summaries.append({"title": title, "path": doc_path, "summary": crow[0], "cached": True})
             continue
 
         full_path = os.path.join(docs_base, doc_path)
@@ -206,7 +206,7 @@ def load_mandate(conn, identifier, docs_base=None):
             if tmp_path:
                 full_path = tmp_path
         if not os.path.exists(full_path):
-            doc_summaries.append({"title": title, "summary": "(File not found)"})
+            doc_summaries.append({"title": title, "path": doc_path, "summary": "(File not found)"})
             continue
         low = doc_path.lower()                           # match on the real name, not the temp suffix
         if low.endswith(".pdf"):
@@ -230,7 +230,7 @@ def load_mandate(conn, identifier, docs_base=None):
                             "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (doc_hash) DO NOTHING",
                             (dh, doc_path, title, summary, pt, ct))
             conn.commit()
-        doc_summaries.append({"title": title, "summary": summary})
+        doc_summaries.append({"title": title, "path": doc_path, "summary": summary})
 
     return {
         "id": m["id"], "code": m.get("code", ""), "project_name": m.get("project_name", ""),
