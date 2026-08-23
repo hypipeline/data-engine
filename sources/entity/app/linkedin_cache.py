@@ -102,6 +102,12 @@ def report_history(limit: int = 50) -> list:
             cur.execute(
                 "SELECT cache_key, company_name, result->>'input' AS input, "
                 "jsonb_array_length(COALESCE(result->'profiles', '[]'::jsonb)) AS profiles, "
+                # verified = the up-to-12 still-at-company (top12 flags), with a fallback to
+                # counting at_company (capped at 12) for older reports without top12 flags.
+                "COALESCE(NULLIF((SELECT count(*) FROM jsonb_array_elements("
+                "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'top12' = 'true'), 0), "
+                "  LEAST((SELECT count(*) FROM jsonb_array_elements("
+                "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'at_company' = 'true'), 12)) AS verified, "
                 "result->'cost'->>'usd' AS cost, created_at "
                 "FROM (SELECT DISTINCT ON (cache_key) * FROM linkedin.profile_reports "
                 "      ORDER BY cache_key, created_at DESC) t "

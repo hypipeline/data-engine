@@ -13,8 +13,22 @@
   .lp-btn:disabled { opacity:.55; cursor:default; }
   .lp-hint { font-size:12.5px; color:var(--muted); margin:0 0 16px; }
   .lp-refresh { font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:5px; cursor:pointer; user-select:none; }
-  #lp-history { max-width:820px; margin:2px 0 16px; }
-  .lp-hist-head { font-size:12.5px; font-weight:600; margin:6px 0 6px; }
+  #lp-history { max-width:820px; margin:2px 0 20px; }
+  .lp-hist-head { font-size:12.5px; font-weight:600; margin:6px 0 8px; }
+  .lp-hist-wrap { max-width:820px; border:1px solid var(--border-2); border-radius:10px; overflow:hidden; background:var(--panel); }
+  .lp-hist-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  .lp-hist-tbl th { text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; padding:9px 14px; background:var(--bg-2,#f7f9fc); border-bottom:1px solid var(--border-2); }
+  .lp-hist-tbl th.num, .lp-hist-tbl td.num { text-align:right; white-space:nowrap; }
+  .lp-hist-tbl td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .lp-hist-tbl tbody tr:last-child td { border-bottom:none; }
+  .lp-hist-tbl tbody tr { cursor:pointer; transition:background .12s; }
+  .lp-hist-tbl tbody tr:hover { background:var(--bg-2,#f4f7fb); }
+  .lp-hist-tbl .nm { font-weight:700; color:var(--text); font-size:13.5px; }
+  .lp-hist-tbl .pf { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .lp-hist-tbl .cost { font-weight:700; color:#166534; font-variant-numeric:tabular-nums; }
+  .lp-hist-tbl .when { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  .ver-badge { display:inline-block; font-weight:800; font-size:12px; color:#166534; background:#dcfce7; border:1px solid #86efac; border-radius:20px; padding:2px 10px; font-variant-numeric:tabular-nums; }
+  .ver-badge.zero { color:#94a3b8; background:#f1f5f9; border-color:#e2e8f0; }
   .lp-hist-item { font-size:13px; padding:6px 10px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); margin-bottom:5px; cursor:pointer; }
   .lp-hist-item:hover { border-color:var(--accent); }
   .lp-hist-item .hn { font-weight:600; }
@@ -187,14 +201,23 @@ function loadHistory(){
     var h=(d&&d.history)||[]; var el=q('lp-history'); if(!el) return;
     if(!h.length){ el.innerHTML=''; return; }
     el.innerHTML='<div class="lp-hist-head">Recent searches <span class="muted" style="font-weight:400">— cached, click to reopen (no cost)</span></div>'
+      +'<div class="lp-hist-wrap"><table class="lp-hist-tbl"><thead><tr>'
+      +'<th>Company</th><th class="num">Profiles</th><th class="num" title="people confirmed still at the company (up to 12)">At company</th><th class="num">Cost</th><th class="num">When</th>'
+      +'</tr></thead><tbody>'
       +h.map(function(x){
         var when=(x.created_at||'').replace('T',' ').slice(0,16);
         var inp=(x.input||x.cache_key||'').replace(/'/g,"\\'");
-        var cost=(x.cost!=null&&x.cost!=='')?' · $'+Number(x.cost).toFixed(4):'';
-        return '<div class="lp-hist-item" onclick="reopen(\''+inp+'\')">'
-          +'<span class="hn">'+esc(x.company_name||x.input||x.cache_key)+'</span>'
-          +'<span class="muted"> · '+(x.profiles||0)+' profiles'+cost+' · '+esc(when)+'</span></div>';
-      }).join('');
+        var cost=(x.cost!=null&&x.cost!=='')?'$'+Number(x.cost).toFixed(2):'—';   // nearest cent
+        var ver=(x.verified!=null)?Number(x.verified):0;
+        return '<tr onclick="reopen(\''+inp+'\')">'
+          +'<td class="nm">'+esc(x.company_name||x.input||x.cache_key)+'</td>'
+          +'<td class="num pf">'+(x.profiles||0)+'</td>'
+          +'<td class="num"><span class="ver-badge'+(ver?'':' zero')+'">✓ '+ver+'/12</span></td>'
+          +'<td class="num cost">'+cost+'</td>'
+          +'<td class="num when">'+esc(when)+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
   }).catch(function(){});
 }
 function reopen(inp){ q('lp-in').value=inp; if(q('lp-refresh'))q('lp-refresh').checked=false; run({preventDefault:function(){}}); }
