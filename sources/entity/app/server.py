@@ -1368,6 +1368,35 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+@app.get("/api/linkedin-profiles/_mismatch")
+def api_linkedin_profiles_mismatch():
+    """Scan cached reports for the exact test case: a person whose current-company NAME matches the
+    searched company but whose company SLUG does NOT — i.e. same name, different company, correctly
+    filtered out by the slug match (the old name-only match would have wrongly kept them)."""
+    out = []
+    for rep in linkedin_cache.recent_full(40):
+        res = rep.get("result") or {}
+        cn = (res.get("company_name") or "").strip().lower()
+        m = re.search(r"/company/([^/?#]+)", (res.get("company_url") or "").lower())
+        sslug = m.group(1).lower() if m else None
+        for p in (res.get("profiles") or []):
+            cc = (p.get("current_company") or "").strip().lower()
+            if not cc:
+                continue
+            name_would_match = bool(cn and (cn in cc or cc in cn))
+            if name_would_match and p.get("at_company") is False:
+                out.append({
+                    "searched_company": res.get("company_name"),
+                    "searched_slug": sslug,
+                    "person": p.get("name"),
+                    "linkedin_url": p.get("url"),
+                    "their_current_company": p.get("current_company"),
+                    "their_company_slug": p.get("current_company_slug"),
+                    "run": rep.get("created_at"),
+                })
+    return JSONResponse({"count": len(out), "mismatches": out})
+
+
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest

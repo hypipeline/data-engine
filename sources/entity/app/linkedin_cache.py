@@ -121,6 +121,26 @@ def report_history(limit: int = 50) -> list:
             return out
 
 
+def recent_full(limit: int = 40) -> list:
+    """Latest FULL report per input (result payload included) — for scanning/debug."""
+    if not enabled():
+        return []
+    with closing(_conn()) as c:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT cache_key, company_name, result, created_at "
+                "FROM (SELECT DISTINCT ON (cache_key) * FROM linkedin.profile_reports "
+                "      ORDER BY cache_key, created_at DESC) t "
+                "ORDER BY created_at DESC LIMIT %s", (limit,))
+            out = []
+            for r in cur.fetchall():
+                r = dict(r)
+                if r.get("created_at"):
+                    r["created_at"] = r["created_at"].isoformat()
+                out.append(r)
+            return out
+
+
 def get_latest(query: str) -> dict | None:
     """Most-recent cached result for this normalized query, or None."""
     if not enabled():
