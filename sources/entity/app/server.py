@@ -1467,20 +1467,31 @@ def api_linkedin_profiles_checkone(input: str = "", url: str = ""):
 
 
 @app.get("/api/linkedin-profiles/report")
-def api_linkedin_profiles_report(input: str = ""):
-    """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
-    saved report for this input: company, the total cost, and `people` = the UP-TO-12 highest-ranked
-    people confirmed STILL AT the company (the same set the tool highlights as TOP 12). Run the tool
-    once (it caches every run) then this returns instantly; 404 if there's no report yet."""
+async def api_linkedin_profiles_report(input: str = "", refresh: str = "", run: int = 1):
+    """JSON API for a LinkedIn-Profiles run. Like entity's /api/lookup, but self-running: returns the
+    saved report if there is one, otherwise RUNS the search live (~1–2 min), saves it, and returns it.
+    `people` = the up-to-12 people confirmed STILL AT the company. Params: refresh=1 forces a fresh
+    run; run=0 makes it cache-only (404 if nothing saved)."""
     inp = (input or "").strip()
     if not inp:
         return JSONResponse({"error": "Pass ?input=<company website or LinkedIn company URL>"}, status_code=400)
+    key = _lp_key(inp)
     try:
-        rep = linkedin_cache.report_get_latest(_lp_key(inp))
+        rep = None if refresh else linkedin_cache.report_get_latest(key)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": "lookup failed: %s" % e}, status_code=500)
+    if not rep and run:
+        # No cached report → run the SAME pipeline the tool/stream uses (drain its generator, which
+        # saves the report), then read it back. Output is identical to a UI run.
+        try:
+            resp = api_linkedin_profiles_stream(input=inp, refresh=refresh, run_id=0)
+            async for _ in resp.body_iterator:          # run to completion; SSE frames discarded
+                pass
+            rep = linkedin_cache.report_get_latest(key)
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse({"error": "run failed: %s" % e}, status_code=500)
     if not rep:
-        return JSONResponse({"error": "No report yet for %r — run it in the tool first." % inp,
+        return JSONResponse({"error": "No report for %r (run=0 and nothing cached)." % inp,
                              "tool": "/linkedin-profiles"}, status_code=404)
     profiles = rep.get("profiles") or []
     # `people` = up to 12 people currently AT the company. Prefer the saved top12 flags; for older
