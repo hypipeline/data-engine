@@ -112,6 +112,20 @@
   .profile .lbl { color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:.03em; }
   .foll { font-size:11px; color:var(--muted); font-weight:400; }
   .muted { color:var(--muted); }
+
+  /* API instructions (collapsible) */
+  .lp-api-docs { max-width:820px; margin:2px 0 16px; border:1px solid var(--border-2); border-radius:10px; background:var(--panel); }
+  .lp-api-docs > summary { cursor:pointer; padding:11px 15px; font-weight:600; font-size:13.5px; color:var(--text); list-style:none; }
+  .lp-api-docs > summary::-webkit-details-marker { display:none; }
+  .lp-api-docs > summary::before { content:'{ } '; font-family:ui-monospace,monospace; color:var(--accent-2); font-weight:700; }
+  .lp-api-docs[open] > summary { border-bottom:1px solid var(--border); }
+  .lp-api-docs .body { padding:10px 16px 16px; font-size:13px; color:var(--text); line-height:1.5; }
+  .lp-api-docs .body p { margin:8px 0; }
+  .lp-api-docs .body ul { margin:6px 0 6px 18px; }
+  .lp-api-docs .body li { margin:3px 0; }
+  .lp-api-docs code { background:var(--bg-2,#f1f5f9); padding:1px 5px; border-radius:4px; font-size:12px; font-family:ui-monospace,monospace; }
+  .lp-api-docs pre { background:#0f172a; color:#e2e8f0; padding:12px 14px; border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.55; margin:6px 0; }
+  .lp-api-docs pre code { background:none; padding:0; color:inherit; }
 </style>
 {% endblock %}
 {% block body %}
@@ -126,6 +140,36 @@
   <button id="lp-btn" class="lp-btn" type="submit">Find profiles</button>
   <label class="lp-refresh"><input type="checkbox" id="lp-refresh"> re-run (ignore cache)</label>
 </form>
+
+<details class="lp-api-docs">
+  <summary>API — run this search programmatically</summary>
+  <div class="body">
+    <p>One JSON endpoint. If a run isn't cached it starts in the background and returns
+       <code>202 {status:"running"}</code> — <b>poll the same URL</b> until it returns <code>200</code>
+       with the result (~1–2 min). It's cached after, so repeat calls are instant &amp; free.</p>
+    <pre>GET /entity-app/api/linkedin-profiles/report?input=&lt;company&gt;</pre>
+    <p><b>Params</b></p>
+    <ul>
+      <li><code>input</code> — company website (e.g. <code>stripe.com</code>) or a LinkedIn company URL</li>
+      <li><code>refresh=1</code> — start a fresh run, ignoring any cached report</li>
+      <li><code>run=0</code> — cache-only: returns <code>404</code> if nothing's saved (never starts a run)</li>
+    </ul>
+    <p><b>Auth</b> — same basic-auth credentials as this site.</p>
+    <p><b>Poll it (bash)</b></p>
+    <pre>BASE='https://dataengine.hyndlandpartners.com/entity-app/api/linkedin-profiles/report?input=monzo.com'
+while :; do
+  code=$(curl -s -o out.json -w '%{http_code}' -u USER:PASS "$BASE")
+  [ "$code" = 200 ] &amp;&amp; break     # 202 = still running
+  sleep 10
+done
+cat out.json</pre>
+    <p><b>Returns</b> — <code>company_name, employees, searches, cost{usd,brightdata_calls}, count,
+       profiles_found, people[]</code>. Each person: <code>rank, name, first_name, last_name,
+       linkedin_url, job_title, current_company, current_city, matched_searches</code>.
+       <code>people</code> = the up-to-12 confirmed <b>still at the company</b>.</p>
+  </div>
+</details>
+
 <div id="lp-status" class="lp-hint"></div>
 <div id="lp-history"></div>
 <div id="lp-log"></div>
