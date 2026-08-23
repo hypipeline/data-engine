@@ -29,6 +29,14 @@
   .lp-hist-tbl .when { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
   .ver-badge { display:inline-block; font-weight:800; font-size:12px; color:#166534; background:#dcfce7; border:1px solid #86efac; border-radius:20px; padding:2px 10px; font-variant-numeric:tabular-nums; }
   .ver-badge.zero { color:#94a3b8; background:#f1f5f9; border-color:#e2e8f0; }
+  /* previous-runs selector for the current company */
+  #lp-runs { max-width:820px; margin:10px 0 4px; }
+  .lp-runs-head { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; }
+  .lp-runs-row { display:flex; flex-wrap:wrap; gap:6px; }
+  .lp-run-chip { font-size:12px; padding:5px 11px; border:1px solid var(--border-2); border-radius:20px; background:var(--panel); color:var(--text); cursor:pointer; }
+  .lp-run-chip:hover { border-color:var(--accent); }
+  .lp-run-chip.active { border-color:#16a34a; background:#eafaf0; color:#166534; font-weight:600; }
+  .lp-run-chip b { font-weight:700; }
   .lp-hist-item { font-size:13px; padding:6px 10px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); margin-bottom:5px; cursor:pointer; }
   .lp-hist-item:hover { border-color:var(--accent); }
   .lp-hist-item .hn { font-weight:600; }
@@ -121,6 +129,7 @@
 <div id="lp-status" class="lp-hint"></div>
 <div id="lp-history"></div>
 <div id="lp-log"></div>
+<div id="lp-runs"></div>
 <div id="lp-out"></div>
 
 <script>
@@ -243,17 +252,20 @@ function fmtDur(s){                        // seconds -> "2m 33s" / "45s" / "—
 }
 function reopen(inp){ q('lp-in').value=inp; if(q('lp-refresh'))q('lp-refresh').checked=false; run({preventDefault:function(){}}); }
 
-function run(e){
+function run(e, runId){
   e.preventDefault();
   var v=q('lp-in').value.trim();
   if(!v) return;
   LP_RUNNING=true;
   q('lp-btn').disabled=true; q('lp-status').textContent='Running…';
   q('lp-out').innerHTML=''; q('lp-log').innerHTML='';
+  // bookmarkable URL: ?input=<company>  (+ &run=<id> when replaying a specific past run)
+  try{ history.replaceState(null,'','?input='+encodeURIComponent(v)+(runId?'&run='+encodeURIComponent(runId):'')); }catch(_){}
   var logmap={}, order=[];
   function paint(){ q('lp-log').innerHTML='<div class="steps">'+order.map(function(k){return logLine(logmap[k]);}).join('')+'</div>'; }
-  var rf=(q('lp-refresh')&&q('lp-refresh').checked)?'&refresh=1':'';
-  var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v)+rf);
+  var rf=runId?'':((q('lp-refresh')&&q('lp-refresh').checked)?'&refresh=1':'');
+  var ridq=runId?'&run_id='+encodeURIComponent(runId):'';
+  var es=new EventSource(EBASE+'/api/linkedin-profiles/stream?input='+encodeURIComponent(v)+rf+ridq);
   es.addEventListener('log', function(ev){
     var m=JSON.parse(ev.data);
     var k=m.key||('_'+order.length);           // keyed: a resolved event replaces its running one in place
@@ -305,9 +317,39 @@ function run(e){
   es.addEventListener('fail', function(ev){ clearStatus();
     try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
   });
-  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; clearStatus(); loadHistory(); });
+  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; clearStatus(); loadHistory(); loadRuns(v); });
   es.onerror=function(){ es.close(); q('lp-btn').disabled=false; clearStatus(); };  // also stops auto-reconnect
 }
-loadHistory();   // show cached searches on load
+
+function loadRuns(input){    // previous runs of THIS company — click any to reload it (free)
+  var el=q('lp-runs'); if(!el) return;
+  if(!input){ el.innerHTML=''; return; }
+  fetch(EBASE+'/api/linkedin-profiles/runs?input='+encodeURIComponent(input)).then(function(r){return r.json();}).then(function(d){
+    var runs=(d&&d.runs)||[];
+    if(runs.length<2){ el.innerHTML=''; return; }    // only worth showing when there are multiple
+    var cur=new URLSearchParams(location.search).get('run');
+    var inp=(d.input||input).replace(/'/g,"\\'");
+    el.innerHTML='<div class="lp-runs-head">Previous runs of this company <span class="muted" style="font-weight:400">— click to load (free)</span></div>'
+      +'<div class="lp-runs-row">'+runs.map(function(r,idx){
+        var when=(r.created_at||'').replace('T',' ').slice(0,16);
+        var cost=(r.cost!=null&&r.cost!=='')?'$'+Number(r.cost).toFixed(2):'';
+        var dur=fmtDur(r.duration_s);
+        var active=(cur?String(r.id)===String(cur):idx===0)?' active':'';   // newest active if no run in URL
+        return '<button class="lp-run-chip'+active+'" onclick="loadRun('+r.id+',\''+inp+'\')">'
+          +'<b>'+esc(when)+'</b> · ✓'+(r.verified||0)+' · '+(r.profiles||0)+'p'+(cost?' · '+cost:'')+(dur!=='—'?' · '+dur:'')+'</button>';
+      }).join('')+'</div>';
+  }).catch(function(){});
+}
+function loadRun(id, input){
+  q('lp-in').value=input; if(q('lp-refresh'))q('lp-refresh').checked=false;
+  run({preventDefault:function(){}}, id);
+}
+
+(function init(){
+  var sp=new URLSearchParams(location.search);
+  var inp=sp.get('input'); var rid=sp.get('run');
+  loadHistory();                                     // recent searches always shown
+  if(inp){ q('lp-in').value=inp; run({preventDefault:function(){}}, rid?parseInt(rid,10):0); }
+})();
 </script>
 {% endblock %}

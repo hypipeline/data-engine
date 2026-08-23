@@ -121,6 +121,48 @@ def report_history(limit: int = 50) -> list:
             return out
 
 
+def report_runs(key: str, limit: int = 50) -> list:
+    """All historical runs for one input (newest first) — powers the previous-runs list."""
+    if not enabled():
+        return []
+    with closing(_conn()) as c:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, company_name, "
+                "jsonb_array_length(COALESCE(result->'profiles', '[]'::jsonb)) AS profiles, "
+                "COALESCE(NULLIF((SELECT count(*) FROM jsonb_array_elements("
+                "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'top12' = 'true'), 0), "
+                "  LEAST((SELECT count(*) FROM jsonb_array_elements("
+                "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'at_company' = 'true'), 12)) AS verified, "
+                "result->'cost'->>'usd' AS cost, result->>'duration_s' AS duration_s, created_at "
+                "FROM linkedin.profile_reports WHERE cache_key=%s "
+                "ORDER BY created_at DESC LIMIT %s", (key, limit))
+            out = []
+            for r in cur.fetchall():
+                r = dict(r)
+                if r.get("created_at"):
+                    r["created_at"] = r["created_at"].isoformat()
+                out.append(r)
+            return out
+
+
+def report_get_by_id(rid: int) -> dict | None:
+    """A specific historical LinkedIn-Profiles report by row id (deep-link / previous-runs)."""
+    if not enabled():
+        return None
+    with closing(_conn()) as c:
+        with c.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT result, created_at FROM linkedin.profile_reports WHERE id=%s", (rid,))
+            row = cur.fetchone()
+    if not row:
+        return None
+    data = dict(row["result"] or {})
+    data["from_cache"] = True
+    data["cached_at"] = row["created_at"].isoformat() if row["created_at"] else None
+    data["run_id"] = rid
+    return data
+
+
 def recent_full(limit: int = 40) -> list:
     """Latest FULL report per input (result payload included) — for scanning/debug."""
     if not enabled():

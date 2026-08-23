@@ -1130,15 +1130,28 @@ def api_linkedin_profiles(input: str = ""):
 
 
 @app.get("/api/linkedin-profiles/stream")
-def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
+def api_linkedin_profiles_stream(input: str = "", refresh: str = "", run_id: int = 0):
     """Same flow as /api/linkedin-profiles but STREAMS a live log (SSE) — one `log` event per step as
     it happens, a `result` event with the full payload, then `done`. Cached per input: a repeat run
-    replays the stored report instantly (no Bright Data calls) unless refresh=1."""
+    replays the stored report instantly (no Bright Data calls) unless refresh=1. Pass run_id=<id>
+    to replay a specific historical run (deep-link / previous-runs)."""
     def sse(event, data):
         return "event: %s\ndata: %s\n\n" % (event, json.dumps(data, default=str))
 
     def gen():
         inp = (input or "").strip()
+        if run_id:                                    # deep-link to a specific past run
+            rep = None
+            try:
+                rep = linkedin_cache.report_get_by_id(run_id)
+            except Exception:  # noqa: BLE001
+                rep = None
+            if rep:
+                yield sse("log", {"key": "cache", "ok": True,
+                                  "msg": "Loaded run #%d from %s · no Bright Data calls" % (
+                                      run_id, (rep.get("cached_at") or "").replace("T", " ")[:19])})
+                yield sse("result", rep); yield sse("done", {}); return
+            # fall through to a normal load if the id is gone
         if not inp:
             yield sse("fail", {"error": "Enter a website URL or a LinkedIn company URL."}); yield sse("done", {}); return
         key = _lp_key(inp)
@@ -1505,6 +1518,15 @@ def api_linkedin_profiles_report(input: str = ""):
         "profiles_found": len(profiles),          # total profiles the search surfaced (before filtering)
         "people": people,
     })
+
+
+@app.get("/api/linkedin-profiles/runs")
+def api_linkedin_profiles_runs(input: str = ""):
+    """All historical runs for one input (newest first) — powers the previous-runs selector."""
+    inp = (input or "").strip()
+    if not inp:
+        return JSONResponse({"input": "", "runs": []})
+    return JSONResponse({"input": inp, "runs": linkedin_cache.report_runs(_lp_key(inp))})
 
 
 @app.get("/api/linkedin-profiles/history")
