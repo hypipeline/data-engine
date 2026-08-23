@@ -18,7 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 from config import load_config
 from agent import EntityLookup
@@ -1466,33 +1466,54 @@ def api_linkedin_profiles_checkone(input: str = "", url: str = ""):
         "cost": _bd_cost(t)})
 
 
+_LP_INFLIGHT: set = set()      # cache keys with a run currently in progress (dedupe polls)
+_LP_BG_TASKS: set = set()      # strong refs so background tasks aren't GC'd
+
+
+async def _lp_run_bg(inp: str, key: str, refresh: str):
+    """Run the profiles pipeline to completion in the background (it saves the report to cache),
+    then clear the in-flight flag so the next poll returns the result."""
+    try:
+        resp = api_linkedin_profiles_stream(input=inp, refresh=refresh, run_id=0)
+        async for _ in resp.body_iterator:              # drive the run; SSE frames discarded
+            pass
+    except Exception as e:  # noqa: BLE001
+        print(f"[linkedin-profiles bg] run failed for {key}: {e}")
+    finally:
+        _LP_INFLIGHT.discard(key)
+
+
 @app.get("/api/linkedin-profiles/report")
 async def api_linkedin_profiles_report(input: str = "", refresh: str = "", run: int = 1):
-    """JSON API for a LinkedIn-Profiles run. Like entity's /api/lookup, but self-running: returns the
-    saved report if there is one, otherwise RUNS the search live (~1–2 min), saves it, and returns it.
-    `people` = the up-to-12 people confirmed STILL AT the company. Params: refresh=1 forces a fresh
-    run; run=0 makes it cache-only (404 if nothing saved)."""
+    """JSON API for a LinkedIn-Profiles run — ASYNC job + poll pattern. Returns the saved report
+    (200) if ready; otherwise KICKS OFF the run in the background and returns 202 {status:"running"}.
+    Poll the same URL (without refresh) until it returns 200. `people` = the up-to-12 people confirmed
+    STILL AT the company. Params: refresh=1 starts a fresh run; run=0 = cache-only (404 if none)."""
     inp = (input or "").strip()
     if not inp:
         return JSONResponse({"error": "Pass ?input=<company website or LinkedIn company URL>"}, status_code=400)
     key = _lp_key(inp)
+    poll_url = "/entity-app/api/linkedin-profiles/report?input=" + quote(inp)
+    # A run is already in progress for this input → keep polling (don't start a duplicate).
+    if key in _LP_INFLIGHT:
+        return JSONResponse({"status": "running", "input": inp, "poll": poll_url,
+                             "note": "run in progress (~1–2 min) — poll this URL until it returns 200"},
+                            status_code=202)
     try:
         rep = None if refresh else linkedin_cache.report_get_latest(key)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": "lookup failed: %s" % e}, status_code=500)
-    if not rep and run:
-        # No cached report → run the SAME pipeline the tool/stream uses (drain its generator, which
-        # saves the report), then read it back. Output is identical to a UI run.
-        try:
-            resp = api_linkedin_profiles_stream(input=inp, refresh=refresh, run_id=0)
-            async for _ in resp.body_iterator:          # run to completion; SSE frames discarded
-                pass
-            rep = linkedin_cache.report_get_latest(key)
-        except Exception as e:  # noqa: BLE001
-            return JSONResponse({"error": "run failed: %s" % e}, status_code=500)
     if not rep:
-        return JSONResponse({"error": "No report for %r (run=0 and nothing cached)." % inp,
-                             "tool": "/linkedin-profiles"}, status_code=404)
+        if not run:
+            return JSONResponse({"error": "No report for %r (run=0 and nothing cached)." % inp,
+                                 "tool": "/linkedin-profiles"}, status_code=404)
+        # Fire the run in the background (fire-and-forget) and tell the caller to poll.
+        _LP_INFLIGHT.add(key)
+        task = asyncio.create_task(_lp_run_bg(inp, key, refresh))
+        _LP_BG_TASKS.add(task); task.add_done_callback(_LP_BG_TASKS.discard)
+        return JSONResponse({"status": "running", "started": True, "input": inp, "poll": poll_url,
+                             "note": "run started (~1–2 min) — poll this URL (without refresh) until it returns 200"},
+                            status_code=202)
     profiles = rep.get("profiles") or []
     # `people` = up to 12 people currently AT the company. Prefer the saved top12 flags; for older
     # reports without them, derive on the fly (first 12 with a matching current company).
