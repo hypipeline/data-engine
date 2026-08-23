@@ -1310,6 +1310,33 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+@app.get("/api/linkedin-profiles/_roleprobe")
+def api_linkedin_profiles_roleprobe(urls: str = ""):
+    """TEMP — dump the role-bearing dataset fields (position, current_company.title, experience[0..1],
+    about) for a few profile URLs, to decide whether the dataset can give an untruncated job title
+    (vs parsing the truncated Google SERP). Remove after deciding."""
+    us = [u.strip() for u in urls.split(",") if u.strip()]
+    if not us:
+        return JSONResponse({"error": "pass ?urls=comma,separated"})
+    t = _tools()
+    ds = t.linkedin_profiles_dataset(us)
+    out = []
+    for u in us:
+        d = ds.get(t._slug_of(u)) or {}
+        exp = d.get("experience") or []
+        cc = d.get("current_company") or {}
+        out.append({
+            "url": u, "name": d.get("name"),
+            "position": d.get("position"),
+            "current_company_title": (cc.get("title") if isinstance(cc, dict) else None),
+            "experience_len": len(exp),
+            "experience_0": (exp[0] if len(exp) > 0 else None),
+            "experience_1": (exp[1] if len(exp) > 1 else None),
+            "about_head": (d.get("about") or "")[:140],
+        })
+    return JSONResponse({"summary": out, "cost": _bd_cost(t)})
+
+
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
