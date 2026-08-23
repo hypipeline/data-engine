@@ -108,7 +108,7 @@ def report_history(limit: int = 50) -> list:
                 "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'top12' = 'true'), 0), "
                 "  LEAST((SELECT count(*) FROM jsonb_array_elements("
                 "  COALESCE(result->'profiles','[]'::jsonb)) e WHERE e->>'at_company' = 'true'), 12)) AS verified, "
-                "result->'cost'->>'usd' AS cost, created_at "
+                "result->'cost'->>'usd' AS cost, result->>'duration_s' AS duration_s, created_at "
                 "FROM (SELECT DISTINCT ON (cache_key) * FROM linkedin.profile_reports "
                 "      ORDER BY cache_key, created_at DESC) t "
                 "ORDER BY created_at DESC LIMIT %s", (limit,))

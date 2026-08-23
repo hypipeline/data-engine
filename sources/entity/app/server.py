@@ -1156,6 +1156,7 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             yield sse("done", {})
             return
         t = _tools()
+        t_start = time.time()                                 # wall-clock run duration for the report
         low, company_url = inp.lower(), None
         company_name = employees = None
         reuse = bool(refresh and cached and cached.get("company_url") and cached.get("company_name"))
@@ -1357,6 +1358,7 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
 
             # persist the enriched report (profiles now carry page_title; final cost incl. verify)
             report["cost"] = cost
+            report["duration_s"] = round(time.time() - t_start, 1)   # how long the run took
             try:
                 linkedin_cache.report_save(key, report)
             except Exception as e:  # noqa: BLE001

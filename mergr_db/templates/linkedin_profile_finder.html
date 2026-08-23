@@ -202,7 +202,7 @@ function loadHistory(){
     if(!h.length){ el.innerHTML=''; return; }
     el.innerHTML='<div class="lp-hist-head">Recent searches <span class="muted" style="font-weight:400">— cached, click to reopen (no cost)</span></div>'
       +'<div class="lp-hist-wrap"><table class="lp-hist-tbl"><thead><tr>'
-      +'<th>Company</th><th class="num">Profiles</th><th class="num" title="people confirmed still at the company (up to 12)">At company</th><th class="num">Cost</th><th class="num">When</th>'
+      +'<th>Company</th><th class="num">Profiles</th><th class="num" title="people confirmed still at the company (up to 12)">At company</th><th class="num">Cost</th><th class="num" title="how long the run took">Run time</th><th class="num">When</th>'
       +'</tr></thead><tbody>'
       +h.map(function(x){
         var when=(x.created_at||'').replace('T',' ').slice(0,16);
@@ -214,11 +214,18 @@ function loadHistory(){
           +'<td class="num pf">'+(x.profiles||0)+'</td>'
           +'<td class="num"><span class="ver-badge'+(ver?'':' zero')+'">✓ '+ver+'/12</span></td>'
           +'<td class="num cost">'+cost+'</td>'
+          +'<td class="num when">'+fmtDur(x.duration_s)+'</td>'
           +'<td class="num when">'+esc(when)+'</td>'
           +'</tr>';
       }).join('')
       +'</tbody></table></div>';
   }).catch(function(){});
+}
+function fmtDur(s){                        // seconds -> "2m 33s" / "45s" / "—"
+  if(s==null||s==='') return '—';
+  s=Math.round(Number(s)); if(!isFinite(s)) return '—';
+  if(s<60) return s+'s';
+  return Math.floor(s/60)+'m '+(s%60)+'s';
 }
 function reopen(inp){ q('lp-in').value=inp; if(q('lp-refresh'))q('lp-refresh').checked=false; run({preventDefault:function(){}}); }
 
