@@ -25,8 +25,8 @@
 	# Clean, tool-scoped alias for the LinkedIn Profiles API (its endpoints live in the shared
 	# entity backend, but "/entity-app/" is a misleading name). /linkedin-profiles/api/* maps to
 	# the entity backend's /api/linkedin-profiles/*. (The tool page /linkedin-profiles stays on web.)
-	handle_path /linkedin-profiles/api/* {
-		rewrite * /api/linkedin-profiles{path}
+	handle /linkedin-profiles/api/* {
+		uri replace /linkedin-profiles/api /api/linkedin-profiles
 		reverse_proxy entity:8000
 	}
 
