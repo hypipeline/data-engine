@@ -32,11 +32,10 @@ jobs:
           cd "$HOME/data-engine/mergr_db"
           # prod overlay adds the public domain + TLS + 80/443 to the single Caddy front door
           docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-          # Caddyfile is a bind mount — a content change won't recreate the container, so
-          # reload it explicitly (falls back to a restart if the admin API reload fails).
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T caddy \
-            caddy reload --config /etc/caddy/Caddyfile 2>/dev/null \
-            || docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
+          # Caddyfile is a bind mount — content changes don't recreate the container, and the
+          # in-place `caddy reload` proved unreliable on this box (config changes weren't applied).
+          # Restart caddy unconditionally so it always boots with the current Caddyfile.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml restart caddy
           docker image prune -f
 
       - name: Health check

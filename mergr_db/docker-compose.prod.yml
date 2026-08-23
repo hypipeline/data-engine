@@ -8,6 +8,9 @@ services:
       CADDY_SITE_ADDRESS: "dataengine.hyndlandpartners.com"
       ACME_EMAIL: "craig.anderson@hyndlandpartners.com"
       AUTH_IMPORT: "auth-on"          # prod requires login (admin / silver-maple-harbor)
+      # Bump this to force `docker compose up -d` to RECREATE caddy (a fresh start reloads the
+      # Caddyfile). The in-place `caddy reload` step hasn't been applying config changes on the box.
+      CADDY_CFG_REV: "3"
     ports: !override
       - "80:80"
       - "443:443"
