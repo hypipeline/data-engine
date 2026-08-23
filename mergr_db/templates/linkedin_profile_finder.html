@@ -78,6 +78,7 @@
   .profile .rank { color:#94a3b8; font-weight:700; margin-right:3px; }
   .profile.top12 .rank { color:#166534; }
   .top-badge { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; color:#166534; background:#dcfce7; border-radius:4px; padding:1px 6px; vertical-align:middle; margin-left:5px; }
+  .lp-divider { max-width:820px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; margin:16px 0 9px; padding-top:11px; border-top:1px dashed var(--border-2); }
   .profile .pn { font-weight:600; font-size:14.5px; }
   /* obvious current-company status pill (checking / at company / moved / unknown) */
   .profile .status-row { margin:6px 0 3px; min-height:24px; }
@@ -171,22 +172,33 @@ function render(d){   // company card + profiles; the step log is shown live in 
       +'</div>';
   }
   if(d.profiles){
+    var hasFlags=d.profiles.some(function(p){ return p.top12!==undefined; });   // verification has run
+    var nVer=d.profiles.filter(function(p){ return p.top12; }).length;
     h+='<div class="results-head">'+d.profiles.length+' unique profile'+(d.profiles.length===1?'':'s')
-      +' across '+(d.searches||1)+' searches <span class="muted" style="font-weight:400">· ranked by how many searches matched each person</span></div>';
+      +' across '+(d.searches||1)+' searches'
+      +(hasFlags
+         ? ' <span class="muted" style="font-weight:400">· '+nVer+' verified still at '+esc(d.company_name||'the company')+' (shown first, up to 12)</span>'
+         : ' <span class="muted" style="font-weight:400">· ranked by how many searches matched each person</span>')+'</div>';
     if(!d.profiles.length){ h+='<p class="muted">No profiles returned. Try the LinkedIn company URL directly, or a larger company.</p>'; }
+    var lastTop=null;
     h+=d.profiles.map(function(p,i){
       var hits=p.hits||[];
       var chips=hits.map(function(hh){
         return '<span class="hit'+(hh==='all employees'?' broad':'')+'">'+esc(hh)+'</span>';
       }).join(' ');
-      // TOP 12 = top 12 still AT the company once verified; before that, provisional by rank
+      // verified (still-at-company) set is shown first; before verification, provisional by rank
       var isTop = (p.top12!==undefined) ? !!p.top12 : (i<12);
+      var divider='';   // once verified, a line between the verified set and everyone else
+      if(hasFlags && lastTop===true && !isTop){
+        divider='<div class="lp-divider">others — not verified as still at '+esc(d.company_name||'the company')+'</div>';
+      }
+      lastTop=isTop;
       var top = isTop ? ' top12' : '';
       var pill=pillFor(p,i);
-      return '<div class="profile'+top+'" data-purl="'+esc(p.url)+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
+      return divider+'<div class="profile'+top+'" data-purl="'+esc(p.url)+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
         +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
-        +(isTop?' <span class="top-badge" title="top 12 people still at the company">TOP 12</span>':'')+'</div>'
+        +(isTop?' <span class="top-badge" title="verified still at the company">✓ verified</span>':'')+'</div>'
         +'<div class="status-row">'+(pill?'<span class="status-pill '+pill.cls+'">'+pill.html+'</span>':'')+'</div>'
         +(p.job_title?'<div class="pjob"><span class="lbl">role:</span> <b>'+esc(p.job_title)+'</b></div>':'')
         +'<div class="pt"><span class="lbl">serp title:</span> '+esc(p.title)+'</div>'
@@ -278,11 +290,15 @@ function run(e){
     else { cls='unknown'; html='— no current company'; }
     row.innerHTML='<span class="status-pill '+cls+'">'+html+'</span>';
   });
-  es.addEventListener('rerank', function(ev){         // final TOP 12 = top 12 still at the company
+  es.addEventListener('rerank', function(ev){         // verified rise to top; unverified bumped down
     var m=JSON.parse(ev.data); var set={}; (m.top12||[]).forEach(function(u){ set[u]=1; });
     if(LP_REPORT && LP_REPORT.profiles){
       LP_REPORT.profiles.forEach(function(p){ p.top12 = !!set[p.url]; });
-      render(LP_REPORT);                              // authoritative redraw: badges on movers removed
+      if(m.order){                                    // reorder to verified-first (minimal bump)
+        var pos={}; m.order.forEach(function(u,idx){ pos[u]=idx; });
+        LP_REPORT.profiles.sort(function(a,b){ return (pos[a.url]==null?1e9:pos[a.url])-(pos[b.url]==null?1e9:pos[b.url]); });
+      }
+      render(LP_REPORT);                              // authoritative redraw in the new order
     }
   });
   function clearStatus(){ LP_RUNNING=false; q('lp-status').className='lp-hint'; q('lp-status').innerHTML=''; }

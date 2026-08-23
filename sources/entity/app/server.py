@@ -1353,14 +1353,18 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                     yield sse("verify", ev)
             checked = state["checked"]
 
-            # TOP 12 = the 12 highest-ranked people STILL at the company — skip movers / no-company.
+            # Reorder so VERIFIED (still-at-company) people rise to the top — unverified names are
+            # bumped down by the minimum (a stable partition keeps hit-rank order within each group).
+            ranked.sort(key=lambda p: 0 if p.get("at_company") else 1)
+            # The highlighted set = the up-to-12 VERIFIED people (now contiguous at the top).
             picked = 0
             for p in ranked:
                 is_top = bool(p.get("at_company")) and picked < 12
                 p["top12"] = is_top
                 if is_top:
                     picked += 1
-            yield sse("rerank", {"top12": [p["url"] for p in ranked if p.get("top12")]})
+            yield sse("rerank", {"order": [p["url"] for p in ranked],
+                                 "top12": [p["url"] for p in ranked if p.get("top12")]})
 
             cost = _bd_cost(t)
             at_n = state["here"]
