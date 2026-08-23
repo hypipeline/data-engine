@@ -126,6 +126,7 @@
 var EBASE='/entity-app';
 var LP_REPORT=null;   // the live report currently rendered (updated by verify/rerank events)
 var LP_COMPANY='';    // searched company name (for the status pills)
+var LP_RUNNING=false; // true only during a live run (so cached loads don't show "checking…")
 function q(id){return document.getElementById(id);}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
@@ -143,8 +144,9 @@ function pillFor(p, i){   // obvious current-company status pill
   if(p.at_company===true)  return {cls:'here',    html:'✓ At '+esc(LP_COMPANY||'company')};
   if(p.at_company===false && p.current_company) return {cls:'gone', html:'✗ Now at '+esc(p.current_company)};
   if(p.at_company===false) return {cls:'unknown', html:'— no current company'};
-  if(i<20) return {cls:'check', html:'<span class="mini-spin"></span> checking…'};  // top-20 pending
-  return null;             // beyond top-20 — never checked
+  // undefined = not checked. During a live run the first 12 are always checked -> show a spinner.
+  if(LP_RUNNING && i<12) return {cls:'check', html:'<span class="mini-spin"></span> checking…'};
+  return null;             // not checked (cached load, or ranked past the checked set)
 }
 
 function render(d){   // company card + profiles; the step log is shown live in #lp-log
@@ -233,6 +235,7 @@ function run(e){
   e.preventDefault();
   var v=q('lp-in').value.trim();
   if(!v) return;
+  LP_RUNNING=true;
   q('lp-btn').disabled=true; q('lp-status').textContent='Running…';
   q('lp-out').innerHTML=''; q('lp-log').innerHTML='';
   var logmap={}, order=[];
@@ -252,14 +255,15 @@ function run(e){
       var cn=q('lp-costnum'); if(cn) cn.textContent='$'+Number(m.cost.usd).toFixed(4);
       var cs=q('lp-costsub'); if(cs) cs.textContent=(m.cost.brightdata_calls||0)+' Bright Data calls @ $'+(m.cost.rate||0)+' ea (est.)';
     }
-    // sticky spinner + progress bar + live "N/20 checked" counter — stays pinned while you scroll
-    var ck=(m.checked||0), tot=(m.total||20), pct=Math.round(ck/tot*100);
+    // sticky spinner + progress bar — fills toward 12 confirmed still-here (adaptive, max 20 checks)
+    var here=(m.here||0), tgt=(m.target||12), ck=(m.checked||0), pct=Math.round(Math.min(here,tgt)/tgt*100);
     var el=(m.elapsed!=null)?'<span class="el">'+m.elapsed+'s</span>':'';
     q('lp-status').className='lp-hint checking';
     q('lp-status').innerHTML='<div class="lp-checking"><span class="lp-spin"></span>'
-      +'<span class="lc-label">Checking employees still at the company…</span>'
+      +'<span class="lc-label">Finding people still at the company…</span>'
       +'<span class="lp-bar"><i style="width:'+pct+'%"></i></span>'
-      +'<span class="lc-count">'+ck+'/'+tot+'</span>'+el+'</div>';
+      +'<span class="lc-count">'+here+'/'+tgt+'</span>'
+      +'<span class="el">'+ck+' checked'+(m.elapsed!=null?' · '+m.elapsed+'s':'')+'</span></div>';
     if(m.progress) return;                            // spinner tick only — no profile payload
     if(m.url && LP_REPORT && LP_REPORT.profiles){     // remember for the rerank re-render
       for(var i=0;i<LP_REPORT.profiles.length;i++){ if(LP_REPORT.profiles[i].url===m.url){
@@ -281,7 +285,7 @@ function run(e){
       render(LP_REPORT);                              // authoritative redraw: badges on movers removed
     }
   });
-  function clearStatus(){ q('lp-status').className='lp-hint'; q('lp-status').innerHTML=''; }
+  function clearStatus(){ LP_RUNNING=false; q('lp-status').className='lp-hint'; q('lp-status').innerHTML=''; }
   es.addEventListener('fail', function(ev){ clearStatus();
     try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
   });

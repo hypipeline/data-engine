@@ -1278,10 +1278,10 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             search_slug = _m.group(1).strip().lower() if _m else None
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
                               "msg": "Checking which of the top %d are still at the company (LinkedIn dataset)…" % len(top)})
-            # Split into small parallel dataset jobs so we can stream real progress ("N/20 checked")
-            # and finish faster than one big ~135s batch. A chunk failing only affects its members.
+            # Adaptive: we only surface up to 12 people, so check in rank order until 12 are
+            # confirmed still-at-company — and never check more than 20. Small parallel dataset jobs
+            # keep the stream live; a chunk failing only affects its members.
             CH = 4
-            chunks = [top[i:i + CH] for i in range(0, len(top), CH)]
 
             def _run_chunk(chunk):
                 return chunk, t.linkedin_profiles_dataset([p["url"] for p in chunk])
@@ -1313,31 +1313,45 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                     cc_l = (p.get("current_company") or "").strip().lower()
                     p["at_company"] = bool(cc_l and cn_l and (cn_l in cc_l or cc_l in cn_l))
 
-            checked = 0
-            with ThreadPoolExecutor(max_workers=3) as ex:
-                futs = [ex.submit(_run_chunk, c) for c in chunks]
-                pending = set(futs)
-                waited = 0
-                while pending:
-                    ready = [f for f in pending if f.done()]
-                    if not ready:                        # spinner tick — keeps the SSE stream alive
-                        time.sleep(2); waited += 2
-                        yield sse("verify", {"progress": True, "checked": checked,
-                                             "total": len(top), "elapsed": waited, "cost": _bd_cost(t)})
-                        continue
-                    for fut in ready:
-                        pending.discard(fut)
-                        try:
-                            chunk, ds = fut.result()
-                        except Exception:  # noqa: BLE001
-                            chunk, ds = [], {}
-                        for p in chunk:
-                            _apply(p, ds.get(t._slug_of(p["url"])))
-                            checked += 1
-                            yield sse("verify", {"url": p["url"], "current_company": p.get("current_company"),
-                                                 "cur_title": p.get("cur_title"), "at_company": p.get("at_company"),
-                                                 "city": p.get("ds_city"), "checked": checked,
-                                                 "total": len(top), "cost": _bd_cost(t)})
+            state = {"checked": 0, "here": 0}            # shared counters across the two pools
+
+            def check_pool(pool):                        # parallel dataset check over `pool`, streaming
+                chunks = [pool[i:i + CH] for i in range(0, len(pool), CH)]
+                with ThreadPoolExecutor(max_workers=3) as ex:
+                    futs = [ex.submit(_run_chunk, c) for c in chunks]
+                    pending = set(futs)
+                    waited = 0
+                    while pending:
+                        ready = [f for f in pending if f.done()]
+                        if not ready:                    # spinner tick — keeps the SSE stream alive
+                            time.sleep(2); waited += 2
+                            yield {"progress": True, "checked": state["checked"], "here": state["here"],
+                                   "target": 12, "cap": 20, "elapsed": waited, "cost": _bd_cost(t)}
+                            continue
+                        for fut in ready:
+                            pending.discard(fut)
+                            try:
+                                chunk, ds = fut.result()
+                            except Exception:  # noqa: BLE001
+                                chunk, ds = [], {}
+                            for p in chunk:
+                                _apply(p, ds.get(t._slug_of(p["url"])))
+                                state["checked"] += 1
+                                if p.get("at_company"):
+                                    state["here"] += 1
+                                yield {"url": p["url"], "current_company": p.get("current_company"),
+                                       "cur_title": p.get("cur_title"), "at_company": p.get("at_company"),
+                                       "city": p.get("ds_city"), "checked": state["checked"],
+                                       "here": state["here"], "target": 12, "cap": 20, "cost": _bd_cost(t)}
+
+            # Phase A: the top 12. If that already yields 12 still-here, we stop (saving up to 8 checks).
+            for ev in check_pool(top[:12]):
+                yield sse("verify", ev)
+            # Phase B: only if we still need more, extend to the top 20.
+            if state["here"] < 12 and len(top) > 12:
+                for ev in check_pool(top[12:20]):
+                    yield sse("verify", ev)
+            checked = state["checked"]
 
             # TOP 12 = the 12 highest-ranked people STILL at the company — skip movers / no-company.
             picked = 0
@@ -1349,12 +1363,11 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             yield sse("rerank", {"top12": [p["url"] for p in ranked if p.get("top12")]})
 
             cost = _bd_cost(t)
-            at_n = sum(1 for p in top if p.get("at_company"))
-            got_n = sum(1 for p in top if p.get("current_company"))
+            at_n = state["here"]
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "ok": True,
-                              "msg": "Verifying top %d" % len(top),
-                              "result": "%d still at %s · %d/%d with a listed current company · %d Bright Data calls total · ~$%s" % (
-                                  at_n, company_name or "company", got_n, len(top), cost["brightdata_calls"], cost["usd"])})
+                              "msg": "Checking still at %s" % (company_name or "company"),
+                              "result": "%d still at %s · %d checked (target 12, max 20) · %d Bright Data calls total · ~$%s" % (
+                                  at_n, company_name or "company", checked, cost["brightdata_calls"], cost["usd"])})
 
             # persist the enriched report (profiles now carry page_title; final cost incl. verify)
             report["cost"] = cost
