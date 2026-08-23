@@ -21,6 +21,13 @@
   .cache-badge { display:inline-block; font-size:11px; font-weight:600; color:#92400e; background:#fef3c7; border-radius:10px; padding:1px 8px; vertical-align:middle; margin-left:6px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:10px 0 18px; max-width:820px; }
 
+  /* "still at company" check — spinner + N/20 counter */
+  .lp-checking { display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--text); background:#eef4ff; border:1px solid #d6e4ff; border-radius:var(--radius-sm); padding:9px 13px; max-width:820px; margin:4px 0; }
+  .lp-checking b { color:#0a3d91; }
+  .lp-checking .el { color:var(--muted); font-weight:400; margin-left:auto; font-size:12px; }
+  .lp-spin { flex:0 0 auto; width:14px; height:14px; border:2px solid #c7d9f5; border-top-color:#0a66c2; border-radius:50%; animation:lp-spin .7s linear infinite; }
+  @keyframes lp-spin { to { transform:rotate(360deg); } }
+
   /* step trail */
   .steps { max-width:820px; margin:8px 0 6px; }
   .step { display:flex; gap:10px; align-items:flex-start; padding:9px 12px; border:1px solid var(--border-2); border-radius:var(--radius-sm); background:var(--panel); margin-bottom:7px; font-size:13.5px; }
@@ -184,8 +191,12 @@ function run(e){
       var cn=q('lp-costnum'); if(cn) cn.textContent='$'+Number(m.cost.usd).toFixed(4);
       var cs=q('lp-costsub'); if(cs) cs.textContent=(m.cost.brightdata_calls||0)+' Bright Data calls @ $'+(m.cost.rate||0)+' ea (est.)';
     }
-    q('lp-status').textContent='Verifying current companies… '+(m.verified||0)+'/'+(m.total||20);
-    if(LP_REPORT && LP_REPORT.profiles){              // remember for the rerank re-render
+    // prominent spinner + live "N/20 checked" counter at the top
+    var el=(m.elapsed!=null)?'<span class="el">'+m.elapsed+'s</span>':'';
+    q('lp-status').innerHTML='<div class="lp-checking"><span class="lp-spin"></span>'
+      +'Checking which employees are still at the company… <b>'+(m.checked||0)+'/'+(m.total||20)+'</b> checked'+el+'</div>';
+    if(m.progress) return;                            // spinner tick only — no profile payload
+    if(m.url && LP_REPORT && LP_REPORT.profiles){     // remember for the rerank re-render
       for(var i=0;i<LP_REPORT.profiles.length;i++){ if(LP_REPORT.profiles[i].url===m.url){
         LP_REPORT.profiles[i].current_company=m.current_company; LP_REPORT.profiles[i].at_company=m.at_company; break; } }
     }

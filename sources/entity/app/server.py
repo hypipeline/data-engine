@@ -1231,25 +1231,18 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             # for logged-out scraping (position=null), so the role stays from the Google SERP above;
             # this step confirms whether each person is *still at the company*. ──
             top = ranked[:20]
-            urls = [p["url"] for p in top]
-            yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
-                              "msg": "Verifying top %d via LinkedIn dataset — current company…" % len(top)})
-            ds = {}
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                fut = ex.submit(t.linkedin_profiles_dataset, urls)
-                waited = 0
-                while not fut.done():                    # heartbeat keeps the SSE stream alive
-                    time.sleep(3); waited += 3
-                    yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
-                                      "msg": "Collecting structured profiles from LinkedIn dataset… (%ds)" % waited})
-                try:
-                    ds = fut.result() or {}
-                except Exception:  # noqa: BLE001
-                    ds = {}
-
             cn_l = (company_name or "").strip().lower()
-            for p in top:
-                row = ds.get(t._slug_of(p["url"]))
+            yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
+                              "msg": "Checking which of the top %d are still at the company (LinkedIn dataset)…" % len(top)})
+            # Split into small parallel dataset jobs so we can stream real progress ("N/20 checked")
+            # and finish faster than one big ~135s batch. A chunk failing only affects its members.
+            CH = 4
+            chunks = [top[i:i + CH] for i in range(0, len(top), CH)]
+
+            def _run_chunk(chunk):
+                return chunk, t.linkedin_profiles_dataset([p["url"] for p in chunk])
+
+            def _apply(p, row):
                 if row:
                     cc, ctitle = t.row_current_company(row)
                     if cc:
@@ -1259,13 +1252,33 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                     if row.get("city"):
                         p["ds_city"] = row.get("city")
                 cc_l = (p.get("current_company") or "").strip().lower()
-                # "still at the company" if the dataset's current company overlaps the searched name
                 p["at_company"] = bool(cc_l and cn_l and (cn_l in cc_l or cc_l in cn_l))
-                yield sse("verify", {"url": p["url"], "current_company": p.get("current_company"),
-                                     "cur_title": p.get("cur_title"), "at_company": p.get("at_company"),
-                                     "city": p.get("ds_city"),
-                                     "verified": sum(1 for pp in top if pp.get("current_company") is not None),
-                                     "total": len(top), "cost": _bd_cost(t)})
+
+            checked = 0
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                futs = [ex.submit(_run_chunk, c) for c in chunks]
+                pending = set(futs)
+                waited = 0
+                while pending:
+                    ready = [f for f in pending if f.done()]
+                    if not ready:                        # spinner tick — keeps the SSE stream alive
+                        time.sleep(2); waited += 2
+                        yield sse("verify", {"progress": True, "checked": checked,
+                                             "total": len(top), "elapsed": waited, "cost": _bd_cost(t)})
+                        continue
+                    for fut in ready:
+                        pending.discard(fut)
+                        try:
+                            chunk, ds = fut.result()
+                        except Exception:  # noqa: BLE001
+                            chunk, ds = [], {}
+                        for p in chunk:
+                            _apply(p, ds.get(t._slug_of(p["url"])))
+                            checked += 1
+                            yield sse("verify", {"url": p["url"], "current_company": p.get("current_company"),
+                                                 "cur_title": p.get("cur_title"), "at_company": p.get("at_company"),
+                                                 "city": p.get("ds_city"), "checked": checked,
+                                                 "total": len(top), "cost": _bd_cost(t)})
 
             # TOP 12 = the 12 highest-ranked people STILL at the company — skip movers / no-company.
             picked = 0
