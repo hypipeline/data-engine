@@ -1348,6 +1348,28 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+@app.get("/api/linkedin-profiles/_coprobe")
+def api_linkedin_profiles_coprobe(urls: str = ""):
+    """TEMP — dump each person's employer identifiers (current_company_company_id, the full
+    current_company object, current_company_name) so we can match on COMPANY ID/link instead of
+    the ambiguous name (two different 'Inflexion' companies have different IDs). Remove after."""
+    us = [u.strip() for u in urls.split(",") if u.strip()]
+    if not us:
+        return JSONResponse({"error": "pass ?urls=comma,separated"})
+    t = _tools()
+    ds = t.linkedin_profiles_dataset(us)
+    out = []
+    for u in us:
+        d = ds.get(t._slug_of(u)) or {}
+        out.append({
+            "url": u, "name": d.get("name"),
+            "current_company_name": d.get("current_company_name"),
+            "current_company_company_id": d.get("current_company_company_id"),
+            "current_company": d.get("current_company"),   # full object — look for id/link/url
+        })
+    return JSONResponse({"summary": out, "cost": _bd_cost(t)})
+
+
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
