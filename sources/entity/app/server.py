@@ -1019,6 +1019,39 @@ def _lp_key(inp):
     return ("co:" + m.group(1).rstrip("/")) if m else ("web:" + _norm_query(inp))
 
 
+def _role_from_serp(title, name=None, company=None):
+    """Best-effort job title out of a Google SERP LinkedIn title like 'Name - Role at Company'.
+    The people dataset masks the role (position null, experience empty), so the SERP is our only
+    source. Google usually truncates at the COMPANY end ('...at ...'), so the role itself is
+    typically intact — e.g. 'William Gaybrick - President, Technology and Business at ...' -> the
+    complete 'President, Technology and Business'. Returns None when only a company/name is present."""
+    if not title:
+        return None
+    s = re.sub(r"\s*[|\-–—]\s*LinkedIn\s*$", "", title, flags=re.I).strip()
+    if name and s.lower().startswith(name.lower()):          # drop the leading 'Name - '
+        s = s[len(name):].lstrip(" -–—:·|").strip()
+    else:
+        parts = re.split(r"\s+[-–—]\s+", s, maxsplit=1)
+        if len(parts) == 2:
+            s = parts[1].strip()
+    s = s.strip(" -–—•·\"'")
+    if not s:
+        return None
+    m = re.split(r"\s+at\s+", s, maxsplit=1, flags=re.I)     # 'Role at Company' -> Role
+    role = m[0].strip()
+    if len(m) == 1:                                          # no ' at ' — handle 'Company Role' / 'Role - Company'
+        cl = (company or "").strip()
+        if cl and role.lower().startswith(cl.lower() + " "):
+            role = role[len(cl):].strip()
+        else:
+            role = re.split(r"\s+[-–—]\s+", role, maxsplit=1)[0].strip()
+    # drop a dangling truncation ('… & ...', trailing ellipsis/conjunction/comma)
+    role = re.sub(r"\s*(?:&|and|,)?\s*(?:\.\.\.|…)\s*$", "", role, flags=re.I).strip(" -–—•·,&\"'")
+    if not role or (company and role.lower() == company.strip().lower()):
+        return None
+    return role
+
+
 @app.get("/api/linkedin-profiles")
 def api_linkedin_profiles(input: str = ""):
     """Find employee LinkedIn profiles for a company. Input = a website URL OR a LinkedIn *company* URL.
@@ -1212,6 +1245,8 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                                       "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
 
             ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
+            for p in ranked:      # parse the job title out of the Google SERP title (dataset masks it)
+                p["job_title"] = _role_from_serp(p.get("title"), p.get("name"), company_name)
             search_cost = _bd_cost(t)
             yield sse("log", {"key": "s3", "step": 3, "parent": True, "ok": True,
                               "msg": "Searching Google (%d queries)" % len(searches),
@@ -1310,33 +1345,6 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-@app.get("/api/linkedin-profiles/_roleprobe")
-def api_linkedin_profiles_roleprobe(urls: str = ""):
-    """TEMP — dump the role-bearing dataset fields (position, current_company.title, experience[0..1],
-    about) for a few profile URLs, to decide whether the dataset can give an untruncated job title
-    (vs parsing the truncated Google SERP). Remove after deciding."""
-    us = [u.strip() for u in urls.split(",") if u.strip()]
-    if not us:
-        return JSONResponse({"error": "pass ?urls=comma,separated"})
-    t = _tools()
-    ds = t.linkedin_profiles_dataset(us)
-    out = []
-    for u in us:
-        d = ds.get(t._slug_of(u)) or {}
-        exp = d.get("experience") or []
-        cc = d.get("current_company") or {}
-        out.append({
-            "url": u, "name": d.get("name"),
-            "position": d.get("position"),
-            "current_company_title": (cc.get("title") if isinstance(cc, dict) else None),
-            "experience_len": len(exp),
-            "experience_0": (exp[0] if len(exp) > 0 else None),
-            "experience_1": (exp[1] if len(exp) > 1 else None),
-            "about_head": (d.get("about") or "")[:140],
-        })
-    return JSONResponse({"summary": out, "cost": _bd_cost(t)})
-
-
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
@@ -1367,7 +1375,8 @@ def api_linkedin_profiles_report(input: str = ""):
             "rank": i + 1,                            # overall search rank (by how many searches matched)
             "name": p.get("name"),
             "linkedin_url": p.get("url"),
-            "headline": p.get("title"),               # Google SERP title (role — LinkedIn masks it in the dataset)
+            "job_title": p.get("job_title"),          # parsed from the SERP title (dataset masks the role)
+            "headline": p.get("title"),               # raw Google SERP title (provenance)
             "description": p.get("description"),
             "followers": p.get("followers"),
             "matched_searches": p.get("hits") or [],  # which of the 16 searches surfaced this person

@@ -60,7 +60,9 @@
   .profile.top12 .rank { color:#166534; }
   .top-badge { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; color:#166534; background:#dcfce7; border-radius:4px; padding:1px 6px; vertical-align:middle; margin-left:5px; }
   .profile .pn { font-weight:600; font-size:14.5px; }
-  .profile .pt { color:var(--muted); font-size:12.5px; margin-top:2px; }
+  .profile .pjob { font-size:13.5px; color:var(--text); margin-top:3px; }
+  .profile .pjob b { color:#0a3d91; }
+  .profile .pt { color:var(--muted); font-size:12px; margin-top:2px; }
   .profile a { color:var(--accent); font-size:12.5px; word-break:break-all; }
   .hitcount { display:inline-block; font-size:11px; font-weight:700; color:#166534; background:#e7f2ea; border-radius:10px; padding:0 7px; margin-left:4px; }
   .profile .hits { margin:5px 0 4px; }
@@ -145,7 +147,8 @@ function render(d){   // company card + profiles; the step log is shown live in 
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
         +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
         +(isTop?' <span class="top-badge" title="top 12 people still at the company">TOP 12</span>':'')+'</div>'
-        +'<div class="pt"><span class="lbl">title:</span> '+esc(p.title)+'</div>'
+        +(p.job_title?'<div class="pjob"><span class="lbl">role:</span> <b>'+esc(p.job_title)+'</b></div>':'')
+        +'<div class="pt"><span class="lbl">serp title:</span> '+esc(p.title)+'</div>'
         +(p.current_company?'<div class="pv '+(p.at_company?'ok':'moved')+'"><span class="lbl">current company</span> '+esc(p.current_company)+(p.at_company?' <span class="vtick">✓ still here</span>':' <span class="vmoved">↗ moved on</span>')+'</div>':'')
         +(p.description?'<div class="pd"><span class="lbl">description:</span> '+esc(p.description)+'</div>':'')
         +(chips?'<div class="hits">'+chips+'</div>':'')
