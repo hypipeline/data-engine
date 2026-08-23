@@ -21,12 +21,17 @@
   .cache-badge { display:inline-block; font-size:11px; font-weight:600; color:#92400e; background:#fef3c7; border-radius:10px; padding:1px 8px; vertical-align:middle; margin-left:6px; }
   .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:var(--radius-sm); padding:14px 16px; color:#991b1b; margin:10px 0 18px; max-width:820px; }
 
-  /* "still at company" check — spinner + N/20 counter */
-  .lp-checking { display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--text); background:#eef4ff; border:1px solid #d6e4ff; border-radius:var(--radius-sm); padding:9px 13px; max-width:820px; margin:4px 0; }
-  .lp-checking b { color:#0a3d91; }
-  .lp-checking .el { color:var(--muted); font-weight:400; margin-left:auto; font-size:12px; }
-  .lp-spin { flex:0 0 auto; width:14px; height:14px; border:2px solid #c7d9f5; border-top-color:#0a66c2; border-radius:50%; animation:lp-spin .7s linear infinite; }
+  /* "still at company" check — big, sticky, unmissable spinner + progress bar + N/20 counter */
+  #lp-status.checking { position:sticky; top:10px; z-index:60; }
+  .lp-checking { display:flex; align-items:center; gap:13px; font-size:15px; font-weight:600; color:#0f5132; background:#eafaf0; border:1.5px solid #34a853; border-radius:12px; padding:14px 18px; max-width:820px; margin:6px 0; box-shadow:0 6px 22px rgba(22,101,52,.22); animation:lp-pulse 1.8s ease-in-out infinite; }
+  .lp-checking .lc-label { flex:0 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lp-checking .lc-count { color:#0f7a3d; font-weight:800; font-size:19px; flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  .lp-checking .el { color:#4a7a5c; font-weight:500; font-size:12.5px; flex:0 0 auto; }
+  .lp-bar { flex:1 1 90px; min-width:90px; height:11px; background:#c5ecd3; border-radius:6px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.08); }
+  .lp-bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#16a34a,#22c55e); border-radius:6px; transition:width .35s ease; }
+  .lp-spin { flex:0 0 auto; width:18px; height:18px; border:3px solid #b7e4c7; border-top-color:#16a34a; border-radius:50%; animation:lp-spin .7s linear infinite; }
   @keyframes lp-spin { to { transform:rotate(360deg); } }
+  @keyframes lp-pulse { 0%,100% { box-shadow:0 6px 22px rgba(22,101,52,.22); } 50% { box-shadow:0 6px 26px rgba(22,101,52,.38); } }
 
   /* step trail */
   .steps { max-width:820px; margin:8px 0 6px; }
@@ -198,10 +203,14 @@ function run(e){
       var cn=q('lp-costnum'); if(cn) cn.textContent='$'+Number(m.cost.usd).toFixed(4);
       var cs=q('lp-costsub'); if(cs) cs.textContent=(m.cost.brightdata_calls||0)+' Bright Data calls @ $'+(m.cost.rate||0)+' ea (est.)';
     }
-    // prominent spinner + live "N/20 checked" counter at the top
+    // sticky spinner + progress bar + live "N/20 checked" counter — stays pinned while you scroll
+    var ck=(m.checked||0), tot=(m.total||20), pct=Math.round(ck/tot*100);
     var el=(m.elapsed!=null)?'<span class="el">'+m.elapsed+'s</span>':'';
+    q('lp-status').className='lp-hint checking';
     q('lp-status').innerHTML='<div class="lp-checking"><span class="lp-spin"></span>'
-      +'Checking which employees are still at the company… <b>'+(m.checked||0)+'/'+(m.total||20)+'</b> checked'+el+'</div>';
+      +'<span class="lc-label">Checking employees still at the company…</span>'
+      +'<span class="lp-bar"><i style="width:'+pct+'%"></i></span>'
+      +'<span class="lc-count">'+ck+'/'+tot+'</span>'+el+'</div>';
     if(m.progress) return;                            // spinner tick only — no profile payload
     if(m.url && LP_REPORT && LP_REPORT.profiles){     // remember for the rerank re-render
       for(var i=0;i<LP_REPORT.profiles.length;i++){ if(LP_REPORT.profiles[i].url===m.url){
@@ -224,11 +233,12 @@ function run(e){
       render(LP_REPORT);                              // authoritative redraw: badges on movers removed
     }
   });
-  es.addEventListener('fail', function(ev){ q('lp-status').textContent='';
+  function clearStatus(){ q('lp-status').className='lp-hint'; q('lp-status').innerHTML=''; }
+  es.addEventListener('fail', function(ev){ clearStatus();
     try{ var m=JSON.parse(ev.data); q('lp-out').innerHTML='<div class="error-box">'+esc(m.error||'Failed')+'</div>'; }catch(_){}
   });
-  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; loadHistory(); });
-  es.onerror=function(){ es.close(); q('lp-btn').disabled=false; q('lp-status').textContent=''; };  // also stops auto-reconnect
+  es.addEventListener('done', function(){ es.close(); q('lp-btn').disabled=false; clearStatus(); loadHistory(); });
+  es.onerror=function(){ es.close(); q('lp-btn').disabled=false; clearStatus(); };  // also stops auto-reconnect
 }
 loadHistory();   // show cached searches on load
 </script>
