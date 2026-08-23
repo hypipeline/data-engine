@@ -1312,10 +1312,10 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
 
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
-    """JSON API for a completed LinkedIn-Profiles run — the same result the tool shows, for
-    programmatic pull. Returns the latest saved report for this input: company, the ranked array
-    of people (with current-company verification), and the total cost. Run the tool once (it caches
-    every run) then this returns instantly; 404 if there's no report yet for that input."""
+    """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
+    saved report for this input: company, the total cost, and `people` = the UP-TO-12 highest-ranked
+    people confirmed STILL AT the company (the same set the tool highlights as TOP 12). Run the tool
+    once (it caches every run) then this returns instantly; 404 if there's no report yet."""
     inp = (input or "").strip()
     if not inp:
         return JSONResponse({"error": "Pass ?input=<company website or LinkedIn company URL>"}, status_code=400)
@@ -1326,19 +1326,27 @@ def api_linkedin_profiles_report(input: str = ""):
     if not rep:
         return JSONResponse({"error": "No report yet for %r — run it in the tool first." % inp,
                              "tool": "/linkedin-profiles"}, status_code=404)
-    people = [{
-        "rank": i + 1,
-        "name": p.get("name"),
-        "linkedin_url": p.get("url"),
-        "headline": p.get("title"),               # Google SERP title (role — LinkedIn masks it in the dataset)
-        "description": p.get("description"),
-        "followers": p.get("followers"),
-        "matched_searches": p.get("hits") or [],  # which of the 16 searches surfaced this person
-        "current_company": p.get("current_company"),   # from the LinkedIn people dataset
-        "still_at_company": p.get("at_company"),
-        "current_city": p.get("ds_city"),
-        "top12": bool(p.get("top12")),            # among the top 12 still at the company
-    } for i, p in enumerate(rep.get("profiles") or [])]
+    profiles = rep.get("profiles") or []
+    # `people` = up to 12 people currently AT the company. Prefer the saved top12 flags; for older
+    # reports without them, derive on the fly (first 12 with a matching current company).
+    have_flags = any(p.get("top12") for p in profiles)
+    people, picked = [], 0
+    for i, p in enumerate(profiles):
+        keep = bool(p.get("top12")) if have_flags else (bool(p.get("at_company")) and picked < 12)
+        if not keep:
+            continue
+        picked += 1
+        people.append({
+            "rank": i + 1,                            # overall search rank (by how many searches matched)
+            "name": p.get("name"),
+            "linkedin_url": p.get("url"),
+            "headline": p.get("title"),               # Google SERP title (role — LinkedIn masks it in the dataset)
+            "description": p.get("description"),
+            "followers": p.get("followers"),
+            "matched_searches": p.get("hits") or [],  # which of the 16 searches surfaced this person
+            "current_company": p.get("current_company"),   # from the LinkedIn people dataset
+            "current_city": p.get("ds_city"),
+        })
     return JSONResponse({
         "input": rep.get("input") or inp,
         "company_name": rep.get("company_name"),
@@ -1347,7 +1355,8 @@ def api_linkedin_profiles_report(input: str = ""):
         "searches": rep.get("searches"),
         "generated_at": rep.get("cached_at"),
         "cost": rep.get("cost"),                  # {brightdata_calls, rate, usd}
-        "count": len(people),
+        "count": len(people),                     # people returned (≤12, all still at the company)
+        "profiles_found": len(profiles),          # total profiles the search surfaced (before filtering)
         "people": people,
     })
 
