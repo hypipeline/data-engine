@@ -1109,43 +1109,56 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
         if not inp:
             yield sse("fail", {"error": "Enter a website URL or a LinkedIn company URL."}); yield sse("done", {}); return
         key = _lp_key(inp)
-        if not refresh:
-            try:
-                cached = linkedin_cache.report_get_latest(key)
-            except Exception:  # noqa: BLE001
-                cached = None
-            if cached:
-                yield sse("log", {"key": "cache", "msg": "Loaded from cache — original run %s · no Bright Data calls (tick “re-run” to refresh)" % (cached.get("cached_at") or "").replace("T", " ")[:19], "ok": True})
-                yield sse("result", cached)
-                yield sse("done", {})
-                return
+        # Load the latest saved report. A normal run replays it (no Bright Data calls). A re-run
+        # REUSES the already-resolved company page + name (Steps 1-2 are stable — the company's
+        # LinkedIn page doesn't change) and only re-fetches the employee profiles (Steps 3-4), so a
+        # transient Step-1 Google lookup failure can never wipe a run we resolved once before.
+        try:
+            cached = linkedin_cache.report_get_latest(key)
+        except Exception:  # noqa: BLE001
+            cached = None
+        if cached and not refresh:
+            yield sse("log", {"key": "cache", "msg": "Loaded from cache — original run %s · no Bright Data calls (tick “re-run” to refresh)" % (cached.get("cached_at") or "").replace("T", " ")[:19], "ok": True})
+            yield sse("result", cached)
+            yield sse("done", {})
+            return
         t = _tools()
         low, company_url = inp.lower(), None
+        company_name = employees = None
+        reuse = bool(refresh and cached and cached.get("company_url") and cached.get("company_name"))
         try:
-            # ── Step 1: company LinkedIn page ──
-            if "linkedin.com/company/" in low:
-                company_url = inp if inp.startswith("http") else "https://" + inp
-                yield sse("log", {"key": "s1", "step": 1, "msg": "Input is a LinkedIn company URL — skipped resolution", "ok": True, "result": company_url})
-            elif "linkedin.com/in/" in low:
-                yield sse("fail", {"error": "That's a personal profile URL. Enter a website or a LinkedIn company URL."}); yield sse("done", {}); return
+            if reuse:
+                # Re-run: skip the fragile live company-page lookup; reuse what we resolved before.
+                company_url = cached.get("company_url")
+                company_name = cached.get("company_name")
+                employees = cached.get("employees")
+                yield sse("log", {"key": "s1", "step": 1, "msg": "Website → LinkedIn company page (reused from last run — re-run only re-searches employees)", "ok": True, "result": company_url})
+                yield sse("log", {"key": "s2", "step": 2, "msg": "Company name (reused from last run)", "ok": True, "result": (company_name or "") + (" · %s employees" % employees if employees else "")})
             else:
-                q = _norm_query(inp)
-                yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "detail": q, "running": True})
-                company_url = t.find_linkedin_url(q)
-                if not company_url:
-                    yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": False, "result": "no company page found"})
-                    yield sse("result", {"input": inp, "error": "No LinkedIn company page found for that website.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
-                yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": True, "result": company_url})
+                # ── Step 1: company LinkedIn page ──
+                if "linkedin.com/company/" in low:
+                    company_url = inp if inp.startswith("http") else "https://" + inp
+                    yield sse("log", {"key": "s1", "step": 1, "msg": "Input is a LinkedIn company URL — skipped resolution", "ok": True, "result": company_url})
+                elif "linkedin.com/in/" in low:
+                    yield sse("fail", {"error": "That's a personal profile URL. Enter a website or a LinkedIn company URL."}); yield sse("done", {}); return
+                else:
+                    q = _norm_query(inp)
+                    yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "detail": q, "running": True})
+                    company_url = t.find_linkedin_url(q)
+                    if not company_url:
+                        yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": False, "result": "no company page found"})
+                        yield sse("result", {"input": inp, "error": "No LinkedIn company page found for that website.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
+                    yield sse("log", {"key": "s1", "step": 1, "msg": "Website → find LinkedIn company page", "ok": True, "result": company_url})
 
-            # ── Step 2: company name ──
-            yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "detail": company_url, "running": True})
-            data = t.linkedin_company_data(company_url)
-            company_name = data.get("name") if data else None
-            employees = data.get("employees") if data else None
-            if not company_name:
-                yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": False, "result": "couldn't read name"})
-                yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
-            yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": True, "result": company_name + (" · %s employees" % employees if employees else "")})
+                # ── Step 2: company name ──
+                yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "detail": company_url, "running": True})
+                data = t.linkedin_company_data(company_url)
+                company_name = data.get("name") if data else None
+                employees = data.get("employees") if data else None
+                if not company_name:
+                    yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": False, "result": "couldn't read name"})
+                    yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
+                yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": True, "result": company_name + (" · %s employees" % employees if employees else "")})
 
             # ── Step 3: Google people search — broad (30) + 15 role searches, shown as substeps ──
             base = 'site:linkedin.com/in/ "%s"' % company_name
