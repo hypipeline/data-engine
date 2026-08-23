@@ -1397,6 +1397,43 @@ def api_linkedin_profiles_mismatch():
     return JSONResponse({"count": len(out), "mismatches": out})
 
 
+@app.get("/api/linkedin-profiles/_checkone")
+def api_linkedin_profiles_checkone(input: str = "", url: str = ""):
+    """Test the still-here decision for ONE profile against a company: shows the searched company
+    slug, the person's current-company name + slug, whether the NAME would match, and whether the
+    SLUG matches (the real verdict). Great for same-name cases like Matt Coleman."""
+    inp, u = (input or "").strip(), (url or "").strip()
+    if not inp or not u:
+        return JSONResponse({"error": "pass ?input=<company website/URL>&url=<profile URL>"})
+    rep = linkedin_cache.report_get_latest(_lp_key(inp)) or {}
+    searched_name = rep.get("company_name")
+    company_url = rep.get("company_url")
+    t = _tools()
+    if not company_url:                       # not cached — resolve the company page fresh
+        try:
+            company_url = u if False else t.find_linkedin_url(_norm_query(inp)) if "linkedin.com/company/" not in inp.lower() else inp
+        except Exception:  # noqa: BLE001
+            company_url = None
+    m = re.search(r"/company/([^/?#]+)", (company_url or "").lower())
+    sslug = m.group(1).lower() if m else None
+    ds = t.linkedin_profiles_dataset([u])
+    row = ds.get(t._slug_of(u)) or {}
+    cc, _ct = t.row_current_company(row)
+    pslug = t.row_company_slug(row)
+    cn_l = (searched_name or "").strip().lower()
+    cc_l = (cc or "").strip().lower()
+    name_would_match = bool(cn_l and cc_l and (cn_l in cc_l or cc_l in cn_l))
+    slug_match = bool(pslug and sslug and pslug == sslug)
+    return JSONResponse({
+        "searched_company": searched_name, "searched_slug": sslug,
+        "person": row.get("name"), "their_current_company": cc, "their_company_slug": pslug,
+        "name_would_match": name_would_match, "slug_matches (at_company)": slug_match,
+        "verdict": ("✓ still here (slug matches)" if slug_match else
+                    ("✗ FILTERED OUT — same name, different company (name matched but slug did not)"
+                     if name_would_match else "✗ not at this company")),
+        "cost": _bd_cost(t)})
+
+
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
