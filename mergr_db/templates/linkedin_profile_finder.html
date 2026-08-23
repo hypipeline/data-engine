@@ -106,9 +106,9 @@ function render(d){   // company card + profiles; the step log is shown live in 
   if(d.company_name){
     var cost=d.cost||{};
     var origCost='$'+(cost.usd!=null?Number(cost.usd).toFixed(4):'0');
-    var costMain = d.from_cache ? '$0' : origCost;
+    var costMain = origCost;   // always show what the report cost to produce (even from cache)
     var costSub = d.from_cache
-      ? 'cached — no Bright Data calls (orig '+origCost+')'
+      ? 'loaded from cache — this view was free (no new Bright Data calls)'
       : ((cost.brightdata_calls||0)+' Bright Data calls @ $'+(cost.rate||0)+' ea (est.)');
     h+='<div class="company-card"><div>'
       +'<div class="cname">'+esc(d.company_name)+(d.from_cache?' <span class="cache-badge" title="ran '+esc(d.cached_at||'')+'">cached</span>':'')+'</div>'
