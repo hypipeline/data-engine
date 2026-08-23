@@ -15,20 +15,18 @@
 		reverse_proxy entity:8000
 	}
 
+	# Unified /api/ base. Tool APIs that live in the entity backend are routed to it BY NAME
+	# (more specific → wins over the general /api/* below); everything else goes to the api service.
+	# The entity app already serves these under /api/linkedin-profiles/*, so no path rewrite is needed.
+	handle /api/linkedin-profiles/* {
+		reverse_proxy entity:8000
+	}
+
 	# Data Engine JSON API (+ its Swagger docs) under /api/*, prefix stripped.
 	# The api container runs with root_path=/api so /api/docs + /api/openapi.json resolve.
 	# The human URLs /mergr/* and /entity are owned by the web UI (below).
 	handle_path /api/* {
 		reverse_proxy api:8000
-	}
-
-	# Clean, tool-scoped alias for the LinkedIn Profiles API (its endpoints live in the shared
-	# entity backend, but "/entity-app/" is a misleading name). /linkedin-profiles/api/* maps to
-	# the entity backend's /api/linkedin-profiles/*. (The tool page /linkedin-profiles stays on web.)
-	handle /linkedin-profiles/api/* {
-		@lp path_regexp lp ^/linkedin-profiles/api/(.*)$
-		rewrite @lp /api/linkedin-profiles/{re.lp.1}
-		reverse_proxy entity:8000
 	}
 
 	# Data Engine web UI — the hub (/), the Mergr tool (/mergr/*), and the

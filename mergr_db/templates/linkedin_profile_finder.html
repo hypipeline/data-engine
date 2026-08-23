@@ -147,7 +147,7 @@
     <p>One JSON endpoint. If a run isn't cached it starts in the background and returns
        <code>202 {status:"running"}</code> — <b>poll the same URL</b> until it returns <code>200</code>
        with the result (~1–2 min). It's cached after, so repeat calls are instant &amp; free.</p>
-    <pre>GET https://dataengine.hyndlandpartners.com/linkedin-profiles/api/report?input=&lt;company&gt;</pre>
+    <pre>GET https://dataengine.hyndlandpartners.com/api/linkedin-profiles/report?input=&lt;company&gt;</pre>
     <p><b>Params</b></p>
     <ul>
       <li><code>input</code> — company website (e.g. <code>stripe.com</code>) or a LinkedIn company URL</li>
@@ -157,7 +157,7 @@
     <p><b>Auth</b> — same basic-auth credentials as this site.</p>
 
     <p><b>Poll it — Bash</b></p>
-    <pre>BASE='https://dataengine.hyndlandpartners.com/linkedin-profiles/api/report?input=stripe.com'
+    <pre>BASE='https://dataengine.hyndlandpartners.com/api/linkedin-profiles/report?input=stripe.com'
 while :; do
   code=$(curl -s -o out.json -w '%{http_code}' -u USER:PASS "$BASE")
   [ "$code" = 200 ] &amp;&amp; break     # 202 = still running
@@ -168,7 +168,7 @@ cat out.json</pre>
     <p><b>Poll it — Python</b></p>
     <pre>import time, requests
 
-URL  = "https://dataengine.hyndlandpartners.com/linkedin-profiles/api/report"
+URL  = "https://dataengine.hyndlandpartners.com/api/linkedin-profiles/report"
 AUTH = ("USER", "PASS")
 
 while True:
@@ -183,7 +183,7 @@ for p in data["people"]:
 
     <p><b>Poll it — PHP</b></p>
     <pre>&lt;?php
-$url  = "https://dataengine.hyndlandpartners.com/linkedin-profiles/api/report?input=stripe.com";
+$url  = "https://dataengine.hyndlandpartners.com/api/linkedin-profiles/report?input=stripe.com";
 $auth = "USER:PASS";
 
 while (true) {
@@ -257,7 +257,7 @@ function render(d){   // company card + profiles; the step log is shown live in 
       +'<div class="cname">'+esc(d.company_name)+(d.from_cache?' <span class="cache-badge" title="ran '+esc(d.cached_at||'')+'">cached</span>':'')+'</div>'
       +'<div class="csub">'+(d.employees!=null?esc(d.employees)+' employees · ':'')
       +'<a href="'+esc(d.company_url)+'" target="_blank">'+esc(d.company_url)+'</a></div>'
-      +'<div class="lp-api"><a href="/linkedin-profiles/api/report?input='+encodeURIComponent(d.input||q('lp-in').value||'')+'" target="_blank" rel="noopener">View as API (JSON) ↗</a></div></div>'
+      +'<div class="lp-api"><a href="/api/linkedin-profiles/report?input='+encodeURIComponent(d.input||q('lp-in').value||'')+'" target="_blank" rel="noopener">View as API (JSON) ↗</a></div></div>'
       +'<div class="cost-pill"><b id="lp-costnum">'+costMain+'</b>'
       +'<div class="muted" id="lp-costsub">'+costSub+'</div></div>'
       +'</div>';
