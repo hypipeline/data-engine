@@ -22,6 +22,14 @@
 		reverse_proxy api:8000
 	}
 
+	# Clean, tool-scoped alias for the LinkedIn Profiles API (its endpoints live in the shared
+	# entity backend, but "/entity-app/" is a misleading name). /linkedin-profiles/api/* maps to
+	# the entity backend's /api/linkedin-profiles/*. (The tool page /linkedin-profiles stays on web.)
+	handle_path /linkedin-profiles/api/* {
+		rewrite * /api/linkedin-profiles{path}
+		reverse_proxy entity:8000
+	}
+
 	# Data Engine web UI — the hub (/), the Mergr tool (/mergr/*), and the
 	# Entity Lookup tool (/entity). Everything else, websockets included.
 	handle {
