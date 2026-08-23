@@ -1267,6 +1267,15 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                                      "verified": sum(1 for pp in top if pp.get("current_company") is not None),
                                      "total": len(top), "cost": _bd_cost(t)})
 
+            # TOP 12 = the 12 highest-ranked people STILL at the company — skip movers / no-company.
+            picked = 0
+            for p in ranked:
+                is_top = bool(p.get("at_company")) and picked < 12
+                p["top12"] = is_top
+                if is_top:
+                    picked += 1
+            yield sse("rerank", {"top12": [p["url"] for p in ranked if p.get("top12")]})
+
             cost = _bd_cost(t)
             at_n = sum(1 for p in top if p.get("at_company"))
             got_n = sum(1 for p in top if p.get("current_company"))
