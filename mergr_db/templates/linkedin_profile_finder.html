@@ -48,6 +48,9 @@
   .company-card .csub { font-size:13px; color:var(--muted); margin-top:2px; }
   .cost-pill { text-align:right; font-size:13px; }
   .cost-pill b { font-size:20px; color:#166534; }
+  .lp-api { margin-top:7px; font-size:12px; }
+  .lp-api a { color:var(--accent-2); font-weight:600; }
+  .lp-api a:hover { text-decoration:underline; }
 
   /* profile results */
   .results-head { max-width:820px; font-size:14px; font-weight:600; margin:18px 0 8px; }
@@ -120,7 +123,8 @@ function render(d){   // company card + profiles; the step log is shown live in 
     h+='<div class="company-card"><div>'
       +'<div class="cname">'+esc(d.company_name)+(d.from_cache?' <span class="cache-badge" title="ran '+esc(d.cached_at||'')+'">cached</span>':'')+'</div>'
       +'<div class="csub">'+(d.employees!=null?esc(d.employees)+' employees · ':'')
-      +'<a href="'+esc(d.company_url)+'" target="_blank">'+esc(d.company_url)+'</a></div></div>'
+      +'<a href="'+esc(d.company_url)+'" target="_blank">'+esc(d.company_url)+'</a></div>'
+      +'<div class="lp-api"><a href="'+EBASE+'/api/linkedin-profiles/report?input='+encodeURIComponent(d.input||q('lp-in').value||'')+'" target="_blank" rel="noopener">View as API (JSON) ↗</a></div></div>'
       +'<div class="cost-pill"><b id="lp-costnum">'+costMain+'</b>'
       +'<div class="muted" id="lp-costsub">'+costSub+'</div></div>'
       +'</div>';

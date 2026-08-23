@@ -1310,6 +1310,48 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
+@app.get("/api/linkedin-profiles/report")
+def api_linkedin_profiles_report(input: str = ""):
+    """JSON API for a completed LinkedIn-Profiles run — the same result the tool shows, for
+    programmatic pull. Returns the latest saved report for this input: company, the ranked array
+    of people (with current-company verification), and the total cost. Run the tool once (it caches
+    every run) then this returns instantly; 404 if there's no report yet for that input."""
+    inp = (input or "").strip()
+    if not inp:
+        return JSONResponse({"error": "Pass ?input=<company website or LinkedIn company URL>"}, status_code=400)
+    try:
+        rep = linkedin_cache.report_get_latest(_lp_key(inp))
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": "lookup failed: %s" % e}, status_code=500)
+    if not rep:
+        return JSONResponse({"error": "No report yet for %r — run it in the tool first." % inp,
+                             "tool": "/linkedin-profiles"}, status_code=404)
+    people = [{
+        "rank": i + 1,
+        "name": p.get("name"),
+        "linkedin_url": p.get("url"),
+        "headline": p.get("title"),               # Google SERP title (role — LinkedIn masks it in the dataset)
+        "description": p.get("description"),
+        "followers": p.get("followers"),
+        "matched_searches": p.get("hits") or [],  # which of the 16 searches surfaced this person
+        "current_company": p.get("current_company"),   # from the LinkedIn people dataset
+        "still_at_company": p.get("at_company"),
+        "current_city": p.get("ds_city"),
+        "top12": bool(p.get("top12")),            # among the top 12 still at the company
+    } for i, p in enumerate(rep.get("profiles") or [])]
+    return JSONResponse({
+        "input": rep.get("input") or inp,
+        "company_name": rep.get("company_name"),
+        "company_url": rep.get("company_url"),
+        "employees": rep.get("employees"),
+        "searches": rep.get("searches"),
+        "generated_at": rep.get("cached_at"),
+        "cost": rep.get("cost"),                  # {brightdata_calls, rate, usd}
+        "count": len(people),
+        "people": people,
+    })
+
+
 @app.get("/api/linkedin-profiles/history")
 def api_linkedin_profiles_history(limit: int = 50):
     return JSONResponse({"history": linkedin_cache.report_history(limit)})
