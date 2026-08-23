@@ -65,6 +65,14 @@
   .profile.top12 .rank { color:#166534; }
   .top-badge { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; color:#166534; background:#dcfce7; border-radius:4px; padding:1px 6px; vertical-align:middle; margin-left:5px; }
   .profile .pn { font-weight:600; font-size:14.5px; }
+  /* obvious current-company status pill (checking / at company / moved / unknown) */
+  .profile .status-row { margin:6px 0 3px; min-height:24px; }
+  .status-pill { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; padding:4px 12px; border-radius:20px; letter-spacing:.01em; }
+  .status-pill.here { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .status-pill.gone { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .status-pill.unknown { background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; }
+  .status-pill.check { background:#eef4ff; color:#1e40af; border:1px solid #bfdbfe; }
+  .mini-spin { width:11px; height:11px; border:2px solid #bfdbfe; border-top-color:#1e40af; border-radius:50%; animation:lp-spin .7s linear infinite; flex:0 0 auto; }
   .profile .pjob { font-size:13.5px; color:var(--text); margin-top:3px; }
   .profile .pjob b { color:#0a3d91; }
   .profile .pt { color:var(--muted); font-size:12px; margin-top:2px; }
@@ -103,6 +111,7 @@
 <script>
 var EBASE='/entity-app';
 var LP_REPORT=null;   // the live report currently rendered (updated by verify/rerank events)
+var LP_COMPANY='';    // searched company name (for the status pills)
 function q(id){return document.getElementById(id);}
 function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
@@ -116,8 +125,17 @@ function logLine(m){
   return '<div class="step '+cls+'"><div class="ico">'+ico+'</div><div><div class="lab">'+label+'</div>'+det+res+'</div></div>';
 }
 
+function pillFor(p, i){   // obvious current-company status pill
+  if(p.at_company===true)  return {cls:'here',    html:'✓ At '+esc(LP_COMPANY||'company')};
+  if(p.at_company===false && p.current_company) return {cls:'gone', html:'✗ Now at '+esc(p.current_company)};
+  if(p.at_company===false) return {cls:'unknown', html:'— no current company'};
+  if(i<20) return {cls:'check', html:'<span class="mini-spin"></span> checking…'};  // top-20 pending
+  return null;             // beyond top-20 — never checked
+}
+
 function render(d){   // company card + profiles; the step log is shown live in #lp-log
   LP_REPORT=d;         // keep the live report so verify/rerank events can update + re-render it
+  LP_COMPANY=d.company_name||LP_COMPANY;
   var h='';
   if(d.error){ h+='<div class="error-box">'+esc(d.error)+'</div>'; }
   if(d.company_name){
@@ -148,13 +166,14 @@ function render(d){   // company card + profiles; the step log is shown live in 
       // TOP 12 = top 12 still AT the company once verified; before that, provisional by rank
       var isTop = (p.top12!==undefined) ? !!p.top12 : (i<12);
       var top = isTop ? ' top12' : '';
+      var pill=pillFor(p,i);
       return '<div class="profile'+top+'" data-purl="'+esc(p.url)+'"><div class="pn"><span class="rank">'+(i+1)+'.</span> '+esc(p.name)
         +' <span class="hitcount" title="matched in '+hits.length+' of the searches">'+hits.length+'×</span>'
         +(p.followers?' <span class="foll">'+esc(p.followers)+'</span>':'')
         +(isTop?' <span class="top-badge" title="top 12 people still at the company">TOP 12</span>':'')+'</div>'
+        +'<div class="status-row">'+(pill?'<span class="status-pill '+pill.cls+'">'+pill.html+'</span>':'')+'</div>'
         +(p.job_title?'<div class="pjob"><span class="lbl">role:</span> <b>'+esc(p.job_title)+'</b></div>':'')
         +'<div class="pt"><span class="lbl">serp title:</span> '+esc(p.title)+'</div>'
-        +(p.current_company?'<div class="pv '+(p.at_company?'ok':'moved')+'"><span class="lbl">current company</span> '+esc(p.current_company)+(p.at_company?' <span class="vtick">✓ still here</span>':' <span class="vmoved">↗ moved on</span>')+'</div>':'')
         +(p.description?'<div class="pd"><span class="lbl">description:</span> '+esc(p.description)+'</div>':'')
         +(chips?'<div class="hits">'+chips+'</div>':'')
         +'<a href="'+esc(p.url)+'" target="_blank">'+esc(p.url)+'</a></div>';
@@ -218,13 +237,12 @@ function run(e){
     }
     var card=q('lp-out').querySelector('.profile[data-purl="'+m.url+'"]');
     if(!card) return;
-    var old=card.querySelector('.pv'); if(old) old.remove();
-    if(!m.current_company) return;                    // no listed current company — leave card as-is
-    var pv=document.createElement('div'); pv.className='pv '+(m.at_company?'ok':'moved');
-    pv.innerHTML='<span class="lbl">current company</span> '+esc(m.current_company)
-      +(m.at_company?' <span class="vtick">✓ still here</span>':' <span class="vmoved">↗ moved on</span>');
-    var pt=card.querySelector('.pt');
-    if(pt){ pt.parentNode.insertBefore(pv, pt.nextSibling); } else { card.appendChild(pv); }
+    var row=card.querySelector('.status-row'); if(!row) return;
+    var cls, html;                                    // flip the pill: checking… -> result
+    if(m.at_company){ cls='here'; html='✓ At '+esc(LP_COMPANY||'company'); }
+    else if(m.current_company){ cls='gone'; html='✗ Now at '+esc(m.current_company); }
+    else { cls='unknown'; html='— no current company'; }
+    row.innerHTML='<span class="status-pill '+cls+'">'+html+'</span>';
   });
   es.addEventListener('rerank', function(ev){         // final TOP 12 = top 12 still at the company
     var m=JSON.parse(ev.data); var set={}; (m.top12||[]).forEach(function(u){ set[u]=1; });

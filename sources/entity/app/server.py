@@ -1270,6 +1270,11 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             # this step confirms whether each person is *still at the company*. ──
             top = ranked[:20]
             cn_l = (company_name or "").strip().lower()
+            # The searched company's own LinkedIn slug (e.g. 'inflexion-private-equity') — the EXACT
+            # id we match each person's current-employer slug against, so same-named companies
+            # ('inflexionlearns' vs 'inflexion-private-equity') don't false-positive on the name.
+            _m = re.search(r"/company/([^/?#]+)", (company_url or "").lower())
+            search_slug = _m.group(1).strip().lower() if _m else None
             yield sse("log", {"key": "s4", "step": 4, "parent": True, "running": True,
                               "msg": "Checking which of the top %d are still at the company (LinkedIn dataset)…" % len(top)})
             # Split into small parallel dataset jobs so we can stream real progress ("N/20 checked")
@@ -1281,6 +1286,7 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                 return chunk, t.linkedin_profiles_dataset([p["url"] for p in chunk])
 
             def _apply(p, row):
+                slug = None
                 if row:
                     cc, ctitle = t.row_current_company(row)
                     if cc:
@@ -1289,8 +1295,22 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                         p["cur_title"] = ctitle
                     if row.get("city"):
                         p["ds_city"] = row.get("city")
-                cc_l = (p.get("current_company") or "").strip().lower()
-                p["at_company"] = bool(cc_l and cn_l and (cn_l in cc_l or cc_l in cn_l))
+                    if row.get("first_name"):
+                        p["first_name"] = row.get("first_name")
+                    if row.get("last_name"):
+                        p["last_name"] = row.get("last_name")
+                    if row.get("name"):
+                        p["ds_name"] = row.get("name")   # dataset's clean full name
+                    slug = t.row_company_slug(row)
+                    if slug:
+                        p["current_company_slug"] = slug
+                # EXACT company-slug match when we have both slugs (distinguishes same-named
+                # companies); otherwise fall back to a company-name overlap.
+                if slug and search_slug:
+                    p["at_company"] = (slug == search_slug)
+                else:
+                    cc_l = (p.get("current_company") or "").strip().lower()
+                    p["at_company"] = bool(cc_l and cn_l and (cn_l in cc_l or cc_l in cn_l))
 
             checked = 0
             with ThreadPoolExecutor(max_workers=3) as ex:
@@ -1348,28 +1368,6 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-@app.get("/api/linkedin-profiles/_coprobe")
-def api_linkedin_profiles_coprobe(urls: str = ""):
-    """TEMP — dump each person's employer identifiers (current_company_company_id, the full
-    current_company object, current_company_name) so we can match on COMPANY ID/link instead of
-    the ambiguous name (two different 'Inflexion' companies have different IDs). Remove after."""
-    us = [u.strip() for u in urls.split(",") if u.strip()]
-    if not us:
-        return JSONResponse({"error": "pass ?urls=comma,separated"})
-    t = _tools()
-    ds = t.linkedin_profiles_dataset(us)
-    out = []
-    for u in us:
-        d = ds.get(t._slug_of(u)) or {}
-        out.append({
-            "url": u, "name": d.get("name"),
-            "current_company_name": d.get("current_company_name"),
-            "current_company_company_id": d.get("current_company_company_id"),
-            "current_company": d.get("current_company"),   # full object — look for id/link/url
-        })
-    return JSONResponse({"summary": out, "cost": _bd_cost(t)})
-
-
 @app.get("/api/linkedin-profiles/report")
 def api_linkedin_profiles_report(input: str = ""):
     """JSON API for a completed LinkedIn-Profiles run — for programmatic pull. Returns the latest
@@ -1398,7 +1396,9 @@ def api_linkedin_profiles_report(input: str = ""):
         picked += 1
         people.append({
             "rank": i + 1,                            # overall search rank (by how many searches matched)
-            "name": p.get("name"),
+            "name": p.get("ds_name") or p.get("name"),   # full name (dataset's clean name preferred)
+            "first_name": p.get("first_name"),        # from the LinkedIn dataset (None if unavailable)
+            "last_name": p.get("last_name"),
             "linkedin_url": p.get("url"),
             "job_title": p.get("job_title"),          # parsed from the SERP title (dataset masks the role)
             "headline": p.get("title"),               # raw Google SERP title (provenance)

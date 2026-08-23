@@ -308,6 +308,23 @@ class GoogleMixin:
             return cc, d.get('position')
         return d.get('current_company_name'), d.get('position')
 
+    @staticmethod
+    def row_company_slug(d: dict):
+        """The person's CURRENT-employer LinkedIn company slug (e.g. 'inflexion-private-equity'),
+        which uniquely identifies the company — unlike the display name, which is ambiguous (two
+        different 'Inflexion' companies have slugs 'inflexion-private-equity' vs 'inflexionlearns').
+        From current_company.company_id, else the slug in current_company.link, else the flat id."""
+        cc = d.get('current_company')
+        if isinstance(cc, dict):
+            cid = cc.get('company_id')
+            if cid:
+                return str(cid).strip().lower()
+            m = re.search(r'/company/([^/?#]+)', cc.get('link') or '')
+            if m:
+                return m.group(1).strip().lower()
+        cid = d.get('current_company_company_id')
+        return str(cid).strip().lower() if cid else None
+
     # ── LinkedIn company page (Bright Data Web Unlocker, raw html) ─────────────
     def fetch_linkedin_company(self, linkedin_url: str) -> str:
         api_key = self.config.get('brightdata_api_key') or ''
