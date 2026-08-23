@@ -121,6 +121,20 @@ def report_history(limit: int = 50) -> list:
             return out
 
 
+def report_clear() -> int:
+    """Delete ALL saved LinkedIn-Profiles reports (full cache reset). Returns rows deleted.
+    Does NOT touch linkedin.companies (the separate LinkedIn Finder cache)."""
+    if not enabled():
+        return 0
+    with closing(_conn()) as c:
+        with c.cursor() as cur:
+            cur.execute("SELECT count(*) FROM linkedin.profile_reports")
+            n = cur.fetchone()[0]
+            cur.execute("DELETE FROM linkedin.profile_reports")
+        c.commit()
+    return int(n or 0)
+
+
 def report_runs(key: str, limit: int = 50) -> list:
     """All historical runs for one input (newest first) — powers the previous-runs list."""
     if not enabled():

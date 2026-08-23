@@ -1520,6 +1520,17 @@ def api_linkedin_profiles_report(input: str = ""):
     })
 
 
+@app.post("/api/linkedin-profiles/_clear-cache")
+def api_linkedin_profiles_clear_cache():
+    """One-time FULL reset of the LinkedIn-Profiles report cache — deletes every saved run for
+    every input (start-fresh). Does not affect the separate LinkedIn Finder cache."""
+    try:
+        n = linkedin_cache.report_clear()
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"cleared": n})
+
+
 @app.get("/api/linkedin-profiles/runs")
 def api_linkedin_profiles_runs(input: str = ""):
     """All historical runs for one input (newest first) — powers the previous-runs selector."""
