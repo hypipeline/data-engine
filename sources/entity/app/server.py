@@ -1198,17 +1198,18 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
             profiles = {}   # clean_url -> {name, title, description, followers, url, hits}
 
             def search_one(qstr, pages):
-                # PURE fetch (no shared-state writes) → safe to run in a thread; merge happens in gen
-                out = []
+                # PURE fetch (no shared-state writes) → safe to run in a thread; merge happens in gen.
+                # Returns (hits, pages_fetched) so we can show THIS search's own cost (1 call/page).
+                out, fetched = [], 0
                 for pg in range(pages):
-                    got = t._google_serp_json(qstr, start=pg * 10)
+                    got = t._google_serp_json(qstr, start=pg * 10); fetched += 1
                     ph = 0
                     for o in got:
                         if "linkedin.com/in/" in (o.get("link") or "").lower():
                             ph += 1; out.append(o)
                     if pg > 0 and ph == 0:
                         break   # Google exhausted
-                return out
+                return out, fetched
 
             def nice_of(lbl):
                 return "all employees — everyone at the company (3 pages)" if lbl == "all employees" else ('“%s”' % lbl)
@@ -1224,9 +1225,9 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                 for fut in as_completed(futs):
                     lbl = futs[fut]
                     try:
-                        results = fut.result()
+                        results, fetched = fut.result()
                     except Exception:  # noqa: BLE001
-                        results = []
+                        results, fetched = [], 0
                     new = 0
                     for o in results:
                         clean = (o.get("link") or "").split("?")[0].rstrip("/")
@@ -1240,9 +1241,11 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = ""):
                             new += 1
                         if lbl not in profiles[clean]["hits"]:
                             profiles[clean]["hits"].append(lbl)
-                    c = _bd_cost(t)
+                    # THIS search's own numbers: profiles it returned, how many were new, its own cost
+                    search_usd = round(fetched * BRIGHTDATA_REQ_RATE, 4)
                     yield sse("log", {"key": "s3." + lbl, "sub": True, "msg": nice_of(lbl), "ok": True,
-                                      "result": "%d unique · %d new · $%s" % (len(profiles), new, c["usd"])})
+                                      "result": "%d found · %d new · %d page%s · $%s" % (
+                                          len(results), new, fetched, "" if fetched == 1 else "s", search_usd)})
 
             ranked = sorted(profiles.values(), key=lambda p: (-len(p["hits"]), p["name"].lower()))
             for p in ranked:      # parse the job title out of the Google SERP title (dataset masks it)
