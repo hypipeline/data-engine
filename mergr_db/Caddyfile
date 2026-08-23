@@ -26,7 +26,8 @@
 	# entity backend, but "/entity-app/" is a misleading name). /linkedin-profiles/api/* maps to
 	# the entity backend's /api/linkedin-profiles/*. (The tool page /linkedin-profiles stays on web.)
 	handle /linkedin-profiles/api/* {
-		uri replace /linkedin-profiles/api /api/linkedin-profiles
+		@lp path_regexp lp ^/linkedin-profiles/api/(.*)$
+		rewrite @lp /api/linkedin-profiles/{re.lp.1}
 		reverse_proxy entity:8000
 	}
 
