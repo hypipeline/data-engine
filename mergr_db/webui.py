@@ -896,38 +896,6 @@ def lpf_download(req: _LpfDownloadReq):
                          "raw_sample": recs[0] if recs else None})
 
 
-@app.get("/buyer-match/_onsetting")
-def bm_onsetting():
-    """TEMP read-only peek at the live ON `settings` row via the BM_SRC tunnel — to see the actual
-    ChatGPT model + any cost/fee columns. Excludes secret-looking columns. Remove after."""
-    import pymysql  # noqa: E402
-    from buyer_match.sync import _src
-    try:
-        conn = pymysql.connect(**_src())
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse({"error": "connect failed: %s" % e}, status_code=500)
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT chatgpt_api_version FROM settings LIMIT 1")
-            r = cur.fetchone(); model = r[0] if r else None
-            cur.execute("SELECT COLUMN_NAME FROM information_schema.columns "
-                        "WHERE table_schema=DATABASE() AND table_name='settings' ORDER BY ordinal_position")
-            cols = [x[0] for x in cur.fetchall()]
-        secret = ("key", "token", "secret", "password", "api")
-        want = [c for c in cols if any(k in c.lower() for k in ("chatgpt", "model", "cost", "fee", "search", "price"))
-                and not any(s in c.lower() for s in secret)]
-        vals = {}
-        if want:
-            with conn.cursor() as cur:
-                cur.execute("SELECT %s FROM settings LIMIT 1" % ",".join("`%s`" % c for c in want))
-                row = cur.fetchone()
-                if row:
-                    vals = {c: (str(v)[:200] if v is not None else None) for c, v in zip(want, row)}
-        return JSONResponse({"chatgpt_api_version": model, "cost_related_settings": vals, "all_columns": cols})
-    finally:
-        conn.close()
-
-
 @app.get("/buyer-match/mandates")
 def bm_mandates():
     return JSONResponse(_bm(bm_svc.list_mandates))
