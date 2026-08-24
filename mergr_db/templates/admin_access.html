@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Access · Data Engine{% endblock %}
+{% block head %}
+<style>
+  .acc-h{display:flex;align-items:baseline;gap:12px;margin:6px 0 4px;}
+  .acc-h h1{font-size:20px;margin:0;}
+  .acc-sub{color:#6b7280;font-size:13px;margin:0 0 18px;}
+  .acc-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;}
+  .acc-tbl th,.acc-tbl td{padding:10px 12px;border-bottom:1px solid #eef0f3;text-align:left;font-size:13px;vertical-align:middle;}
+  .acc-tbl th{background:#fafbfc;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#6b7280;}
+  .acc-tbl th.sec,.acc-tbl td.sec{text-align:center;width:1%;white-space:nowrap;}
+  .acc-email{font-weight:600;color:#111827;}
+  .acc-admin{display:inline-block;margin-left:7px;background:#eef2ff;color:#4338ca;font-size:10px;font-weight:800;
+    padding:1px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.3px;}
+  .acc-all{color:#16a34a;font-weight:700;font-size:12px;}
+  .acc-actions{display:flex;gap:8px;}
+  .acc-btn{padding:6px 11px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid #d1d5db;background:#fff;cursor:pointer;}
+  .acc-btn.save{border-color:#c7d2fe;background:#eef2ff;color:#4338ca;}
+  .acc-btn.imp{border-color:#fed7aa;background:#fff7ed;color:#c2410c;}
+  .acc-add{margin-top:22px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;}
+  .acc-add h3{margin:0 0 10px;font-size:14px;}
+  .acc-add input[type=email]{padding:8px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;min-width:280px;}
+  .acc-err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:9px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
+</style>
+{% endblock %}
+{% block body %}
+<div class="acc-h"><h1>Access control</h1></div>
+<p class="acc-sub">Admins ({{ auth_sections and '' }}Craig &amp; Lewis) see everything. For everyone else, tick the sections they may use.
+  Changes save per row.</p>
+{% if err %}<div class="acc-err">{{ 'That email must be on the @originationnetwork.com domain.' if err=='bad_email' else err }}</div>{% endif %}
+
+<table class="acc-tbl">
+  <thead>
+    <tr>
+      <th>User</th>
+      {% for s in sections %}<th class="sec">{{ s.label }}</th>{% endfor %}
+      <th style="text-align:right;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for u in users %}
+    <tr>
+      <form method="post" action="/admin/access" id="row-{{ loop.index }}">
+      <td>
+        <span class="acc-email">{{ u.email }}</span>
+        {% if u.is_admin %}<span class="acc-admin">Admin</span>{% endif %}
+        <input type="hidden" name="email" value="{{ u.email }}">
+      </td>
+      {% for s in sections %}
+        <td class="sec">
+          {% if u.is_admin %}
+            <span class="acc-all" title="Admins see all sections">✓</span>
+          {% else %}
+            <input type="checkbox" name="sections" value="{{ s.key }}"
+                   {{ 'checked' if s.key in u.sections }}>
+          {% endif %}
+        </td>
+      {% endfor %}
+      <td style="text-align:right;">
+        <div class="acc-actions" style="justify-content:flex-end;">
+          {% if not u.is_admin %}
+            <button class="acc-btn save" type="submit" form="row-{{ loop.index }}">Save</button>
+          {% endif %}
+        </div>
+      </td>
+      </form>
+      <td style="display:none;"></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="acc-add">
+  <h3>Grant / impersonate a new email</h3>
+  <form method="post" action="/admin/access" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <input type="email" name="email" placeholder="person@originationnetwork.com" required>
+    {% for s in sections %}
+      <label style="font-size:12px;display:inline-flex;gap:4px;align-items:center;">
+        <input type="checkbox" name="sections" value="{{ s.key }}"> {{ s.label }}
+      </label>
+    {% endfor %}
+    <button class="acc-btn save" type="submit">Add grants</button>
+  </form>
+  <form method="post" action="/admin/impersonate" style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+    <input type="email" name="email" placeholder="impersonate person@originationnetwork.com" required>
+    <button class="acc-btn imp" type="submit">Impersonate</button>
+  </form>
+</div>
+{% endblock %}

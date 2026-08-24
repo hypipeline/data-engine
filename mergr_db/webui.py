@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 import entity_client
 import li_profile_finder as lpf
+import auth
 
 DSN = os.environ["DATABASE_URL"]
 POOL = pgpool.ThreadedConnectionPool(1, 8, DSN)
@@ -36,6 +37,13 @@ try:
         os.path.join(HERE, "static", "app.css"))))
 except OSError:
     templates.env.globals["asset_ver"] = "0"
+
+# Google sign-in + per-section access control (layered *inside* the Caddy basic_auth
+# front door, which stays on as an outer defence). Adds session middleware, the access
+# guard, and the /login /auth/* /logout /admin/* routes. FAIL-SAFE: stays dormant (app
+# open, as today) until GOOGLE_CLIENT_ID is configured on the box.
+auth.setup_auth(app, templates)
+
 PAGE_SIZE = 50
 
 
@@ -137,9 +145,14 @@ def _tool_for(active):
 
 def render(request, name, active, **ctx):
     # no-cache: pages carry inline JS, so a stale cached page hides UI changes
+    base = {"request": request, "active": active, "tool": _tool_for(active)}
+    try:
+        base.update(auth.nav_context(request))   # auth_user / auth_allowed / impersonation
+    except Exception:
+        pass
+    base.update(ctx)
     return templates.TemplateResponse(
-        name, {"request": request, "active": active, "tool": _tool_for(active), **ctx},
-        headers={"Cache-Control": "no-cache, must-revalidate"})
+        name, base, headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 def fmt_deal_rows(rows):

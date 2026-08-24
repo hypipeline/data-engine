@@ -9,6 +9,14 @@
   {% block head %}{% endblock %}
 </head>
 <body>
+  {% if auth_impersonating %}
+  <div style="background:#7c2d12;color:#fff;font-size:12.5px;padding:7px 16px;display:flex;align-items:center;gap:10px;">
+    <span style="font-weight:700;">Impersonating {{ (auth_user or {}).get('email') }}</span>
+    <span style="opacity:.8;">— you're seeing exactly what they see.</span>
+    <span style="flex:1;"></span>
+    <a href="/stop-impersonate" style="color:#fff;font-weight:700;text-decoration:underline;">Return to your account</a>
+  </div>
+  {% endif %}
   <header class="topbar">
     <a class="brand" href="/"><span class="dot"></span> Data Engine</a>
     {% if tool %}
@@ -26,12 +34,20 @@
         <a href="/mergr/settings"     class="{{ 'active' if active=='settings' }}">Settings</a>
       {% endif %}
       <span class="grow"></span>
-      {# tool switcher — jump between the tools of Data Engine #}
-      <a href="/mergr"       class="tool {{ 'on' if tool=='mergr' }}">Mergr</a>
-      <a href="/entity"      class="tool {{ 'on' if tool=='entity' }}">Entity Lookup</a>
-      <a href="/buyer-match" class="tool {{ 'on' if tool=='buyer-match' }}">Buyer Match</a>
-      <a href="/linkedin"    class="tool {{ 'on' if tool=='linkedin' }}">LinkedIn Finder</a>
-      <a href="/linkedin-profiles" class="tool {{ 'on' if tool=='linkedin-profiles' }}">Profile Finder</a>
+      {# tool switcher — only the sections this user may see #}
+      {% set _al = auth_allowed if auth_allowed is defined else None %}
+      {% if _al is none or 'mergr' in _al %}<a href="/mergr"       class="tool {{ 'on' if tool=='mergr' }}">Mergr</a>{% endif %}
+      {% if _al is none or 'entity' in _al %}<a href="/entity"      class="tool {{ 'on' if tool=='entity' }}">Entity Lookup</a>{% endif %}
+      {% if _al is none or 'buyer-match' in _al %}<a href="/buyer-match" class="tool {{ 'on' if tool=='buyer-match' }}">Buyer Match</a>{% endif %}
+      {% if _al is none or 'linkedin' in _al %}<a href="/linkedin"    class="tool {{ 'on' if tool=='linkedin' }}">LinkedIn Finder</a>{% endif %}
+      {% if _al is none or 'linkedin-profiles' in _al %}<a href="/linkedin-profiles" class="tool {{ 'on' if tool=='linkedin-profiles' }}">Profile Finder</a>{% endif %}
+      {% if _al is none or 'acquirer-finder' in _al %}<a href="/acquirer-finder" class="tool {{ 'on' if tool=='acquirer-finder' }}">Acquirer Finder</a>{% endif %}
+      {% if auth_user %}
+        <span style="width:1px;height:18px;background:#e5e7eb;margin:0 4px;"></span>
+        {% if auth_is_admin and not auth_impersonating %}<a href="/admin/access" class="tool">Access</a>{% endif %}
+        <span class="tool" style="color:#6b7280;cursor:default;" title="{{ (auth_user or {}).get('email') }}">{{ (auth_user or {}).get('email','').split('@')[0] }}</span>
+        <a href="/logout" class="tool">Sign out</a>
+      {% endif %}
     </nav>
   </header>
   <main class="wrap">

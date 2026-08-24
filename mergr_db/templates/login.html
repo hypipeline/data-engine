@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Data Engine</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{ asset_ver }}">
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_ver }}">
+  <style>
+    .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f6f7f9;}
+    .login-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:34px 34px 30px;
+      width:380px;box-shadow:0 12px 40px rgba(15,23,42,.08);text-align:center;}
+    .login-brand{display:inline-flex;align-items:center;gap:9px;font-weight:800;font-size:17px;color:#111827;margin-bottom:6px;}
+    .login-brand .dot{width:11px;height:11px;border-radius:50%;background:#4f46e5;display:inline-block;}
+    .login-sub{color:#6b7280;font-size:13.5px;margin:2px 0 22px;}
+    .gbtn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;padding:11px 14px;
+      border:1px solid #dadce0;border-radius:10px;background:#fff;color:#3c4043;font-weight:600;font-size:14.5px;
+      text-decoration:none;cursor:pointer;transition:background .12s,box-shadow .12s;}
+    .gbtn:hover{background:#f8faff;box-shadow:0 1px 4px rgba(60,64,67,.15);}
+    .gbtn svg{width:18px;height:18px;flex:0 0 auto;}
+    .login-note{color:#9aa3af;font-size:12px;margin-top:16px;}
+    .login-err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:9px;
+      padding:9px 12px;font-size:12.5px;margin-bottom:16px;text-align:left;}
+    .login-dev{margin-top:20px;padding-top:18px;border-top:1px dashed #e5e7eb;}
+    .login-dev input{width:100%;padding:9px 11px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;margin-bottom:9px;box-sizing:border-box;}
+    .login-dev button{width:100%;padding:9px;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;font-weight:700;border-radius:8px;cursor:pointer;font-size:13px;}
+    .login-dev .tag{display:inline-block;background:#fef3c7;color:#92400e;font-size:10px;font-weight:800;
+      padding:1px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;}
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand"><span class="dot"></span> Data Engine</div>
+      <div class="login-sub">Sign in with your <b>@{{ domain }}</b> account</div>
+      {% if err %}<div class="login-err">{{ err }}</div>{% endif %}
+      {% if configured %}
+        <a class="gbtn" href="/auth/start?next={{ next|urlencode }}">
+          <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.4 5.4 2.5 13.3l7.9 6.1C12.3 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.1 5.3-4.6 7l7.1 5.5c4.2-3.9 6.7-9.6 6.7-16z"/><path fill="#FBBC05" d="M10.4 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.1-5.5c-2 1.3-4.6 2.1-8.1 2.1-6.4 0-11.7-3.7-13.6-9.4l-7.9 6.1C6.4 42.6 14.6 48 24 48z"/></svg>
+          Sign in with Google
+        </a>
+      {% else %}
+        <div class="login-err">Google sign-in isn't configured yet (no <code>GOOGLE_CLIENT_ID</code>).</div>
+      {% endif %}
+      <div class="login-note">Access is limited to Origination Network staff.</div>
+
+      {% if dev_mode %}
+      <div class="login-dev">
+        <span class="tag">Dev sign-in</span>
+        <form method="post" action="/auth/dev">
+          <input type="hidden" name="next" value="{{ next }}">
+          <input name="email" type="email" placeholder="you@{{ domain }}" required>
+          <button type="submit">Sign in (dev — no Google)</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

@@ -5,6 +5,8 @@
 <p class="sub">A multi-tool data platform. Choose a tool to get started.</p>
 
 <div class="tool-grid">
+  {% set _al = auth_allowed if auth_allowed is defined else None %}
+  {% if _al is none or 'mergr' in _al %}
   <a class="tool-card" href="/mergr">
     <div class="tool-card-h">
       <span class="tool-card-title">Mergr</span>
@@ -19,7 +21,9 @@
     </div>
     <span class="tool-card-cta">Open Mergr →</span>
   </a>
+  {% endif %}
 
+  {% if _al is none or 'entity' in _al %}
   <a class="tool-card" href="/entity">
     <div class="tool-card-h">
       <span class="tool-card-title">Entity Lookup</span>
@@ -34,7 +38,9 @@
     </div>
     <span class="tool-card-cta">Open Entity Lookup →</span>
   </a>
+  {% endif %}
 
+  {% if _al is none or 'buyer-match' in _al %}
   <a class="tool-card" href="/buyer-match">
     <div class="tool-card-h">
       <span class="tool-card-title">Buyer Match</span>
@@ -48,7 +54,9 @@
     </div>
     <span class="tool-card-cta">Open Buyer Match →</span>
   </a>
+  {% endif %}
 
+  {% if _al is none or 'linkedin' in _al %}
   <a class="tool-card" href="/linkedin">
     <div class="tool-card-h">
       <span class="tool-card-title">LinkedIn Finder</span>
@@ -63,7 +71,9 @@
     </div>
     <span class="tool-card-cta">Open LinkedIn Finder →</span>
   </a>
+  {% endif %}
 
+  {% if _al is none or 'linkedin-profiles' in _al %}
   <a class="tool-card" href="/linkedin-profiles">
     <div class="tool-card-h">
       <span class="tool-card-title">LinkedIn Profile Finder</span>
@@ -78,5 +88,12 @@
     </div>
     <span class="tool-card-cta">Open Profile Finder →</span>
   </a>
+  {% endif %}
+
+  {% if auth_user and not auth_allowed %}
+  <div style="grid-column:1/-1;text-align:center;color:#6b7280;padding:30px;border:1px dashed #e5e7eb;border-radius:12px;">
+    No sections enabled yet. Ask an admin (Craig or Lewis) to grant you access.
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
