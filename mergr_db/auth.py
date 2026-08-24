@@ -179,7 +179,7 @@ def all_known_users():
         conn.close()
     emails = set(seen) | set(grants) | set(ADMIN_EMAILS)
     out = []
-    for e in sorted(emails):
+    for e in sorted(emails, key=lambda x: (x not in ADMIN_EMAILS, x)):  # admins first, then alphabetical
         out.append({
             "email": e,
             "name": (seen.get(e) or {}).get("name"),
