@@ -1207,6 +1207,7 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = "", run_id: int
                     yield sse("result", {"input": inp, "company_url": company_url, "error": "Couldn't read the company name.", "cost": _bd_cost(t), "api_calls": t.get_api_calls()}); yield sse("done", {}); return
                 yield sse("log", {"key": "s2", "step": 2, "msg": "Read company name from LinkedIn", "ok": True, "result": company_name + (" · %s employees" % employees if employees else "")})
 
+            t_resolve = time.time()   # end of resolve (Step 1+2), start of the Google-SERP phase
             # ── Step 3: Google people search — broad (30) + 15 role searches, shown as substeps ──
             base = 'site:linkedin.com/in/ "%s"' % company_name
             profiles = {}   # clean_url -> {name, title, description, followers, url, hits}
@@ -1275,6 +1276,7 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = "", run_id: int
                       "employees": employees, "base_query": base, "searches": len(searches),
                       "profiles": ranked, "cost": search_cost, "api_calls": t.get_api_calls()}
             yield sse("result", report)
+            t_serp = time.time()   # end of Google-SERP phase (Step 3), start of verify (Step 4)
 
             # ── Step 4: verify the top 20 via the LinkedIn people dataset (gd_l1viktl72bvl7bjuj0) —
             # ONE batched job returns each profile's structured CURRENT company. Far more reliable
@@ -1388,7 +1390,17 @@ def api_linkedin_profiles_stream(input: str = "", refresh: str = "", run_id: int
 
             # persist the enriched report (profiles now carry page_title; final cost incl. verify)
             report["cost"] = cost
-            report["duration_s"] = round(time.time() - t_start, 1)   # how long the run took
+            _now = time.time()
+            report["duration_s"] = round(_now - t_start, 1)   # how long the run took
+            # per-phase wall-clock so we can see WHY a run is slow (resolve vs Google-SERP vs verify)
+            report["timing"] = {"resolve_s": round(t_resolve - t_start, 1),
+                                "serp_s": round(t_serp - t_resolve, 1),
+                                "verify_s": round(_now - t_serp, 1),
+                                "total_s": round(_now - t_start, 1)}
+            print("[lp-timing] %s: resolve=%.1fs serp=%.1fs verify=%.1fs total=%.1fs bd_calls=%s" % (
+                company_name, report["timing"]["resolve_s"], report["timing"]["serp_s"],
+                report["timing"]["verify_s"], report["timing"]["total_s"],
+                t.get_api_calls().get("brightdata")), flush=True)
             try:
                 linkedin_cache.report_save(key, report)
             except Exception as e:  # noqa: BLE001
