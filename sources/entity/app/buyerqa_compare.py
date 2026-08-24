@@ -79,8 +79,10 @@ def _call_openai_web(config, model, prompt):
                     txt += cp.get("text", "")
     u = d.get("usage") or {}
     it, ot = u.get("input_tokens", 0), u.get("output_tokens", 0)
-    # gpt-4o token rates + a rough web_search tool fee (~$0.025/call) — search context inflates input
-    cost = round(it * 2.5 / 1e6 + ot * 10.0 / 1e6 + 0.025, 4)
+    # gpt-4o token rates + web_search tool fee. OpenAI's web search tool is $10/1k = $0.010/call for
+    # ALL models (verified vs OpenAI pricing page + org billing, Aug 2026). Search context is billed
+    # as input tokens, which inflates `it`.
+    cost = round(it * 2.5 / 1e6 + ot * 10.0 / 1e6 + 0.010, 4)
     return {"text": txt, "cost_usd": cost, "input_tokens": it, "output_tokens": ot,
             "route": "openai-responses", "provider": "OpenAI web_search", "latency_ms": int((time.time() - t0) * 1000)}
 
@@ -88,7 +90,9 @@ def _call_openai_web(config, model, prompt):
 def _call_openai_search_api(config, model, prompt):
     """OpenAI's dedicated gpt-5-search-api model — search is BUILT IN (no tool to attach), called via
     chat/completions. Faster (~7s vs ~3min for gpt-5+web_search) and not reasoning-heavy. The injected
-    web-search results are billed as prompt tokens; gpt-5 token rates, no separate tool fee."""
+    web-search results are billed as PROMPT tokens (real calls run ~26k input tokens each), AND there is
+    a separate web-search fee of $10/1k = $0.010/call — both verified vs OpenAI pricing + org billing
+    (Aug 2026). So input token cost (~$0.033) dominates, not the $0.010 fee."""
     key = config.get("openai_api_key")
     if not key:
         return {"error": "no OpenAI API key", "route": "openai-search-api", "provider": "OpenAI"}
@@ -107,7 +111,10 @@ def _call_openai_search_api(config, model, prompt):
     txt = ((d.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     u = d.get("usage") or {}
     it, ot = u.get("prompt_tokens", 0), u.get("completion_tokens", 0)
-    cost = round(it * 1.25 / 1e6 + ot * 10.0 / 1e6, 4)  # gpt-5 rates; search results billed as input
+    cached = (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
+    # gpt-5 rates: fresh input $1.25/1M, cached input $0.125/1M, output $10/1M, + $0.010 web-search fee.
+    # Search results are billed as input (inflates `it`), so input cost dominates.
+    cost = round((it - cached) * 1.25 / 1e6 + cached * 0.125 / 1e6 + ot * 10.0 / 1e6 + 0.010, 4)
     return {"text": txt, "cost_usd": cost, "input_tokens": it, "output_tokens": ot,
             "route": "openai-search-api", "provider": "OpenAI gpt-5-search-api", "latency_ms": int((time.time() - t0) * 1000)}
 

@@ -9,13 +9,16 @@ PRICING = {
     "claude-opus-4-8":   {"in": 15.0, "out": 75.0, "search": 0.01},
     "claude-sonnet-4-6": {"in": 3.0,  "out": 15.0, "search": 0.01},
     "claude-haiku-4-5":  {"in": 1.0,  "out": 5.0,  "search": 0.01},
-    # OpenAI
-    "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.025},
+    # OpenAI — gpt-5-search-api rates VERIFIED to the cent vs org billing (Aug 2026):
+    #   $1.25/1M in, $10/1M out, $0.125/1M cached in, web search $0.010/call ($10/1k).
+    # NB: gpt-5-search-api bills web-search RESULTS as INPUT tokens — real calls run
+    # ~26k input tokens each, so input cost (~$0.033) dominates over the $0.010 search
+    # fee. Always compute from the logged prompt_tokens, never a small fixed assumption.
+    "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.010},
     "gpt-4o":            {"in": 2.5,  "out": 10.0, "search": 0.025},
     "gpt-4o-search-preview": {"in": 2.5, "out": 10.0, "search": 0.030},
-    "gpt-5-search-api":  {"in": 1.25, "out": 10.0, "search": 0.030},
+    "gpt-5-search-api":  {"in": 1.25, "out": 10.0, "search": 0.010},
     "gpt-5.5":           {"in": 2.0,  "out": 12.0, "search": 0.030},
-    "gpt-5":             {"in": 1.25, "out": 10.0, "search": 0.030},
     "gpt-4.1":           {"in": 2.0,  "out": 8.0,  "search": 0.025},
     # Perplexity Sonar — sonar/sonar-pro bill a FLAT per-request search fee by context tier (NOT per query),
     # so 'search' here is charged once/request (see cost_usd). deep-research genuinely bills per search.
