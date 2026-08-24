@@ -60,6 +60,7 @@
         <div class="acc-actions" style="justify-content:flex-end;">
           {% if not u.is_admin %}
             <button class="acc-btn save" type="submit" form="row-{{ loop.index }}">Save</button>
+            <button class="acc-btn imp" type="submit" form="row-{{ loop.index }}" formaction="/admin/impersonate">Impersonate</button>
           {% endif %}
         </div>
       </td>
@@ -71,7 +72,7 @@
 </table>
 
 <div class="acc-add">
-  <h3>Grant / impersonate a new email</h3>
+  <h3>Grant a new email access</h3>
   <form method="post" action="/admin/access" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <input type="email" name="email" placeholder="person@originationnetwork.com" required>
     {% for s in sections %}
@@ -80,10 +81,6 @@
       </label>
     {% endfor %}
     <button class="acc-btn save" type="submit">Add grants</button>
-  </form>
-  <form method="post" action="/admin/impersonate" style="margin-top:12px;display:flex;gap:10px;align-items:center;">
-    <input type="email" name="email" placeholder="impersonate person@originationnetwork.com" required>
-    <button class="acc-btn imp" type="submit">Impersonate</button>
   </form>
 </div>
 {% endblock %}

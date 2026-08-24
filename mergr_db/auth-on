@@ -1,3 +1,12 @@
-basic_auth {
+# Basic-auth front door. Bypassed ONLY for the public LinkedIn-Profiles report
+# endpoint when the correct ?token= is present in the URL (token = {$DE_LP_TOKEN},
+# supplied via the gitignored caddy.secrets.env). Every other request needs auth.
+@de_needs_auth {
+	not {
+		path /api/linkedin-profiles/report /api/linkedin-profiles/report/*
+		query token={$DE_LP_TOKEN}
+	}
+}
+basic_auth @de_needs_auth {
 	admin $2b$10$77ny5wro9EArgmgImXTP3eVqcaT66Gy3.ac1h6MRZWT4Y2RzsH/ai
 }
