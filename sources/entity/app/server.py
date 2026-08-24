@@ -1557,7 +1557,7 @@ async def api_linkedin_profiles_report(input: str = "", refresh: str = "", run: 
         "employees": rep.get("employees"),
         "searches": rep.get("searches"),
         "generated_at": rep.get("cached_at"),
-        "cost": rep.get("cost"),                  # {brightdata_calls, rate, usd}
+        "cost": {"usd": (rep.get("cost") or {}).get("usd")},   # USD only — rate/brightdata_calls are internal
         "count": len(people),                     # people returned (≤12, all still at the company)
         "profiles_found": len(profiles),          # total profiles the search surfaced (before filtering)
         "people": people,
