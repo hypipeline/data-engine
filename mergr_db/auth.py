@@ -312,8 +312,13 @@ def setup_auth(app, templates):
 
         # section gate ("/" and other hub pages have no section -> always allowed once in)
         section = section_for_path(path)
-        if section and section not in allowed_sections(eff.get("email")):
-            return _forbidden(request, templates, None, section=section)
+        if section:
+            allowed = allowed_sections(eff.get("email"))
+            # Acquirer Finder is surfaced *inside* Buyer Match (its "AI Generate" mode calls
+            # /acquirer-finder/*), so a user granted buyer-match can use those endpoints too.
+            ok = (section in allowed) or (section == "acquirer-finder" and "buyer-match" in allowed)
+            if not ok:
+                return _forbidden(request, templates, None, section=section)
         return await call_next(request)
 
     # SessionMiddleware is added LAST so it sits OUTERMOST and wraps the guard,
@@ -446,7 +451,13 @@ def setup_auth(app, templates):
 
 
 def _forbidden(request, templates, message, section=None):
-    """Render the friendly 'no access' screen (403)."""
+    """Render the friendly 'no access' screen (403). For XHR/API callers return JSON, not HTML,
+    so a fetch()->response.json() gets a clean error instead of choking on '<!doctype ...'."""
+    if "text/html" not in request.headers.get("accept", ""):   # XHR/API caller -> JSON, not the HTML page
+        return JSONResponse(
+            {"error": "forbidden", "section": section,
+             "message": message or "You don't have access to this section."},
+            status_code=403)
     ctx = {"message": message, "section": section}
     try:
         ctx.update(nav_context(request))
