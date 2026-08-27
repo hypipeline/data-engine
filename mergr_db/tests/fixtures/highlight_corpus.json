@@ -1,0 +1,1211 @@
+{
+"note": "Real Data Engine data for the differential corpus: buyer descriptions + mandate teaser texts. trigger_query is a redacted stand-in for a real mandate doc summary. Regenerate with tests/README.md.",
+"buyers": [
+{
+"description": "Hyndland Capital Ltd is a private equity firm specializing in investments within the information and knowledge economies. The firm focuses on sectors such as tech-enabled business and information services, digital marketing and data analytics, IT cybersecurity, and IT infrastructure and communications. Hyndland Capital is dedicated to creating value through thesis-driven investments in high-growth sectors.",
+"sector_keywords": "tech-enabled business services, digital marketing, data analytics, IT cybersecurity, IT infrastructure, human capital management technology, outsourced solutions, healthcare IT, information services, media content distribution"
+},
+{
+"description": "Kain Capital LLC, founded in 2014 and headquartered in New York City, is a private equity firm specializing in healthcare services and information technology sectors. The firm partners with founder-led, mid-sized healthcare companies to drive transformational change through technology enablement and operational improvements.",
+"sector_keywords": "value-based primary care, hospice care, palliative care, occupational medicine, workers' compensation, specialized behavioral health services, healthcare technology, healthcare information technology, healthcare services, healthcare analytics"
+},
+{
+"description": "Bestport Ventures LLP, founded in 2005 and headquartered in London, United Kingdom, is an independent private equity firm specializing in providing development capital to small, fast-growing UK companies. The firm focuses on sectors such as business services, education, healthcare services, and technology, partnering with ambitious management teams to drive business growth and success.",
+"sector_keywords": "business services, education, healthcare services, technology, management buyouts, growth capital, retirement sales, UK lower mid-market, private equity, cash generative businesses"
+},
+{
+"description": "August Equity LLP is a London-based private equity firm founded in 2001, specializing in investments in UK and Ireland-based small and medium-sized enterprises (SMEs). The firm focuses on service-oriented businesses within the technology, healthcare, business services, and education sectors, aiming to build high-quality market leaders through primary buyouts and strategic support.",
+"sector_keywords": "b2b software, managed services, governance risk compliance, education technology, healthcare services, digital health, medical devices, edtech, healthtech, fintech, saas, security software, life sciences, agritech, financial services"
+},
+{
+"description": "Graphite Capital Management LLP, founded in 1981 and headquartered in London, is an independent private equity firm specializing in mid-market leveraged buyouts. The firm focuses on companies valued between £30 million and £150 million across various sectors, including healthcare, education, and technology-enabled services. Graphite has backed over 100 management teams since the early 1990s, consistently generating strong returns through diverse economic cycles.",
+"sector_keywords": "healthcare services, pharmaceutical services, medical products, education services, data services, tech-enabled services, human capital, outsourcing, life sciences, digital health, medical devices, e-learning, edtech, software as a service, SaaS"
+},
+{
+"description": "Founded in 1999 and headquartered in Bussum, Netherlands, Waterland Private Equity Investments B.V. is an independent private equity firm specializing in mid-market buy-and-build strategies. The firm focuses on sectors undergoing significant change, including leisure and tourism, outsourcing and business services, healthcare and senior living, and sustainability. Waterland has executed over 1,000 acquisitions since inception, averaging approximately 60 add-ons per year.",
+"sector_keywords": "leisure and tourism, outsourcing, business services, healthcare, senior living, sustainability, digital transformation, carve-outs, mid-market buy-and-build, fragmented markets"
+},
+{
+"description": "RD Capital Partners (RDCP) is a founder-owned investment conglomerate established in 2015 by Sameer Rizvi and Iryna Dubylovska. Headquartered in London, RDCP employs over 2,000 people across the UK and has an enterprise value of $650 million. The firm makes long-term control investments using internally generated, permanent capital from its own balance sheet, focusing on building enduring, high-quality businesses across multiple sectors.",
+"sector_keywords": "healthcare, industrials, consumer staples, manufacturing, real estate, pet food, elderly care, nursing homes, residential real estate, investment conglomerate, permanent capital, long-term investments"
+},
+{
+"description": "Council Capital Funds Management, LLC, founded in 2014, is a private equity firm headquartered in Nashville, Tennessee. The firm specializes in investing in healthcare companies, focusing on healthcare services and healthcare IT sectors. Council Capital partners with mission-driven businesses to improve healthcare by providing strategic insights, extensive relationships, and value-creating resources.",
+"sector_keywords": "healthcare services, healthcare IT, digital health, medical devices, health technology, telemedicine, health informatics, patient engagement, healthcare analytics, population health management, revenue cycle management, electronic health records, healthcare interoperability, value-based care, healthcare operations"
+},
+{
+"description": "Gresham House plc, founded in 1857, is a specialist alternative asset manager headquartered in London, UK. The firm focuses on delivering sustainable financial returns through investments in long-term global themes, including forestry, energy transition, sustainable infrastructure, real estate, and strategic equity. Gresham House partners with a diverse client base, including government entities, institutional investors, wealth managers, financial advisers, individual investors, family offices, ",
+"sector_keywords": "forestry, energy transition, sustainable infrastructure, real estate, strategic equity, private equity, venture capital, renewable energy, housing, infrastructure"
+},
+{
+"description": "Nordic Capital Holding AB, founded in 1989, is a private equity firm headquartered in Stockholm, Sweden. The firm specializes in investing in healthcare, technology & payments, financial services, and services & industrial technology sectors. With a focus on Northern Europe and North America, Nordic Capital partners with business owners and management teams to drive sustainable growth and transformative change.",
+"sector_keywords": "pharma, healthtech, medtech, life sciences, healthcare services, vertical software, payments, e-ID, cybersecurity, application software, banking, lending, insurance, wealth management, tech-enabled services, advanced services, greentech, industrial technology"
+},
+{
+"description": "Cabot Square Capital LLP, founded in 1996, is a London-based private equity firm specializing in providing long-term investment capital to small and mid-sized companies in the UK and Western Europe. The firm focuses on sectors such as financial services, property, and infrastructure, offering hands-on support to management teams for growth, acquisitions, and strategic development. Cabot Square Capital is independently owned and regulated by the Financial Conduct Authority (FCA).",
+"sector_keywords": "financial services, property, infrastructure, specialist lending, asset management, renewable energy, technology platforms, fintech, real estate, logistics"
+},
+{
+"description": "Terra Firma Capital Partners Limited is a British private equity firm founded in 2002 by Guy Hands, headquartered in London, UK. The firm focuses on asset-backed investments across various sectors, including agriculture, green energy, infrastructure, housing, transportation, entertainment, and leasing. Since its inception, Terra Firma has invested over €18 billion in 43 businesses across 25 sectors, with an aggregate enterprise value exceeding €52 billion.",
+"sector_keywords": "agriculture, green energy, infrastructure, housing, transportation, entertainment, leasing"
+},
+{
+"description": "HC-One Holdco Limited, founded in 2011, is the United Kingdom's largest care home operator, headquartered in Darlington. The company specializes in providing residential, nursing, and dementia care services across more than 275 care homes in England, Scotland, and Wales. HC-One focuses on delivering compassionate care for older individuals, emphasizing kindness and quality in its services.",
+"sector_keywords": "residential care, nursing care, dementia care, elderly care, care homes, healthcare services, senior living, long-term care, assisted living, nursing homes, geriatric care, senior care facilities, aged care, care home management, healthcare management"
+},
+{
+"description": "Bain Capital, founded in 1984 and headquartered in Boston, Massachusetts, is a leading private investment firm managing approximately $225 billion in assets. The firm specializes in private equity, venture capital, credit, public equity, impact investing, life sciences, crypto, tech opportunities, special situations, and real estate. Bain Capital operates globally with 24 offices across North America, Europe, Asia, and Australia, investing across a diverse range of industry sectors and geographi",
+"sector_keywords": "private equity, venture capital, credit, public equity, impact investing, life sciences, crypto, tech opportunities, special situations, real estate, technology, healthcare, financial services, consumer products"
+},
+{
+"description": "Ambea AB (publ), founded in 1993 and headquartered in Solna, Sweden, is a leading care provider in the Nordic region. The company offers a range of services including elderly care, disability care, and psychosocial support across Sweden, Norway, Denmark, and Finland. Operating through brands such as Nytida, Vardaga, Stendi, Altiden, and Klara, Ambea serves approximately 18,000 care receivers with the support of around 41,000 employees.",
+"sector_keywords": "elderly care, disability care, psychosocial support, nursing homes, home care services, personal assistance, social care services, rehabilitation services, special education, healthcare staffing solutions, competence development, neuropsychiatric disorders, assisted living facilities, daily activity units, residential facilities"
+},
+{
+"description": "Elysian Capital LLP, founded in 2007, is an independent private equity firm headquartered in London, UK. The firm specializes in acquiring majority stakes in growth-oriented businesses valued between £20 million and £100 million, partnering with entrepreneurial management teams to unlock their full potential. Elysian Capital operates across various sectors, including healthcare, business services, industrials, energy, utilities, business goods, and marketing services, with a primary focus on the",
+"sector_keywords": "healthcare, business services, industrials, energy, utilities, business goods, marketing services, lower mid-market, growth businesses, management buyouts, UK, Ireland"
+},
+{
+"description": "Agilitas Private Equity LLP, founded in 2011 and headquartered in London, UK, is a pan-European mid-market private equity firm. The company specializes in making transformational investments in defensible businesses, focusing on improving, growing, and strengthening them. Agilitas operates across various sectors, emphasizing operational involvement and long-term value creation.",
+"sector_keywords": "private equity, mid-market, transformational investments, defensible businesses, operational involvement, long-term value creation"
+},
+{
+"description": "Palatine Private Equity LLP, founded in 2005, is a UK-based private equity firm headquartered in Manchester, with additional offices in London and Birmingham. The firm focuses on sustainable growth and responsible investing, partnering with management teams across sectors such as business services, financial services, health and education, and technology. Palatine operates two primary funds: a Buyout Fund investing between £10 million and £50 million, and an Impact Fund investing between £5 mill",
+"sector_keywords": "business services, financial services, health and education, technology, sustainable investing, impact investing, mid-market companies, management buyouts, growth capital, UK investments"
+},
+{
+"description": "Downing LLP is a responsible investment manager founded in London in 1986. With approximately 270 staff across five European offices, the firm manages £2.5 billion in assets as of September 2025. Downing focuses on private market sectors including renewable energy and infrastructure, private equity, and private credit, aiming to deliver attractive returns while contributing to a sustainable future.",
+"sector_keywords": "healthcare, education, renewable energy, infrastructure, private equity, private credit, asset-backed businesses, UK investments, sustainable investing, responsible investment, energy transition, social infrastructure, specialist care services, elderly residential care, retirement living, funeral care"
+},
+{
+"description": "Apollo Global Management, Inc., founded in 1990 and headquartered in New York City, is a leading global alternative investment firm. The company specializes in private equity, credit, and real assets, managing approximately $1 trillion in assets. Apollo provides innovative capital solutions to businesses and offers retirement income products through its subsidiary, Athene.",
+"sector_keywords": "private equity, credit, real assets, infrastructure, real estate, energy transition, corporate carve-outs, deleveraging investments, buyouts, hybrid value, impact investing, secondaries, asset-backed finance, corporate credit, retirement solutions"
+},
+{
+"description": "Grant Avenue Capital, founded in 2019 and headquartered in New York City, is a private equity firm specializing in healthcare investments. The firm partners with management teams to invest in companies across healthcare services, medical devices, pharmaceutical services, and healthcare IT sectors. Grant Avenue Capital focuses on building world-class companies that enhance patient health and improve the overall healthcare system.",
+"sector_keywords": "healthcare services, medical devices, pharmaceutical services, healthcare IT, cost containment, custom solutions, consumer-oriented health, healthcare outsourcing, healthcare technology solutions, clinical outcomes improvement, healthcare efficiency, patient health enhancement, healthcare system improvement, healthcare investment, healthcare private equity"
+},
+{
+"description": "Cane Investment Partners is a private investment firm founded in 2014 and headquartered in Chicago, Illinois. The firm focuses on providing expansion capital and strategic support to companies in sectors such as energy, healthcare, specialty finance, real estate, and service industries. Their approach combines financial acumen with operational expertise to foster long-term growth and value creation.",
+"sector_keywords": "energy, healthcare, specialty finance, real estate, service sector, growth capital, strategic support"
+},
+{
+"description": "Searchlight Capital Partners UK, LLP is a private investment firm founded in 2010 and headquartered in London, England. The firm specializes in private equity and debt investments, focusing on sectors such as communications, media, financial services, and business services. With a flexible investment mandate, Searchlight aims to create value through strategic and operational support to its portfolio companies.",
+"sector_keywords": "communications, media, financial services, business services, private equity, debt investments, North America, Europe, strategic support, value creation"
+},
+{
+"description": "Queen's Park Equity LLP, founded in 2020 and headquartered in London, UK, is a private equity firm specializing in investments within the Education, Health & Pharma, and Tech & Business Services sectors. The firm partners with entrepreneur-led businesses to support accelerated growth through both organic expansion and strategic acquisitions. QPE emphasizes a collaborative approach, leveraging its team's extensive sector expertise and a network of industry-specific entrepreneurs to drive value cr",
+"sector_keywords": "education technology, e-learning, healthcare services, pharmaceuticals, medical devices, software as a service, business process outsourcing, data analytics, cloud computing, cybersecurity, fintech, edtech, healthtech, biotech, digital transformation"
+},
+{
+"description": "Weight Partners Capital LLP (WPC) is a specialist private equity investor founded in 2009, headquartered in Chichester, West Sussex, United Kingdom. WPC focuses on investing in UK healthcare SMEs, partnering with management teams to strengthen and scale their businesses into market-leading operations.",
+"sector_keywords": "healthcare services, consumer services, leisure, hospitality"
+},
+{
+"description": "Apposite Capital LLP, founded in 2006 and headquartered in London, is a specialist pan-European healthcare investor. The firm focuses on investing in and scaling healthcare businesses, leveraging deep sector knowledge and an extensive network of healthcare leaders to identify and support high-growth opportunities.",
+"sector_keywords": "healthcare, digital health, medical devices, diagnostics, pharmaceuticals, life sciences, healthcare services"
+},
+{
+"description": "Intriva Capital Management Limited, founded in 2017, is an alternative investment firm headquartered in London, England, with additional offices in Frankfurt and Madrid. The firm focuses on sustainable value creation in mid-market businesses throughout Western Europe, working alongside management teams to enhance strategic, operational, and financial trajectories. Intriva operates across various sectors, including private equity, private debt, and real estate.",
+"sector_keywords": "private equity, private debt, real estate, mid-market businesses, Western Europe, strategic repositioning, operational improvement, buy-and-build strategies, capital solutions, asset management, sustainable value creation, complex investments, proprietary technology, management partnerships, ESG integration"
+},
+{
+"description": "Key Capital Partners LLP is an independent private equity firm founded in 2007, headquartered in Leeds, UK. The firm specializes in investing in small to medium-sized enterprises (SMEs) valued between £5 million and £50 million. Key Capital Partners focuses on sectors such as business services, education technology (EdTech), healthcare, and technology-enabled businesses, providing both capital and strategic support to drive transformative growth.",
+"sector_keywords": "business services, edtech, healthcare, technology-enabled businesses, e-commerce, outsourced services, telecommunications, property management, facilities management, media, recruitment, fire and safety, managed service providers, B2B services"
+},
+{
+"description": "Acadia Healthcare Company, Inc., founded in 2005 and headquartered in Franklin, Tennessee, is a leading provider of behavioral healthcare services in the United States and Puerto Rico. The company operates a network of 277 facilities across 40 states, offering services such as inpatient psychiatric hospitals, specialty treatment facilities, residential treatment centers, outpatient clinics, and therapeutic school-based programs. Acadia's mission is to provide compassionate care that improves liv",
+"sector_keywords": "behavioral healthcare, psychiatric hospitals, addiction treatment, residential treatment centers, outpatient clinics"
+},
+{
+"description": "Stirling Square Capital Partners, founded in 2002 and headquartered in London, is a private equity firm specializing in mid-market investments across Europe. The firm focuses on businesses with enterprise values between €50 million and €500 million, aiming to transform them into regional or global leaders. Stirling Square manages over €3.5 billion in assets and has a diverse portfolio spanning various sectors.",
+"sector_keywords": "mid-market investments, enterprise value €50 million to €500 million, regional leaders, global leaders, organic growth, organizational enhancement, performance optimization, digitalization, transformational M&A"
+},
+{
+"description": "Salutem Shared Services Limited, founded in 2018 and headquartered in Windsor, United Kingdom, provides business support services to the healthcare and education sectors. The company operates under the Salutem Care and Education brand, offering care and support across schools, day centres, and residential homes for children and adults with complex needs. Salutem is recognized for its commitment to quality and has been named a Top Employer in the United Kingdom.",
+"sector_keywords": "complex care, education services, learning disabilities, autism support, mental health care, residential care, day centres, children's services, adult services, supported living, special education, healthcare support, care homes, disability services, social care"
+},
+{
+"description": "24Haymarket Limited, founded in 2012, is a private capital investment firm headquartered in London, with a regional office in Edinburgh. The firm specializes in early-stage venture and growth equity investments in the UK, focusing on sectors such as digital healthcare, edtech, cybersecurity, enterprise software, supply chain and logistics technology, fintech, insurtech, and legal services tech. 24Haymarket is distinguished by its network of over 100 senior business leaders, offering extensive ex",
+"sector_keywords": "digital healthcare, edtech, cybersecurity, enterprise software, supply chain technology, logistics technology, fintech, insurtech, legal services tech"
+},
+{
+"description": "3i Group plc, founded in 1945 and headquartered in London, is a British multinational investment company specializing in private equity and infrastructure investments. The firm focuses on mid-market companies in Europe and North America, aiming to generate attractive returns for shareholders and co-investors. 3i is listed on the London Stock Exchange and is a constituent of the FTSE 100 Index.",
+"sector_keywords": "consumer and private label, healthcare, industrial, services and software, communications, energy, social infrastructure, transport and logistics, utilities"
+},
+{
+"description": "Founded in 2012 and headquartered in San Jose, California, 3P Equity Partners is a private equity firm specializing in operating privately held businesses. The firm focuses on sectors such as general manufacturing, heavy industrials, e-commerce, consumer retail, and technology. Their team brings extensive experience in founding, operating, and successfully exiting investments.",
+"sector_keywords": "general manufacturing, heavy industrials, e-commerce, consumer retail, technology, plastics, packaging, aerospace, automotive, chemicals, electrical equipment"
+},
+{
+"description": "65 Equity Partners Pte. Ltd., founded in 2021, is a global investment firm headquartered in Singapore with offices in London, Paris, San Francisco, and New York. The firm focuses on partnering with family-owned and entrepreneur-led middle-market businesses across the consumer, industrials, business services, healthcare, and technology sectors. Backed by Temasek, 65 Equity Partners manages US$4.2 billion in funds, providing flexible capital solutions to support growth, M&A financing, shareholder ",
+"sector_keywords": "consumer goods, industrial manufacturing, business services, healthcare services, technology solutions, digital health, medical devices, industrial automation, logistics services, fintech, enterprise software, pharmaceuticals, biotechnology, e-commerce, renewable energy"
+},
+{
+"description": "Founded in 1851 and headquartered in Helsinki, Finland, A. Ahlström Oy is a long-term industrial owner with a strategic focus on the Forest & Fiber and Environmental Technology sectors. The company aims to create sustainable value for future generations by developing leading global specialist positions in these industries. Its portfolio includes both privately held and listed companies, as well as significant real estate and forest holdings.",
+"sector_keywords": "forest products, fiber-based materials, environmental technology, sustainable packaging, recycling solutions, specialty papers, nonwoven fabrics, industrial machinery, medical devices, digital imaging, automation systems, renewable resources, clean energy, waste management, pulp and paper"
+},
+{
+"description": "Founded in 2011 and headquartered in Greenwich, Connecticut, A&M Capital Advisors, LP is a private equity investment firm specializing in middle-market companies. Operating under the Alvarez & Marsal Capital business line, the firm focuses on sectors such as industrials, healthcare, consumer and retail, business services, government services, financial services, food and packaging, and energy services.",
+"sector_keywords": "industrials, healthcare, consumer and retail, business services, government services, financial services, food and packaging, energy services"
+},
+{
+"description": "Abacus alpha GmbH is an experienced and financially independent investment company based in Frankenthal, Germany. Founded to support sustainable growth financing and corporate succession for SMEs, the firm focuses on forward-looking technologies and innovations that address future challenges through technology. Their investment areas include automation, clean tech/green tech, innovative materials, and services.",
+"sector_keywords": "automation, digitalization, clean tech, green tech, innovative materials, services"
+},
+{
+"description": "Abris Capital Partners, founded in 2007, is a private equity firm headquartered in Warsaw, Poland, with additional offices in Bucharest, Romania, and Nicosia, Cyprus. The firm specializes in partnering with mid-market businesses in Central Europe, providing capital, strategic support, and operational expertise to drive growth through mergers and acquisitions, international expansion, and environmental, social, and governance (ESG) transformation. Abris focuses on sectors such as healthcare, circ",
+"sector_keywords": "healthcare, circular economy, digital technology, e-commerce, modern logistics, specialist manufacturing, ESG transformation, mergers and acquisitions, international expansion, mid-market investments, Central Europe, Poland, Romania, operational expertise, strategic support"
+},
+{
+"description": "Founded in 1989 and headquartered in Boston, Massachusetts, Abry Partners is a private equity firm specializing in investments in the communications, media, information, and business services sectors. The firm manages approximately $5.4 billion of active capital across four investment strategies and has completed over $90 billion in investments to date.",
+"sector_keywords": "business and facility services, communications, data centers, managed IT services, government services, healthcare IT, human capital management, insurance, financial services, media, entertainment, outsourced professional services"
+},
+{
+"description": "Accel-KKR Holdings GP, LLC is a technology-focused private equity firm founded in 2000 and headquartered in Menlo Park, California. The firm specializes in investing in mid-market software and tech-enabled services companies, aiming to accelerate their growth and operational efficiency. With over $23 billion in cumulative capital commitments, Accel-KKR has made more than 500 investments globally, emphasizing long-term partnerships and sustainable business development.",
+"sector_keywords": "enterprise software, tech-enabled services, mid-market software, software buyouts, growth capital, corporate carveouts, take-private transactions, credit investments, secondary investments, founder-owned companies, closely-held private companies, global technology investments, sustainable business development, operational efficiency, long-term partnerships"
+},
+{
+"description": "Access Industries Management, LLC is a privately-held, global investment company founded in 1986 by businessman and philanthropist Len Blavatnik. Headquartered in New York City, the firm focuses on long-term investments across various sectors, including natural resources, chemicals, media, telecommunications, venture capital, and real estate. Access Industries identifies companies with strong business models and management teams, optimizing their value through financial backing and expertise.",
+"sector_keywords": "natural resources, chemicals, media, telecommunications, venture capital, real estate, biotechnology, entertainment, technology ventures"
+},
+{
+"description": "Accession Capital Partners GmbH, formerly known as Mezzanine Management, was founded in 1999 and is headquartered in Vienna, Austria. The firm specializes in providing flexible financing solutions, including mezzanine finance and growth capital, to mid-market companies in Central and Eastern Europe. Over its 25+ year history, ACP has invested over €1.3 billion across five funds, supporting businesses in sectors such as healthcare, manufacturing, consumer goods, information technology, and financ",
+"sector_keywords": "mezzanine finance, growth capital, mid-market companies, Central Europe, healthcare, manufacturing, consumer goods, information technology, financial services"
+},
+{
+"description": "ACON Investments, founded in 1996 and headquartered in Washington, D.C., is a private equity firm managing approximately $7.2 billion across 86 platform investments and 137 add-on acquisitions. The firm specializes in the Consumer, Industrials, and Business Services sectors, focusing on value-oriented investments and identifying opportunities at inflection points in a company's evolution. ACON operates globally with offices in cities including Dallas, Los Angeles, New York, Bogotá, Madrid, Mexic",
+"sector_keywords": "consumer goods, industrial manufacturing, business services, brand repositioning, industry consolidation, corporate carve-outs, family-owned businesses, middle-market investments, strategic sustainability, value creation"
+},
+{
+"description": "Founded in 1999 and headquartered in Munich, Germany, Acton Capital Partners GmbH is a venture capital firm specializing in tech-enabled business models. With over 25 years of experience, the firm invests in startups at Series A and beyond, focusing on companies ready to scale and built to last. Acton Capital operates across Europe and Canada, supporting sectors such as SaaS, fintech, healthcare, and digital marketplaces.",
+"sector_keywords": "enterprise saas, vertical saas, fintech, cybersecurity, marketplace, consumer, logistics, supply chain, healthtech, legaltech, edtech"
+},
+{
+"description": "Adams Street Partners LLC, founded in 1972 and headquartered in Chicago, Illinois, is a private markets investment management firm. The firm manages nearly $70 billion in assets across primary, secondary, growth equity, credit, and co-investment strategies. With a global presence, Adams Street has 15 offices worldwide, including locations in Abu Dhabi, Austin, Beijing, Boston, Hong Kong, London, Menlo Park, Munich, New York, Seoul, Singapore, Sydney, Tokyo, and Toronto. The firm serves a diverse",
+"sector_keywords": "private markets investment, co-investments, growth equity, private credit, secondary investments, primary investments, technology, healthcare, middle-market companies"
+},
+{
+"description": "ADCURAM Group GmbH, founded in 2003 and headquartered in Munich, Germany, is a privately owned industrial holding company. It specializes in acquiring companies with potential and actively developing them through strategic and operational initiatives. The firm focuses on businesses with revenues between €30 million and €500 million, operating across various sectors without specific industry restrictions.",
+"sector_keywords": "succession planning, carve-outs, M&A, restructuring, operational development, industrial holding, DACH region, mid-sized companies, complex shareholder structures, restructuring cases, controlling majority stakes, long-term development, strategic initiatives, operational initiatives, diverse sectors"
+},
+{
+"description": "Addition Capital Ltd, founded in 2018, is a London-based investment firm specializing in acquiring and scaling UK small and medium-sized enterprises (SMEs). The firm focuses on long-term ownership, partnering with management teams to drive transformational growth across sectors such as healthcare, financial services, business services, information and communication, and manufacturing.",
+"sector_keywords": "healthcare, financial services, business services, information and communication, manufacturing, B2B, UK SMEs, technology integration, owner-managed businesses, sustainable competitive advantage"
+},
+{
+"description": "Founded in 1968 by the Rockefeller, Mellon, and Harriman family interests along with S.G. Warburg & Co., AEA Investors LP is a leading global private investment firm headquartered in New York City. The firm specializes in private equity, growth equity, and private debt investments, managing approximately $19 billion in assets. AEA focuses on control-oriented investments in middle-market companies across sectors such as industrial technology, consumer products, and business services.",
+"sector_keywords": "industrial technology, consumer products, business services, value-added industrials, growth equity, private debt, middle-market investments, control buyouts, operational improvements, North America, Europe"
+},
+{
+"description": "Aeterna Capital Partners is a family office-backed private investment firm founded in 2012 and headquartered in New York, NY. The firm specializes in direct lower middle market investments, including private equity and debt, with a flexible and long-term investment approach. Aeterna focuses on closely held or family-owned businesses, particularly in the industrial and business services sectors.",
+"sector_keywords": "industrial services, business services, private equity, private credit, lower middle market, family-owned businesses, growth capital, strategic partnerships, direct investments, venture growth"
+},
+{
+"description": "AGC Equity Partners is a London-based investment company established in 2009, managing approximately USD 6.5 billion in assets. The firm focuses on real assets, private equity opportunities, and liquid strategies, primarily in Europe and North America. AGC serves as General Partner across its platforms, managing capital for a diverse investor base, including sovereign funds, pension funds, financial institutions, and family offices.",
+"sector_keywords": "real assets, private equity, liquid strategies, technology, real estate, infrastructure, financial services"
+},
+{
+"description": "AGIC Partners GmbH, founded in 2015 and headquartered in Munich, Germany, is a growth-oriented European-Asian private equity firm. With US$2.2 billion in assets under management, AGIC focuses on investments in advanced industrial and healthcare technologies across Europe and beyond. The firm seeks to invest between €50 and 250 million per deal in both majority and minority transactions, aiming to build high-growth, technology-rich businesses that are strategically important in their markets.",
+"sector_keywords": "advanced industrial technology, healthcare technology, engineered products, specialty materials, medical devices, life science tools, specialty healthcare services"
+},
+{
+"description": "Alberta Investment Management Corporation (AIMCo), established in 2008, is one of Canada's largest institutional investment managers, headquartered in Edmonton, Alberta. AIMCo manages a diversified portfolio across various asset classes, including public and private equity, fixed income, infrastructure, real estate, and private debt, on behalf of pension, endowment, insurance, and government clients in Alberta. The corporation operates independently from the Government of Alberta, ensuring a cli",
+"sector_keywords": "public equity, private equity, fixed income, infrastructure, real estate, private debt, pension funds, endowment funds, insurance funds, government funds"
+},
+{
+"description": "Alcuin Capital Partners LLP, founded in 2004, is a London-based private equity firm specializing in the UK lower-middle market. The firm focuses on investing in profitable, growth-oriented companies, typically with an enterprise value between £5 million and £30 million. Alcuin partners with ambitious management teams, providing capital for Management Buy-Outs (MBOs), Management Buy-Ins (MBIs), and growth capital transactions. Their investment strategy is sector-agnostic, and they aim to support ",
+"sector_keywords": "consumer, technology, financial services, transport, specialist manufacturing, business services, hospitality, software, IT, fintech, hardware, cleantech, food and beverage, logistics"
+},
+{
+"description": "Aleph Capital Partners Limited is a London-based independent investment firm founded in 2013. The firm specializes in providing long-term capital solutions to mid-sized European companies, particularly in the Telecommunications, Media, and Technology sectors. Aleph collaborates closely with management teams and stakeholders to drive value growth, with typical investments ranging from €100 million to €400 million.",
+"sector_keywords": "telecommunications, media, technology, digital media, entertainment, software, cloud services, infrastructure, networking, mobile"
+},
+{
+"description": "All Seas Capital Partners LTD, founded in 2018 and headquartered in London, is a pan-European private capital firm. The firm specializes in providing flexible, structured capital solutions to mid-market businesses across various sectors, including Business Services, Consumer, Finance & Insurance, Healthcare, Industrials, Natural Resources, and TMT. Their strategy focuses on partnering with entrepreneur and family-owned businesses to support transformational growth while allowing owners to retain",
+"sector_keywords": "mid-market businesses, structured capital solutions, debt and equity financing, transformational growth, strategic guidance, talent development, operational efficiency, organic growth, acquisitions"
+},
+{
+"description": "Semco Maritime A/S, founded in 1980 and headquartered in Esbjerg, Denmark, is an international engineering and contracting company specializing in the energy sector. The company provides turnkey solutions and services for both conventional energy and renewable energy industries, including offshore wind farms and oil and gas projects. With approximately 2,300 employees, Semco Maritime operates globally, offering expertise in engineering, procurement, construction, and maintenance services.",
+"sector_keywords": "offshore wind, oil and gas, renewable energy, energy infrastructure, engineering services, procurement, construction, maintenance, North Sea, Baltic Sea, offshore substations, telecommunication systems, firefighting systems, energy transition"
+},
+{
+"description": "Iberdrola, S.A., founded in 1840 and headquartered in Bilbao, Spain, is a multinational electric utility company. It specializes in the generation, transmission, distribution, and supply of electricity, focusing on renewable energy sources such as onshore and offshore wind, hydroelectric, and photovoltaic power. The company operates in multiple countries, including Spain, the United Kingdom, the United States, Mexico, Brazil, Germany, France, and Australia, serving approximately 30 million custo",
+"sector_keywords": "renewable energy, smart grids, onshore wind, offshore wind, hydroelectric power, photovoltaic power"
+},
+{
+"description": "Norges Bank Investment Management (NBIM) manages the Norwegian Government Pension Fund Global, one of the world's largest sovereign wealth funds. Founded in 1998 and headquartered in Oslo, Norway, NBIM invests globally across equities, fixed income, real estate, and renewable energy infrastructure. The fund aims to ensure responsible and long-term management of Norway's oil and gas revenues for the benefit of current and future generations.",
+"sector_keywords": "equities, fixed income, real estate, renewable energy infrastructure, global markets, diversification, responsible investment"
+},
+{
+"description": "Founded in 1988 and headquartered in Zug, Switzerland, Capital Dynamics is an independent global asset management firm specializing in private assets, including private equity and clean energy investments. The firm focuses on mid-market corporate investing and clean energy projects worldwide, managing over $15 billion in assets across 14 offices in Europe, North America, and Asia.",
+"sector_keywords": "mid-market private equity, clean energy, renewable energy, primaries, secondaries, direct investments, private assets, carbon-reducing projects, energy transition, sustainable investing, responsible investment, infrastructure, power generation, environmental, social, governance"
+},
+{
+"description": "Adani Green Energy Limited (AGEL), founded in 2015 and headquartered in Ahmedabad, India, is a leading renewable energy company specializing in the development, ownership, and operation of utility-scale grid-connected solar, wind, and hybrid power plants. As of March 31, 2025, AGEL's operational renewable energy capacity stood at 14,243 MW across 12 states in India. The company aims to achieve 50 GW of renewable energy capacity by 2030, aligning with India's decarbonization goals.",
+"sector_keywords": "solar energy, wind energy, hybrid power plants, renewable energy storage, utility-scale renewable projects, grid integration, decarbonization, energy security, clean energy transition, renewable energy capacity expansion"
+},
+{
+"description": "Founded in 2001 and headquartered in New York, NY, OEP Capital Advisors, L.P., also known as One Equity Partners, is a private equity firm specializing in middle-market investments across the industrial, healthcare, and technology sectors in North America and Europe. The firm focuses on building valuable relationships with successful business owners and has invested over $13.5 billion in capital across more than 125 platform investments.",
+"sector_keywords": "industrial, healthcare, technology, middle-market investments, North America, Europe, private equity, platform investments, experienced management teams, equity value growth"
+},
+{
+"description": "Riverstone Holdings LLC, founded in 2000 by David M. Leuschen and Pierre F. Lapeyre, Jr., is a private equity and asset management firm headquartered in New York City. The firm specializes in investments within the energy, power, and infrastructure sectors, managing over $40 billion in capital commitments. Riverstone has invested in more than 200 portfolio companies across 15 countries, focusing on real assets and the energy value chain.",
+"sector_keywords": "upstream oil and gas, midstream pipelines, oilfield services, renewable energy, power generation, energy infrastructure, energy technology, energy transition, decarbonization, energy storage, electric vehicles, solar power, wind power, energy efficiency, sustainable energy"
+},
+{
+"description": "Founded in 2012 and headquartered in Copenhagen, Denmark, Copenhagen Infrastructure Partners P/S (CIP) is a global fund manager specializing in energy infrastructure investments. CIP focuses on developing and constructing large-scale renewable energy projects, including offshore and onshore wind, solar PV, biomass, and energy-from-waste facilities. As of 2026, CIP manages 15 funds with approximately EUR 37 billion under management, making it one of the world's largest dedicated fund managers wit",
+"sector_keywords": "offshore wind, onshore wind, solar PV, biomass, energy-from-waste, transmission and distribution, reserve capacity, energy storage, Power-to-X, advanced bioenergy, greenfield energy investments, renewable energy infrastructure, energy transition, sustainable energy projects, large-scale developments"
+},
+{
+"description": "Cubico Sustainable Investments Australia Pty Ltd, established in 2018, is headquartered in Sydney, New South Wales. The company specializes in renewable energy projects, focusing on onshore wind, solar photovoltaic, and battery energy storage systems. As a subsidiary of Cubico Sustainable Investments, it contributes to the global portfolio spanning the Americas, Europe, and Australia.",
+"sector_keywords": "onshore wind, solar photovoltaic, battery energy storage systems, renewable energy, clean energy, energy transition, sustainable investments, power generation, energy infrastructure, solar thermal, transmission lines, distribution lines, concentrated solar power, energy storage, renewable energy projects"
+},
+{
+"description": "Blackstone Inc., founded in 1985 and headquartered in New York City, is a leading global alternative investment management firm. The company specializes in private equity, real estate, credit, and hedge fund solutions, managing over $1.3 trillion in assets as of March 31, 2026. Blackstone operates across various sectors, including energy transition infrastructure, transportation, digital infrastructure, and water and waste.",
+"sector_keywords": "private equity, real estate, credit, hedge funds, energy transition infrastructure, transportation, digital infrastructure, water and waste, large-scale infrastructure, growth-oriented businesses, long-term investments, capital appreciation, cash flow yields"
+},
+{
+"description": "Polaris Management A/S, founded in 1998 and headquartered in Copenhagen, Denmark, is a leading Nordic private equity firm specializing in mid-sized companies. The firm focuses on sectors including business services, consumer, finance & insurance, healthcare, industrials, natural resources, real estate, and TMT. Polaris employs multiple investment strategies, such as private equity, flexible capital, and public equity, to support companies in realizing their full potential.",
+"sector_keywords": "business services, consumer goods, financial services, healthcare, industrial products, natural resources, real estate, technology, media, telecommunications"
+},
+{
+"description": "CVC Capital Partners plc, founded in 1981, is a global private equity and investment advisory firm headquartered in St Helier, Jersey. The firm manages approximately €209 billion in assets across private equity, secondaries, credit, and infrastructure strategies, with a network of 29 offices worldwide. CVC invests in a diverse range of industries, including fintech, healthcare, industrials, telecommunications, and consumer goods.",
+"sector_keywords": "fintech, healthcare, industrials, telecommunications, consumer goods, software as a service, data centers, medical devices, biotechnology, energy production, infrastructure, media, retail, sports, entertainment, chemicals, gaming, oil and gas"
+},
+{
+"description": "Chiltern Capital LLP, founded in 2015, is an independent investment firm headquartered in London, UK. The firm specializes in private equity investments in lower mid-market companies across various B2B sectors. Chiltern partners with management teams to support growth through operational improvements, strategic acquisitions, and organic expansion.",
+"sector_keywords": "business services, industrials, technology, financial services, healthcare, consumer products, manufacturing, distribution, logistics, software, engineering, construction, automotive, energy, telecommunications"
+},
+{
+"description": "APi Group Corporation, founded in 1926 and headquartered in New Brighton, Minnesota, is a global business services provider specializing in fire and life safety, security, elevator and escalator, and specialty services. Operating through over 500 locations worldwide, the company offers design, installation, inspection, service, and monitoring solutions to sectors including high-tech services, advanced manufacturing, healthcare, fulfillment and distribution centers, and critical infrastructure. (",
+"sector_keywords": "fire protection, life safety, electronic security, elevators, escalators, HVAC services, specialty contracting, infrastructure services, utility services, fabrication services, civil services, mechanical services, inspection services, monitoring services, maintenance services"
+},
+{
+"description": "Riverside Europe Partners S.à r.l., established in 2019, is a private equity firm headquartered in Luxembourg. As part of The Riverside Company, founded in 1988 with over $13 billion in assets under management, Riverside Europe focuses on investing in small and medium-sized enterprises (SMEs) across Europe. The firm specializes in sectors such as software & IT, healthcare, consumer brands, franchising, training and education, business services, and specialized manufacturing & distribution. River",
+"sector_keywords": "software, IT, healthcare, consumer brands, franchising, training, education, business services, specialized manufacturing, distribution"
+},
+{
+"description": "Altor Equity Partners AB, founded in 2003 and headquartered in Stockholm, Sweden, is a private equity firm specializing in leveraged buyouts and growth capital investments. The firm focuses on medium-sized companies across the Nordic and DACH regions, aiming to create value through revenue growth, margin expansion, and operational improvements. Altor operates across various sectors, including business services, consumer goods, financial services, industrial, and technology.",
+"sector_keywords": "business services, consumer goods, financial services, industrial, technology"
+},
+{
+"description": "Verdane Advisors Holding AS, founded in 2016 and headquartered in Oslo, Norway, is a specialist growth investment firm that partners with tech-enabled and sustainable European businesses. The firm focuses on driving digitalisation and decarbonisation across various sectors, leveraging its deep sector expertise and local networks to support companies in achieving international growth.",
+"sector_keywords": "software, b2c products, b2c services, energy transition, resource efficiency, digitalisation, decarbonisation, tech-enabled businesses, sustainable businesses, growth equity, european mid-market, investment firm, private equity, venture capital, portfolio investments"
+},
+{
+"description": "Orrön Energy AB, founded in 2001 and headquartered in Stockholm, Sweden, is a publicly listed renewable energy company operating within the Lundin Group of Companies. The company focuses on developing and managing onshore renewable energy assets, including wind power, solar, and battery projects across the Nordics, UK, Germany, and France. ([orron.com](https://www.orron.com/about-us/?utm_source=openai))",
+"sector_keywords": "onshore wind, solar energy, battery storage, renewable energy, greenfield projects, energy transition, wind farms, solar projects, battery projects, Nordics, UK, Germany, France"
+},
+{
+"description": "Lightrock LLP, established in 2021 and headquartered in London, is a global investment platform dedicated to supporting the growth of technology-enabled companies. The firm focuses on generating both financial returns and measurable social and environmental impact by investing in businesses that address pressing global challenges across the themes of People, Planet, and Productivity. Lightrock operates across private and public markets, with a presence in over 30 countries worldwide.",
+"sector_keywords": "education technology, healthcare services, financial inclusion, renewable energy, sustainable mobility, circular economy, clean energy generation, energy storage, smart grid technologies, e-mobility, climate resilience, digital platforms, productivity tools, artificial intelligence, data analytics"
+},
+{
+"description": "Summa Equity AB, founded in 2016 and headquartered in Stockholm, Sweden, is a thematic investment firm focusing on Circularity, Sustainable Food, Energy Transition, and Tech-Enabled Resilience. The firm manages approximately EUR 4 billion across three funds and has made over 30 platform investments to date.",
+"sector_keywords": "Circularity, Sustainable Food, Energy Transition, Tech-Enabled Resilience, Private Equity, Thematic Investment"
+},
+{
+"description": "EQT AB is a Swedish global investment organization founded in 1994. Headquartered in Stockholm, Sweden, EQT specializes in private equity, infrastructure, real estate, growth equity, and venture capital investments across Europe, North America, and Asia-Pacific. As of 2025, EQT's assets under management are €266 billion (US$285 billion), making it one of the largest private equity firms worldwide.",
+"sector_keywords": "private equity, infrastructure, real estate, growth equity, venture capital, business services, consumer goods, finance, insurance, healthcare, industrials, public sector, infrastructure, natural resources, real estate, TMT"
+},
+{
+"description": "Triton Investments Advisers LLP, founded in 1997, is a private equity firm headquartered in London, United Kingdom. The firm specializes in investing in mid-market companies across Europe, focusing on sectors such as industrial technology, business services, and healthcare. Triton emphasizes close collaboration with management teams to unlock the full potential of their businesses and build stronger, more resilient companies.",
+"sector_keywords": "industrial technology, business services, healthcare, technical services, energy transition, building technology, healthcare services, pharmaceuticals, life science tools, diagnostics"
+},
+{
+"description": "GLIL Infrastructure LLP is a not-for-profit infrastructure investment platform established in 2015 by UK pension funds. Headquartered in London, it manages £4.1 billion in committed capital as of December 2025, investing in essential UK infrastructure sectors such as renewable energy, transport, and social infrastructure. The firm focuses on long-term, inflation-linked returns to support stable outcomes for pension fund members.",
+"sector_keywords": "renewable energy, regulated utilities, transport infrastructure, social infrastructure, energy transition, solar energy, wind energy, water utilities, ports, logistics, trains, hospitals, schools, healthcare"
+},
+{
+"description": "Established in 1999, STAR Capital Partnership LLP is a private equity firm headquartered in London, UK. The firm focuses on developing strategic asset-based businesses in Western Europe, primarily investing in companies with enterprise values between €50 million and €1 billion. STAR Capital targets sectors characterized by strategic qualities that provide strong downside protection, including Business Services, Finance & Insurance, Healthcare, Industrials, Public Sector & Infrastructure, Natural",
+"sector_keywords": "strategic assets, capital-intensive businesses, carve-outs, buy-to-merge, de-risking, strategic repositioning, transformation, Western Europe"
+},
+{
+"description": "Muehlhan Holding GmbH, founded in 1881 and headquartered in Hamburg, Germany, is a global provider of surface protection solutions. The company specializes in services such as surface treatment, maintenance, and repair across various sectors, including maritime, infrastructure, and offshore wind energy. With approximately 3,000 employees and operations in over 35 countries, Muehlhan offers a comprehensive range of services, including scaffolding, insulation, passive fire protection, and steel co",
+"sector_keywords": "surface protection, industrial services, wind energy, maritime maintenance, offshore wind, scaffolding, insulation, passive fire protection, steel construction, infrastructure maintenance, oil and gas platforms, chemical plants, pipelines, bridges, renewable energy"
+},
+{
+"description": "Partners Group Holding AG, founded in 1996 and headquartered in Baar, Switzerland, is a global private equity firm managing over US$185 billion in assets. The firm specializes in private equity, private real estate, private infrastructure, and private debt investments, serving a diverse clientele including institutional investors, private banks, and financial institutions. Partners Group operates across various sectors, focusing on identifying and transforming companies into market leaders throu",
+"sector_keywords": "industrial manufacturing, distribution, transportation & logistics, healthcare, consumer products, business services, private equity, private real estate, private infrastructure, private debt"
+},
+{
+"description": "Nexa Equity LLC is a San Francisco-based private equity firm founded in 2021. The firm specializes in partnering with founder-led, high-growth vertical SaaS companies, focusing on markets underserved by technology. Nexa Equity manages over $1 billion in assets and maintains a concentrated portfolio strategy, typically investing in 7-9 companies per fund. ([nexaequity.com](https://nexaequity.com/about-us/?utm_source=openai))",
+"sector_keywords": "vertical SaaS, application software, fintech, healthcare IT, electronic payments"
+},
+{
+"description": "ABN AMRO Bank N.V., founded in 2009 and headquartered in Amsterdam, Netherlands, is a leading financial institution offering a wide range of banking products and services to retail, private, and corporate clients. Operating through segments such as Personal & Business Banking, Wealth Management, and Corporate Banking, the bank provides services including deposits, loans, mortgages, investment products, insurance, and online banking. ABN AMRO has a significant presence in the Netherlands and exte",
+"sector_keywords": "retail banking, wealth management, corporate banking, mortgages, deposits, investment products, insurance, online banking, Netherlands, Northwest Europe"
+},
+{
+"description": "Founded in 1995 and headquartered in Istanbul, Turkey, Aras Marine Investment Holding Inc. is a leading company in the maritime industry. The firm specializes in marine construction, ship salvage and emergency response services, shipbuilding and repair, R&D, and advanced engineering solutions. Aras Marine operates across various sectors, including maritime, engineering, and advanced technology.",
+"sector_keywords": "marine construction, ship salvage, shipbuilding, maritime engineering, advanced technology solutions, offshore services, R&D, emergency response services, coastal protection structures, underwater technologies, offshore geotechnical investigations, environmental responsibility, sustainability, operational excellence, maritime industry"
+},
+{
+"description": "BlackRock, Inc., founded in 1988, is a global asset management firm headquartered in New York City. As the world's largest asset manager, it offers a comprehensive range of investment solutions, including equity, fixed income, multi-asset, and alternative investments, serving institutional and individual clients worldwide. The firm is renowned for its commitment to risk management and its innovative use of technology in investment processes.",
+"sector_keywords": "equity investments, fixed income, multi-asset strategies, alternative investments, risk management, sustainable investing, technology-driven investing, passive investment strategies, active investment strategies, global asset management"
+},
+{
+"description": "EDF International SAS, a subsidiary of Électricité de France (EDF), is headquartered in Courbevoie, France. Founded in 1991, the company operates as a low-carbon energy provider, focusing on the generation and transmission of electricity. It plays a significant role in EDF's global operations, contributing to the group's mission of delivering sustainable energy solutions worldwide.",
+"sector_keywords": "low-carbon energy, electricity generation, electricity transmission, renewable energy, energy infrastructure, sustainable energy, power grids, energy services, energy trading, nuclear energy, hydroelectric power, wind energy, solar energy, thermal energy, energy distribution"
+},
+{
+"description": "Natixis Investment Managers, Switzerland Sàrl, established in 2008, is headquartered in Geneva, Switzerland. As a subsidiary of Natixis Investment Managers, it offers a diverse range of investment solutions across various asset classes, including equities, fixed income, multi-asset, private assets, and sustainable investing. The firm focuses on providing tailored investment strategies to institutional and individual clients, leveraging the expertise of its multi-affiliate model.",
+"sector_keywords": "equities, fixed income, multi-asset, private assets, sustainable investing, ESG, institutional clients, individual clients"
+},
+{
+"description": "Founded in 2014 and headquartered in Zurich, Switzerland, Energy Infrastructure Partners AG is a specialized investment firm focusing exclusively on energy infrastructure. The company manages assets for institutional investors, offering long-term returns through private equity investments in large-scale renewable energy projects and system-critical infrastructure. Their portfolio spans various sectors, including renewable energy production, storage and flexibility solutions, and transmission and",
+"sector_keywords": "renewable energy, onshore wind, offshore wind, solar power, hydropower, energy storage, electric vehicle charging, power grids, gas pipelines, energy transition, decarbonization, electrification, energy security, energy infrastructure, private equity investments"
+},
+{
+"description": "Energy Capital Partners Management, LP (ECP) is an American investment firm founded in 2005 and headquartered in Summit, New Jersey. The firm specializes in investments across the energy sector, focusing on power generation, renewable energy, and energy storage assets. ECP operates additional offices in New York City, Houston, San Diego, Fort Lauderdale, and Seoul. In August 2024, ECP merged with Bridgepoint Group to form a private assets investment platform.",
+"sector_keywords": "power generation, renewable energy, energy storage, electricity infrastructure, sustainability infrastructure, decarbonization, electrification, environmental infrastructure, energy transition, clean energy, ESG-related businesses, energy efficiency, energy reliability, sustainable infrastructure, energy investments"
+},
+{
+"description": "Macquarie Group Limited, founded in Sydney in 1969, is a global financial services organization operating in 30 markets. The company provides asset management, retail and business banking, wealth management, as well as advisory, and risk and capital solutions across debt, equity, financial markets, and commodities. ([macquarie.com](https://www.macquarie.com/us/en/about/company.html?utm_source=openai))",
+"sector_keywords": "infrastructure, real estate, agriculture, equities, fixed income, private credit, multi-asset solutions, commodities, energy, technology, renewables, financial markets, asset management, wealth management, advisory services"
+},
+{
+"description": "Ingka Holding B.V., founded by Ingvar Kamprad, is the parent company of Ingka Group, the largest owner and operator of IKEA Retail. Headquartered in Leiden, Netherlands, Ingka Group operates 574 IKEA stores and planning studios across 31 countries, representing approximately 87% of total IKEA sales worldwide. The company focuses on retail, real estate, and investments, aiming to make affordable home furnishings accessible globally.",
+"sector_keywords": "forestland investments, renewable energy, financial markets, business acquisitions, real estate, circular economy, sustainability, retail transformation, climate positive, responsible investing"
+},
+{
+"description": "Maple Power Ltd, established in 2019 as a joint venture between CPP Investments and Enbridge Inc., is a leading developer of offshore wind projects in France. Headquartered in Paris, France, the company specializes in the development, contracting, financing, and investment of high-quality offshore wind projects, including both floating and fixed-bottom wind farms. Maple Power has successfully delivered several flagship offshore wind projects in collaboration with partners such as EDF Renewables.",
+"sector_keywords": "offshore wind, floating wind farms, fixed-bottom wind farms, renewable energy, wind energy, wind power, wind farm development, wind project financing, wind project construction, wind project contracting, wind project investment, wind project origination, wind project lifecycle, wind project management, wind project operations"
+},
+{
+"description": "Octopus Energy Group Limited, founded in 2015 and headquartered in London, UK, is a global clean energy technology company operating across 18 countries. The company specializes in energy generation and supply, managing a £6 billion portfolio of renewable energy projects, including over 300 wind and solar farms. Octopus Energy is recognized for its innovative technology platform, Kraken, which supports over 54 million customer accounts worldwide.",
+"sector_keywords": "renewable energy, wind farms, solar farms, energy technology, clean energy, energy generation, energy supply, energy transition, sustainable energy, green energy, energy infrastructure, energy investment, energy assets, energy portfolio, energy management"
+},
+{
+"description": "Pictet Asset Management Holding SA, founded in 1805 and headquartered in Geneva, Switzerland, is a leading European asset manager. The firm offers a range of investment solutions across equity, fixed income, alternative, and multi-asset products, serving institutional investors, financial intermediaries, and their clients worldwide. Pictet is known for its independent partnership structure, long-term investment mindset, and commitment to responsible business practices.",
+"sector_keywords": "thematic investing, emerging markets, alternative investments, multi-asset strategies, sustainable investing, private equity, fixed income, equity investments, responsible investing, global asset allocation"
+},
+{
+"description": "Energy Impact Partners LP (EIP) is a global energy technology investor founded in 2015 and headquartered in New York, NY. EIP brings together entrepreneurs and some of the world’s most forward-thinking energy and industrial companies to advance innovation for a better energy future. Investing in venture, growth/private equity, and credit, EIP seeks attractive risk-adjusted returns for its investors by leveraging its differentiated strategy and industrial ecosystem. With over 80 corporate partner",
+"sector_keywords": "energy technology, sustainable energy, venture capital, private equity, industrial innovation, energy transition"
+},
+{
+"description": "Founded in 2010 by Nicolas Rochon, RGREEN INVEST is an independent French investment management company headquartered in Paris. The firm specializes in financing projects that accelerate the energy transition and address climate change mitigation and adaptation. With over 15 years of experience, RGREEN INVEST manages €2.9 billion in assets and has funded 3,000 projects across Europe and OECD countries.",
+"sector_keywords": "solar energy, wind energy, energy efficiency, energy storage, renewable energy infrastructure, green finance, climate change mitigation, climate change adaptation, sustainable infrastructure, green mobility, hydroelectricity, biomass, biogas, geothermal energy, cogeneration"
+},
+{
+"description": "Schroders plc, founded in 1804 and headquartered in London, England, is a British multinational asset management company. It offers a range of services including asset management, risk management, mutual funds, exchange-traded funds, and stockbroking. The firm operates globally with 38 locations across Europe, America, Asia, Africa, and the Middle East, managing assets worth £823.7 billion as of December 31, 2025. ([en.wikipedia.org](https://en.wikipedia.org/wiki/Schroders?utm_source=openai))",
+"sector_keywords": "asset management, risk management, mutual funds, exchange-traded funds, stockbroking, private markets, wealth management, advisory services, financial institutions, high-net-worth individuals, endowments, public markets, private equity, real estate, commodities"
+},
+{
+"description": "Statkraft AS, founded in 1895 and headquartered in Oslo, Norway, is Europe's largest producer of renewable energy. The company develops, owns, and operates assets in hydropower, wind, solar, gas, and biomass, supplying district heating and engaging in energy trading. Statkraft focuses on the renewable energy sector, aiming to lead the transition towards a carbon-free future.",
+"sector_keywords": "hydropower, onshore wind, offshore wind, solar power, battery storage, green hydrogen, renewable energy, energy trading, district heating, biomass, gas power, energy market operations, energy transition, carbon-free future, renewable energy assets"
+},
+{
+"description": "Renner Energies, founded in 2002 and headquartered in Leuven, Belgium, is a renewable energy company specializing in the development, financing, construction, and operation of wind, solar, and battery storage projects. Operating in Belgium, France, and Spain, the company focuses on delivering sustainable energy solutions tailored to local environments. ([renner-energies.com](https://www.renner-energies.com/about-renner-energies?utm_source=openai))",
+"sector_keywords": "onshore wind energy, solar power, battery storage, renewable energy projects, energy transition, low-carbon solutions, sustainable energy, photovoltaic projects, agrivoltaics, energy storage systems, grid integration, CO2 emissions reduction, renewable energy development, wind farms, solar farms"
+},
+{
+"description": "Sandbrook Capital is a private investment firm founded in 2021, headquartered in Stamford, Connecticut, with an additional office in London. The firm focuses on transforming the world's energy infrastructure by partnering with entrepreneurs to build companies that advance the transition to a low-carbon future. ([sandbrook.com](https://sandbrook.com/about/?utm_source=openai))",
+"sector_keywords": "clean power generation, transmission, storage, energy efficiency, industrial decarbonization, renewable energy, climate infrastructure"
+},
+{
+"description": "Allianz Capital Partners GmbH, founded in 1996, is a subsidiary of Allianz Global Investors and serves as one of Allianz Group's asset managers for alternative equity investments. Headquartered in Munich, Germany, with additional offices in Luxembourg and New York, the firm focuses on private equity, infrastructure, and renewable energy investments. Their strategy emphasizes generating attractive, long-term, and stable returns for clients through diversified global portfolios.",
+"sector_keywords": "private equity, infrastructure, renewable energy, buyouts, growth equity, co-investments, energy transition, digitalization"
+},
+{
+"description": "Almaz Capital, founded in 2008, is a global venture capital firm headquartered in Portola Valley, California, with additional offices in Berlin, Germany. The firm specializes in early-stage investments in capital-efficient technology companies, focusing on disruptive deep tech sectors such as B2B software, AI/ML, blockchain applications, IoT, and cybersecurity. Almaz Capital serves as a bridge between emerging tech regions and the global marketplace, leveraging its presence in Silicon Valley and",
+"sector_keywords": "b2b software, ai/ml, blockchain applications, iot, cybersecurity, deep tech, early-stage investments, capital-efficient technology, central and eastern europe startups, global scaling"
+},
+{
+"description": "Aloe Private Equity SAS is a French independent management company founded in 2003, headquartered in Paris. The firm specializes in private equity investments, focusing on environmental and socially sustainable companies. It manages several environmental funds that invest in technologies across sectors such as clean energy, waste recycling, and eco-processes. Aloe Private Equity is regulated by the French Autorité des Marchés Financiers (AMF).",
+"sector_keywords": "clean energy, waste recycling, eco-processes, environmental technologies, sustainable investments"
+},
+{
+"description": "Alpine Management Services III, LLC, established in 2014, is a private equity firm headquartered in San Francisco, California. The firm specializes in investing in software and services businesses, focusing on companies with enterprise values up to $1 billion. Alpine employs a PeopleFirst operating philosophy, emphasizing the development of exceptional talent to build enduring companies.",
+"sector_keywords": "software, business services, consumer services, corporate carve-outs, add-on acquisitions, majority recapitalizations, 100% buyouts"
+},
+{
+"description": "Alstin II GmbH, founded in 2014 and headquartered in Munich, Germany, is an early-stage venture capital firm focusing on B2B software companies across Europe. The firm invests during the Late Seed and Series A stages, with initial investments ranging from €2 million to €8 million. Alstin II GmbH specializes in sectors such as FinTech, InsurTech, RegTech, Cyber Security, and ClimateTech.",
+"sector_keywords": "B2B software, FinTech, InsurTech, RegTech, Cyber Security, ClimateTech"
+},
+{
+"description": "Founded in 2007, Ambienta SGR S.p.A. is a European asset manager specializing in environmental sustainability investments. Headquartered in Milan, Italy, with offices in London, Paris, Munich, and Stockholm, the firm manages over €4.0 billion in assets across private equity, private credit, and public markets. Ambienta focuses on companies whose products and services address global environmental issues, particularly in resource efficiency and pollution control.",
+"sector_keywords": "resource efficiency, pollution control, renewable energy, sustainable agriculture, environmental services, water treatment, waste management, energy infrastructure, clean technology, green manufacturing, eco-friendly products, sustainable transportation, environmental consulting, circular economy, energy efficiency"
+},
+{
+"description": "Founded in 1987 and headquartered in Denver, Colorado, Amstar Group, LLC is a real estate investment firm specializing in acquiring, developing, and managing commercial real estate assets across the United States. The firm focuses on value-add acquisitions, major renovations, repositionings, and opportunistic ground-up developments, primarily in the multifamily and industrial sectors. Amstar employs a disciplined investment approach, emphasizing long-term value creation through active asset mana",
+"sector_keywords": "multifamily, industrial, value-add acquisitions, ground-up developments, major renovations, repositionings, high-growth markets, core markets, infill locations, commercial real estate, asset management, long-term value creation, opportunistic investments, real estate investment, U.S. markets"
+},
+{
+"description": "Founded in 2005 and headquartered in London, AnaCap Members LLP is a specialist private equity firm focusing on the European financial ecosystem. The firm invests in services, software, and technology companies, partnering with founders and entrepreneurial management teams to drive growth. AnaCap operates across more than 10 European jurisdictions and has executed over 100 deals since 2022.",
+"sector_keywords": "financial services, fintech, insurtech, regtech, wealth management, payment processing, digital banking, asset management software, financial analytics, risk management solutions, compliance technology, lending platforms, insurance software, financial data services, investment platforms"
+},
+{
+"description": "Ancala Partners LLP, founded in 2010 and headquartered in London, is an independent infrastructure investment manager. The firm focuses on mid-market infrastructure investments across sectors such as renewables, energy transition, transport, utilities, and the circular economy. Ancala manages over €4.7 billion in assets across 23 portfolio companies operating in 18 countries.",
+"sector_keywords": "renewable energy, energy transition, transport infrastructure, utilities, circular economy"
+},
+{
+"description": "TPG Inc., formerly known as Texas Pacific Group and TPG Capital, is a leading global alternative asset management firm founded in 1992. Headquartered in Fort Worth, Texas, TPG manages $303 billion in assets across various investment platforms, including private equity, growth equity, impact investing, credit, real estate, and market solutions. The firm focuses on sectors such as healthcare, technology, consumer, and business services, employing a thematic and growth-oriented investment strategy.",
+"sector_keywords": "private equity, growth equity, impact investing, credit, real estate, healthcare, technology, consumer, business services"
+},
+{
+"description": "Antin Infrastructure Partners SAS is a private equity firm founded in 2007 and headquartered in Paris, France, with additional offices in London, New York, Luxembourg, and Singapore. The firm specializes in infrastructure investments across sectors such as energy and environment, digital, transportation, and social infrastructure. As of December 2025, Antin manages over €33 billion in assets and employs more than 250 professionals.",
+"sector_keywords": "energy and environment, digital infrastructure, transportation infrastructure, social infrastructure, toll roads, airports, ports, urban rail, gas storage, LNG terminals, waste management, telecommunications, data centers"
+},
+{
+"description": "Apera Asset Management LLP, founded in 2016 and headquartered in London, United Kingdom, is a private debt asset manager specializing in providing capital solutions to mid-market companies across Western Europe. The firm focuses on senior secured financings, offering tailored financial solutions to support businesses demonstrating resilience, competitive positioning, and growth potential. Apera operates with a local presence in key European markets, including the UK, Germany, Austria, Switzerlan",
+"sector_keywords": "information technology, healthcare, consumer discretionary, financial services, private debt, senior secured financing, mid-market companies, Western Europe, private equity partnerships, growth financing"
+},
+{
+"description": "Apogem Capital LLC, formed in 2022 through the merger of GoldPoint Partners, Madison Capital Funding, and PA Capital, is a private markets investment firm headquartered in Chicago, Illinois. Managing approximately $44 billion in assets, Apogem specializes in private credit, private equity, and real assets, focusing on the North American middle market. The firm leverages over 35 years of experience to provide financing solutions and investment opportunities to private equity sponsors and their po",
+"sector_keywords": "healthcare services, financial technology, software and technology services, industrial manufacturing, consumer products, business services, energy, cleantech, healthtech, security, SaaS, private credit, private equity, GP stakes, private real assets"
+},
+{
+"description": "Taaleri Plc, founded in 2007 and headquartered in Helsinki, Finland, is a Nordic investment and asset management company specializing in renewable energy, bioindustry, and real estate investments. The firm focuses on businesses with industrial-scale opportunities, aiming to create value by combining extensive know-how, deep expertise, entrepreneurship, and capital. Taaleri is listed on Nasdaq Helsinki and employs approximately 130 people.",
+"sector_keywords": "renewable energy, bioindustry, real estate, wind farms, solar parks, battery energy storage systems, bioeconomy, circular economy, credit risk insurance, housing investments, utility-scale projects"
+},
+{
+"description": "Founded in 1989 and headquartered in Houston, Texas, SCF Partners is a private equity firm specializing in energy services, equipment, and technology companies. With a global presence, including offices in Calgary, Singapore, and Aberdeen, SCF has invested in over 70 platform companies and completed more than 400 acquisitions, focusing on building enduring value in the energy sector.",
+"sector_keywords": "energy services, oil and gas equipment, energy technology, energy infrastructure, renewable energy services, energy transition, energy equipment manufacturing, energy exploration, energy production, energy generation, energy processing, energy transmission, energy distribution"
+},
+{
+"description": "Ardian is a global private investment firm founded in 1996 and headquartered in Paris, France. Managing or advising on $200 billion of assets, the firm operates across Europe, the Americas, Asia, and the Middle East. Ardian specializes in private equity, real assets, and credit, offering investment and customized solutions to a diverse clientele, including governments, institutions, pension funds, and high-net-worth investors. The firm is majority-owned by its employees and maintains a strong co",
+"sector_keywords": "food value chain, health and wellness, applied technologies, essential B2B services, private equity, real assets, credit, infrastructure, private debt, real estate, secondaries, primaries, co-investment, buyout, expansion"
+},
+{
+"description": "Founded in 2014, Exus Management Partners is an independent investment and asset management firm headquartered in Madrid, Spain. The company specializes in the renewable energy sector, focusing on wind, photovoltaic, and small hydro projects. Exus combines financial, technical, and operational expertise to provide comprehensive investment solutions and asset management services across Europe, North America, and Latin America.",
+"sector_keywords": "wind energy, solar energy, photovoltaic projects, small hydro, battery storage, renewable energy assets, utility-scale projects, energy asset management, repowering, operational optimization, Europe, North America, Latin America"
+},
+{
+"description": "Rivage Investment SAS is an independent asset management company founded in 2010, headquartered in Paris, with offices in London and New York. Specializing in mid-market private infrastructure credit, the firm manages over €8.3 billion in assets, focusing on financing sustainable infrastructure projects, essential assets, and public sector entities across Europe and North America.",
+"sector_keywords": "infrastructure debt, renewable energy financing, public sector financing, sustainable infrastructure, energy transition, mid-market private credit"
+},
+{
+"description": "Swiss Life Asset Management AG, founded in 1857, is headquartered in Zurich, Switzerland. As a leading European institutional real estate investor, the firm manages assets across various classes, including office, residential, healthcare, logistics, retail, and hotel properties. With over 165 years of experience, Swiss Life Asset Managers offers tailored investment solutions to institutional clients, focusing on long-term, stable returns.",
+"sector_keywords": "office properties, residential properties, healthcare properties, logistics properties, retail properties, hotel properties, real estate investment, institutional real estate, European real estate, sustainable investment, responsible investment, long-term investment, asset management, property management, investment solutions"
+},
+{
+"description": "Eiffel Investment Group, founded in 2009 and headquartered in Paris, France, is an independent asset manager specializing in financing companies through private debt, energy transition infrastructure, private equity, and listed equities and credit. The firm focuses on sustainable investments, particularly in the energy transition sector, and manages approximately €8 billion in assets as of December 31, 2025.",
+"sector_keywords": "renewable energy, energy transition, healthcare, digital industries, private debt, private equity, infrastructure financing, sustainable investments, European SMEs, listed equities, credit"
+},
+{
+"description": "Suma Capital S.G.E.I.C, S.A., founded in 2007 and headquartered in Barcelona, Spain, is an independent investment manager specializing in responsible and impact investments. With offices in Barcelona, Madrid, Paris, and Milan, the firm focuses on sustainable infrastructure projects, growth equity, and venture capital, aiming to drive economic growth while generating long-term positive environmental and social impact.",
+"sector_keywords": "renewable energy, energy efficiency, sustainable mobility, circular economy, clean technology, waste management, water management, environmental services, decarbonization, resource efficiency, energy transition, sustainable infrastructure, impact investment, ESG, climate change mitigation"
+},
+{
+"description": "Marguerite Investment Management S.A., founded in 2010, is a pan-European infrastructure fund manager headquartered in Luxembourg. The firm focuses on investments that contribute to sustainable economic growth and climate protection, managing multiple funds with commitments exceeding €2 billion. Marguerite specializes in sectors such as energy and renewables, digital transformation, waste and water, and transport.",
+"sector_keywords": "renewable energy, digital infrastructure, waste management, water treatment, transportation infrastructure, solar energy, wind energy, biomass, data centers, fiber optics, public lighting, electric vehicle charging, energy efficiency, marine services, rail freight"
+},
+{
+"description": "Arcus Infrastructure Partners LLP, founded in 2009 and headquartered in London, England, is an independent infrastructure fund manager specializing in European mid-market investments. The firm focuses on four core sectors: Digital, Energy, Transport, and Logistics & Industrials, managing assets with an aggregate enterprise value of approximately €23 billion as of March 31, 2024. Arcus employs a rigorous and aligned approach to bridge opportunities with exceptional returns and long-term impact.",
+"sector_keywords": "digital infrastructure, energy infrastructure, transport infrastructure, logistics, industrials, telecommunications, renewable energy, mobility infrastructure, data centers, cold storage logistics, fiberoptic networks, intermodal tank containers, sustainable infrastructure, mid-market investments, European infrastructure"
+},
+{
+"description": "Colliers International Group Inc., founded in 1976 and headquartered in Toronto, Canada, is a global diversified professional services and investment management company. Operating through three industry-leading platforms—Real Estate Services, Engineering, and Investment Management—Colliers provides services across the full asset lifecycle. With over 24,000 professionals in 70 countries, the company manages $108 billion in assets and generates annual revenues exceeding $5.6 billion. ([corporate.c",
+"sector_keywords": "commercial real estate, engineering consulting, investment management, property services, asset management"
+},
+{
+"description": "Tiger Infrastructure Partners LP, founded in 2010 and headquartered in New York, NY, is a private equity firm specializing in providing growth capital to middle-market infrastructure companies. The firm focuses on sectors such as digital infrastructure, energy transition, and transportation, primarily in North America and Europe. Tiger Infrastructure adopts a value-added approach, actively managing its portfolio companies to create, expand, and consolidate assets into scaled enterprises.",
+"sector_keywords": "digital infrastructure, energy transition, transportation, telecommunications, broadband networks, renewable energy, electric vehicle infrastructure, logistics, rail transport, port facilities, data centers, smart grids, waste management, water treatment, energy storage"
+},
+{
+"description": "AE Industrial Partners, LP is a private investment firm founded in 1998 and headquartered in Boca Raton, Florida. The firm specializes in investing in technologies and services critical to national and economic security, focusing on sectors such as aerospace, defense, and industrial services. With over $9 billion in assets under management, AE Industrial Partners leverages deep industry knowledge and operational expertise to support market-leading companies.",
+"sector_keywords": "aerospace, defense, industrial services, national security, space technology, aircraft leasing, venture capital, engineering services, manufacturing, power generation, environmental services, logistics, transportation, data services, telecommunications"
+},
+{
+"description": "Berkshire Partners LLC, founded in 1984 and headquartered in Boston, Massachusetts, is a private equity firm specializing in middle-market companies. The firm focuses on sectors including services, healthcare, industrials, and technology, aiming to transform high-potential businesses into enduring market leaders.",
+"sector_keywords": "commercial services, residential services, distribution, financial services, wealth management, multi-unit retail services, healthcare services, pharmaceuticals, aerospace, defense, industrial technology, automation, software, tech-enabled services, communications"
+},
+{
+"description": "Henko Capital Partners SGEIC, S.A. is a Spanish private equity firm founded in 2021 and headquartered in Madrid. The company specializes in supporting the growth and internationalization of mid-sized companies in Spain and Portugal, focusing on sectors with long-term growth potential. Henko provides both financial and operational support to its portfolio companies, aiming to transform them into resilient and sustainable businesses.",
+"sector_keywords": "digital technology, energy and environment, healthcare, industrial technology, renewable energy, engineering services, technical services, energy transition, digitalization, buy-and-build, consolidation projects, international expansion, operational improvement, mid-sized companies, Spain, Portugal"
+},
+{
+"description": "Inflexion Private Equity Partners LLP, founded in 1999 and headquartered in London, is a leading European mid-market private equity firm. The company partners with ambitious, entrepreneurial management teams to accelerate growth through flexible funding and strategic support. Inflexion focuses on sectors including Business Services, Technology, Financial Services, Healthcare, Industrials, and Consumer industries.",
+"sector_keywords": "business services, technology, financial services, healthcare, industrials, consumer industries"
+},
+{
+"description": "DIF Management B.V., founded in 2005 and headquartered in Amsterdam, Netherlands, is an independent infrastructure fund manager specializing in mid-market investments across Europe, North America, and Australia. The firm focuses on sectors such as energy transition, digital infrastructure, transport, and utilities, managing approximately €23 billion in assets. In 2024, DIF was acquired by CVC, a leading global private markets manager, and now operates under the name CVC DIF.",
+"sector_keywords": "energy transition, digital infrastructure, transport, utilities, renewable energy, telecommunications, sustainable transportation, public-private partnerships, concessions, mid-market investments, asset-heavy business models, buy-and-build strategy, infrastructure projects, economic infrastructure, core-plus funds"
+},
+{
+"description": "Camco Clean Energy Limited, founded in 1989 and headquartered in London, UK, is a specialist climate and impact fund manager. The company focuses on leading the transition to clean energy in emerging markets by providing innovative financing solutions for renewable energy projects. With over 30 years of experience, Camco has supported more than 200 projects across 30 countries, emphasizing sustainable development and climate resilience.",
+"sector_keywords": "renewable energy, energy efficiency, climate finance, sustainable development, blended finance, SMEs, emerging markets, Africa, Pacific, clean energy transition, climate resilience, inclusive development, sustainable infrastructure, ESG practices, impact investing"
+},
+{
+"description": "Tikehau Capital SCA, founded in 2004, is a Paris-based alternative asset management firm with €53 billion in assets under management as of March 31, 2026. The company operates across four main business lines: Credit, Real Assets, Private Equity, and Capital Markets Strategies, providing innovative financing solutions to businesses worldwide. Tikehau Capital maintains a global presence with offices in 17 countries, including Europe, the Middle East, North America, and Asia.",
+"sector_keywords": "private debt, real assets, private equity, capital markets strategies, credit, real estate, SMEs, mid-market companies, offices, retail, logistics, hotels, residential properties"
+},
+{
+"description": "Founded in 2013, RIVE Private Investment is an independent investment firm headquartered in Paris, with additional offices in Geneva and Luxembourg. The company specializes in energy transition and transportation assets, managing over €1 billion in assets under management. RIVE focuses on investments that contribute to decarbonization and have a positive societal impact, operating primarily in Europe and North America.",
+"sector_keywords": "renewable energies, sustainable thermal energy, green gas, energy storage, charging infrastructure, railway rolling stock, specialized aviation, maritime assets, decarbonization, energy transition, transportation assets, low-carbon economy, essential services, small and mid-market investments, OECD countries"
+},
+{
+"description": "Stonepeak Partners LP, founded in 2011 and headquartered in New York City, is a leading alternative investment firm specializing in infrastructure and real assets. The firm manages approximately $88 billion in assets, investing on behalf of pension funds, endowments, and other large institutions globally. Stonepeak focuses on sectors such as communications, energy and energy transition, transport and logistics, and social infrastructure.",
+"sector_keywords": "communications infrastructure, energy transition, transport logistics, social infrastructure, digital infrastructure, renewable energy, data centers, telecommunications, power generation, utilities, transportation, logistics, healthcare infrastructure, real estate, private credit"
+},
+{
+"description": "I Squared Capital Advisors (US) LLC is an independent global infrastructure investment firm founded in 2012 and headquartered in Miami, Florida. The firm specializes in investing across sectors such as energy, utilities, transportation, digital infrastructure, environmental, and social infrastructure. With over $50 billion in assets under management as of November 2025, I Squared Capital operates a diverse portfolio of more than 100 companies across 115 countries.",
+"sector_keywords": "energy, utilities, transportation, digital infrastructure, environmental infrastructure, social infrastructure, fiber networks, cellular sites, data centers, Wi-Fi hotspots, wastewater management, water management, waste processing, recycling, elderly care facilities"
+},
+{
+"description": "EIG Management Company, LLC, founded in 1982 and headquartered in Washington, D.C., is a leading institutional investor specializing in private investments in the global energy and infrastructure sectors. With $25.4 billion in assets under management as of December 31, 2025, EIG has committed over $53.4 billion to 425 projects or companies across 44 countries on six continents. The firm focuses on energy-related infrastructure investments, including power generation, midstream assets, and energy",
+"sector_keywords": "energy infrastructure, power generation, midstream assets, energy transition, renewable energy, LNG, oil and gas, energy storage, energy distribution, energy services, energy technology, energy finance, energy logistics, energy transportation, energy production"
+},
+{
+"description": "Brookfield Asset Management Ltd., founded in December 2022, is a leading global alternative asset manager headquartered in New York City. The company manages over $1 trillion in assets across real estate, infrastructure, renewable energy, private equity, and credit markets. Brookfield focuses on acquiring high-quality assets and businesses, investing on a value basis to grow cash flow and compound capital, and enhancing value through operational expertise.",
+"sector_keywords": "real estate, infrastructure, renewable energy, private equity, credit markets"
+},
+{
+"description": "Founded in 2000 and headquartered in Austin, Texas, Vista Equity Partners is a leading global investment firm specializing in enterprise software, data, and technology companies. With over 25 years of experience and more than $103 billion in assets under management, Vista partners with software leaders to enhance performance and maximize growth potential.",
+"sector_keywords": "enterprise software, data analytics, technology, private equity, private credit, operational excellence, innovation, growth potential, majority shareholder, long-term investment, software leaders, performance enhancement, profitability, value creation, investment strategies"
+},
+{
+"description": "General Atlantic Partners, L.P., founded in 1980 and headquartered in New York City, is a global growth equity firm providing capital and strategic support to growth companies. The firm focuses on sectors including Technology, Consumer, Financial Services, Healthcare, and Life Sciences, leveraging its deep sector expertise and global network to help companies scale their operations and impact.",
+"sector_keywords": "technology, consumer, financial services, healthcare, life sciences, software, fintech, e-commerce, digital health, medical devices, artificial intelligence, machine learning, cybersecurity, biotech, edtech"
+},
+{
+"description": "InfraRed Capital Partners is an international infrastructure asset manager founded in the late 1990s. Headquartered in London, UK, the firm specializes in investing in essential infrastructure assets across sectors such as energy transition, digital infrastructure, and social and transport infrastructure. InfraRed manages over $13 billion in equity and has invested in more than 350 infrastructure assets across 18 countries.",
+"sector_keywords": "energy transition, digital infrastructure, social infrastructure, transport infrastructure, renewable energy, data centers, telecommunications, public-private partnerships"
+},
+{
+"description": "Bridges Fund Management Limited, founded in 2002 and headquartered in London, UK, is a specialist sustainable and impact investment fund manager. The firm focuses on investing in the transition to a more sustainable and inclusive economy, operating across private equity, property, and outcomes partnerships. Bridges has raised over £2bn across its investment strategies, targeting sectors such as healthcare, education, sustainable living, and underserved markets.",
+"sector_keywords": "healthcare, education, sustainable living, underserved markets, impact investing, sustainable economy, inclusive economy"
+},
+{
+"description": "Founded in 2007, Cathay Capital Private Equity SAS is a global investment firm headquartered in Paris, France, with offices in New York, Shanghai, Munich, San Francisco, Berlin, Beijing, and Singapore. The firm manages over $5 billion in assets and has completed more than 230 buyouts and venture capital investments. Cathay Capital focuses on supporting the international expansion and digital transformation of small to midsize companies across sectors such as healthcare, consumer goods, business ",
+"sector_keywords": "healthcare, consumer goods, business transformation, software, financial industries"
+},
+{
+"description": "Neuberger Berman Group LLC, founded in 1939 and headquartered in New York City, is a private, independent, employee-owned investment management firm. The company offers a diverse range of investment solutions across equities, fixed income, private equity, private credit, real assets, and hedge funds, serving global institutional investors, advisors, and high-net-worth individuals. As of March 31, 2026, Neuberger Berman manages approximately $567 billion in client assets.",
+"sector_keywords": "healthcare, business services, industrial services, software, technology, private equity, private credit, real assets, hedge funds, equities, fixed income, alternative investments, growth capital, minority recapitalization, strategic M&A"
+},
+{
+"description": "Wind Point Advisors LLC, also known as Wind Point Partners, is a private equity firm founded in 1984 and headquartered in Chicago, Illinois. The firm specializes in acquiring and transforming middle-market companies through strategic partnerships with experienced executives. Wind Point focuses on sectors such as business services, consumer products, and industrial products.",
+"sector_keywords": "engineering services, logistics services, maintenance services, food products, household products, pet products, chemicals, specialty materials, engineered products, packaging"
+},
+{
+"description": "Impax Asset Management LLC, founded in 1998 and headquartered in London, UK, is a specialist asset manager focusing on the transition to a more sustainable global economy. The firm offers a diverse lineup of investment strategies that integrate environmental, social, and governance (ESG) research to manage risk and deliver competitive long-term performance. Impax operates globally with offices in the United States, Ireland, Hong Kong, and Japan.",
+"sector_keywords": "renewable energy, water infrastructure, waste management, sustainable food, environmental markets, ESG integration, sustainable infrastructure, climate change mitigation, resource efficiency, green technology, clean transportation, circular economy, sustainable agriculture, energy efficiency, low-carbon economy"
+},
+{
+"description": "Equitix Holdings Ltd, founded in 2007 and headquartered in London, United Kingdom, is a leading international investor, developer, and fund manager specializing in infrastructure projects. With over £13.8 billion in assets under management, Equitix focuses on sectors such as social infrastructure, transport, renewable power, environmental services, network utilities, and data infrastructure. The firm emphasizes long-term, responsible investing to create value for investors and communities.",
+"sector_keywords": "social infrastructure, transport, renewable power, environmental services, network utilities, data infrastructure, education, healthcare, social housing, student accommodation, roads, rail, aviation, wind energy, solar energy"
+},
+{
+"description": "Foresight Group Holdings Limited is an infrastructure and private equity investment manager operating in the United Kingdom, Italy, Luxembourg, Ireland, Spain, and Australia. The firm specializes in early venture and emerging growth investments, focusing on growth capital and buyouts. It manages infrastructure assets, private equity investments, and open-ended investment companies for institutional and retail investors.",
+"sector_keywords": "infrastructure, private equity, early-stage ventures, emerging growth, growth capital, buyouts, energy transition, natural capital, real assets, sustainable investing, renewable energy, digital infrastructure, environmental impact, venture capital, asset management"
+},
+{
+"description": "LDC, founded in 1981, is the private equity arm of Lloyds Banking Group, headquartered in London, UK. It specializes in providing investment to help grow businesses or fund changes in ownership, supporting management teams across various sectors of the UK economy. LDC operates a national network of 10 offices, combining local relationships with national scale to build trusted partnerships.",
+"sector_keywords": "business services, consumer, healthcare, information and communication technology, industrials, media, technology"
+},
+{
+"description": "Arcade Partners, LLC is a private equity firm founded in 2003 and headquartered in West Hartford, Connecticut. The firm specializes in providing growth capital to small and medium-sized profitable businesses, as well as selected early-stage companies. With extensive experience in private equity and investment banking, Arcade Partners focuses on enhancing value through strategic, operational, financial, and M&A resources.",
+"sector_keywords": "manufacturing, distribution, service companies, industrial manufacturing, consumer products, paper and packaging, logistics, food and beverage, industrial distribution, telecommunications, business services"
+}
+],
+"mandates": [
+{
+"code": "512431",
+"text": "Summary: Enterprise GenAI\n\n[{\"text\":\"Example intro one.\"},{\"text\":\"Example intro two.\"}]\n\n• Conversational generative AI business based in Singapore.\n• Comprehensive, no-code, non-linear AI which is easy to design & deploy and is adaptable to third-party large-language models (LLMs).\n• The platform adapts LLMs with context-bound responses integrating industry-specific context, thereby resulting in more accurate and relevant responses, free of irrelevant “clutter”.\n• Proof-of-concept implementations completed at several enterprise clients in Australia, India, South Africa, the U.S. and Singapore."
+},
+{
+"code": "236754",
+"text": "Summary: Disruptive Creator Economy Platform\n\n[{\"text\":\"We represent a disruptive, AI-driven platform for the creator economy. It has an unfair advantage driven by backing from industry titans including Simon Cowell and the world's largest talent agency.\"},{\"text\":\"It's raising \\u00a33m to drive continued exponential growth.\"}]\n\n• Democratising the feasibility of earning income as a small-medium sized creator\n• Complementary to other platforms like Instagram and YouTube\n• Increasing earning potential for the top 0.1% of creators\n• Aggressively gaining share in a $40bn market\n• Delivered ~500,000 hours of content"
+},
+{
+"code": "98547",
+"text": "Summary: Cyber Intelligence\n\n[{\"text\":\"We represent a UK-based cyber security firm that has developed a cryptographic discovery and remediation platform. It ensures enterprises meet regulatory standards for encrypted communication.\\n\\nIt has recently partnered with one of its largest competitors and now has a $50m deal pipeline across the US and Europe. Current signed clients include Brevan Howard, CBRE and CocaCola.\"}]"
+},
+{
+"code": "99670",
+"text": "Summary: Growth Equity: Road Management SaaS\n\n[{\"text\":\"We're managing transaction discussions for an AI-driven smart city group.\\n\\nThe product monitors urban infrastructure, including road quality\\/maintenance requirements, as well as traffic levels. Additional features include tracking and analytics for commercial vehicle fleets.\\n\\nKey Highlights:\"}]\n\n• Proprietary IP developed by an in-house suite of autonomous vehicle engineers.\n• The technology is mandated by road traffic authorities in domestic contract tenders.\n• Recurring revenue from long-term government and commercial contracts.\n• Highly experienced management team keen to roll a meaningful proportion equity."
+},
+{
+"code": "78688",
+"text": "Summary: Disruptive IT and Cybersecurity\n\n[{\"text\":\"We represent a UK-based, CREST accredited managed IT and cybersecurity group exploring a transaction.\\n\\nIt is disruptive with a proprietary sales engine and scalable operations driven by a remote-first model. The group has developed cost advantages, advancing cyber inclusivity for SME customers.\"},{\"text\":\"Expertise includes:\"}]\n\n• 24/7 managed detection and response\n• Access management\n• Deep web safety\n• Cloud Security"
+},
+{
+"code": "2091837",
+"text": "Summary: Satellite Network & Edge Compute\n\n• B2B satellite communication and cloud services business raising a Series B round.\n• It is launching a proprietary satellite network. At scale, with 92 satellites launched, the network is more efficient and cost-effective than Starlink's generation one system. \n• As an additional use of the network, it has partnered with Microsoft to deliver cloud services and provides a more sustainable solution to internet access.\n• It has over $1bn of contracted revenue in the pipeline and is raising $125m."
+},
+{
+"code": "98437",
+"text": "Summary: M&A Opportunity: Yacht Services & Sales \n\n[{\"text\":\"We are managing the sale process for a yacht brokerage and services group.\\n\\nIt provides new\\/used yachts and sales\\/after-sales across Europe. Key highlights:\"}]\n\n• Exclusive relationships with leading manufacturers provide a competitive edge.\n• In-house servicing and maintenance drives reoccurring revenue.\n• Data-driven organisation with more scale than any other independent European yachting group.\n• >€2m of EBITDA in the last financial year, forecasting >€3.1m by 2026. "
+},
+{
+"code": "34443",
+"text": "Summary: Pest Control\n\n[{\"text\":\"We represent a leading Indian pest control business that's exploring a sale.\"}]"
+},
+{
+"code": "33344",
+"text": "Summary: M&A: Music Software\n\n[{\"text\":\"We represent a software business exploring a sale. It provides an end-to-end music production platform for artists and musicians \\u2013 a 15% CAGR market.\"}]\n\n• $13m of revenue, majority recurring\n• 25% YoY growth\n• Cash-flow positive, >80% gross margins"
+},
+{
+"code": "2693286",
+"text": "Summary: Residential Care and Fostering Services\n\n• A group of complementary businesses providing residential care, fostering and support services.\n• Consistent growth in revenue and margins, with forecasted EBITDA growth >40% in the next financial year. \n• High occupancy rate with frequent client referrals.\n• Management team run the business independently of shareholders and would like to remain post-transaction."
+},
+{
+"code": "3145334",
+"text": "Summary: M&A: Accounting Group\n\n[{\"text\":\"Hyndland Partners is managing the sale process for a global accounting and professional services business.\"}]"
+},
+{
+"code": "71221",
+"text": "Summary: Marketing Technology\n\n[{\"text\":\"We represent an influencer marketing platform exploring a sale. It connects brands with celebrities, creators, and affiliates.\\n\\nKey differentiators include:\"}]\n\n• Allowing brands to connect with consumers at scale\n• Strong relationships with Fortune 500 clients\n• One-stop solution for word-of-mouth marketing"
+},
+{
+"code": "9821639",
+"text": "Summary: Door and Window Manufacturing\n\n• Volume manufacturer of windows and doors focussed on the new-build housing market.\n• Recently invested in new factories that have substantial capacity for growth.\n• No formal process is underway, however, the shareholders are open to off-market approaches."
+},
+{
+"code": "12411",
+"text": "Summary: GP NAV Financing\n\n[{\"text\":\"We represent a UK-based private equity firm raising group-level financing.\\n\\nIt has 10+ portfolio companies and a long-standing track record of success.\"}]"
+},
+{
+"code": "2091837",
+"text": "Summary: M&A: Satellite Infrastructure\n\n[{\"text\":\"We\\u2019re managing an accelerated M&A process for a satellite network business.\\n\\nDeal Summary:\"}]\n\n• Strong asset base, including regulatory-approved spectrum filings for highly elliptical and medium orbit satellite constellations.\n• Highly motivated seller, open to asset or share purchase structures.\n• $380m of contracted revenue in the pipeline."
+},
+{
+"code": "9840503",
+"text": "Summary: Veterinary Products Opportunity\n\n• An established exporter and distributor specialising in veterinary products, catering to a global customer base. \n• The portfolio encompasses a range of critical offerings, such as parasiticides, flea products, and anti-inflammatories. \n• With a proven track record and robust growth, this company is a key player in the international distribution of high-quality veterinary products."
+},
+{
+"code": "0756813",
+"text": "Summary: M&A: UK Produce Wholesale\n\n[{\"text\":\"We're running an M&A process for a UK-based, B2B vegetable wholesale and distribution group.\"},{\"text\":\"For some additional details:\\n\\n- Revenues north of \\u00a370m with an EBITDA of \\u00a34m\\n- Vertically integrated operations driving a sustainable margin advantage\\n- Diverse network of contract growers with in-house production capacity to supplement\\n- Strong growth potential via export-led expansion and roll-up strategies\"}]"
+},
+{
+"code": "732654",
+"text": "Summary: Commercial Catering Equipment\n\n• One of Europe's leading suppliers of commercial catering equipment, predominantly operating in the B2B sector.\n• Products are own-brand, and the management team has crafted the brand to be synonymous with quality and reliability.\n• This opportunity will be shown to a select few buyers via the Origination Network before a formal process begins."
+},
+{
+"code": "34533",
+"text": "Summary: MBO: Testing and Verification Group\n\n[{\"text\":\"We represent a\\u00a0European satellite\\u00a0testing\\u00a0company exploring a management buyout.\\n\\nKey highlights:\"}]\n\n• Proprietary software and hardware architecture provide a competitive edge.\n• Strong client relationships drive re-occurring revenue – forward visibility underscored by order backlogs.\n• Motivated and highly experienced management team."
+},
+{
+"code": "944756",
+"text": "Summary: B2B EduTech Platform\n\n[{\"text\":\"We represent a B2B education software business exploring a sale.\\n\\nIt has $5.5m of run-rate ARR, expecting to finish this year with $6m. Gross margins of 50%, NRR of 120%, expecting to be profitable at the end of this year, founders are keen to roll equity.\"}]"
+},
+{
+"code": "738624",
+"text": "Summary: Accounting\n\n• Accountancy practice with multiple locations across its home country. \n• Diversified range of services including audit, bookkeeping, payroll, and VAT."
+},
+{
+"code": "743865",
+"text": "Summary: M&A: Marketing and Data Privacy Software\n\n[{\"text\":\"We represent a B2B marketing technology and GDPR software group exploring a sale.\\n\\nIt has >$75m of run-rate ARR and is growing at double-digits whilst remaining profitable.\"}]"
+},
+{
+"code": "839264",
+"text": "Summary: Restaurant Group with 5+ Locations\n\n• Premium restaurant group with 5+ locations exploring a majority growth equity or buyout transaction to expand across the UK. \n• A formal process will begin later this year. In the meantime, the shareholders and their advisors remain open to having early discussions with select buyers, allowing an interested party to avoid a competitive process. "
+},
+{
+"code": "345434",
+"text": "Summary: Timber Products for the Housing Market\n\n• Volume manufacturer specialising in timber products tailored to the new-build housing market.\n• Track record of delivering high-quality timber catering to the construction sector.\n• Shareholders anticipate a formal process in mid-2024, aiming to close a deal in late 2024. However, they remain open to select off-market discussions beforehand. "
+},
+{
+"code": "784365",
+"text": "Summary: M&A: Tech-Enabled Home Services\n\n[{\"text\":\"We represent a tech-enabled platform providing 24\\/7 on-demand cleaning services across B2B and B2C verticals.\\n\\nKey Highlights:\"}]\n\n• Revenue is above €25m, with a 60% CAGR since 2020\n• Strong B2C and B2B growth driven by partnerships with Airbnb and Hilton\n• Successfully executing an international expansion playbook\n• Operating at break-even"
+},
+{
+"code": "9040024",
+"text": "Summary: M&A: Managed IT Services\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a Managed IT Services provider.\"},{\"text\":\"For some additional details:\"}]\n\n• Revenues north of $250m with an EBITDA of $80m+\n• Core focus on business communications and network infrastructure solutions for IT leaders and resellers\n• Over 90% of revenue is recurring in nature, creating predictable revenue streams\n• Blended top-line growth forecast at circa 10% and on a pathway to surpassing $100m in EBITDA "
+},
+{
+"code": "892347",
+"text": "Summary: Renewable Services\n\n• An established wind services firm is exploring a buyout transaction.\n• This company has positioned itself as a leader in the wind energy sector, offering a comprehensive suite of services.\n• It boasts an international presence, serving clients across continents - diversifying revenue and positioning the firm strategically in emerging wind energy markets.\n• The industry is experiencing strong growth, driven by the global shift towards renewable energy."
+},
+{
+"code": "7459188",
+"text": "Summary: M&A: Managed IT Services\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a Managed IT Services provider.\"},{\"text\":\"For some additional details:\"}]\n\n• Opportunity to acquire a non-core business unit via a corporate carve-out\n• Generates over $60 million in recurring revenue with approximately $10 million in EBITDA\n• Specialises in cybersecurity, networking, and unified communications\n• Provides services to 100+ customers spanning multiple industries"
+},
+{
+"code": "897324",
+"text": "Summary: Fire Safety\n\n• A prominent player in the UK fire products market is exploring a buyout transaction.\n• It has a deep pipeline of patented IP and software applications, creating high entry barriers with substantial product differentiation. \n• Tightening safety regulations are fuelling the addressable market. "
+},
+{
+"code": "078567",
+"text": "Summary: Hydrogen and Electricity Storage\n\n• Develops, produces and installs hydrogen and long-duration electricity storage systems.\n• The growing renewable energy market and need for variable energy are increasing demand for long-duration and solid-state storage.\n• The business is a subsidiary of a large, publicly listed group. The parent company is looking to carve out this unit or partner with a growth investor (minority or majority), in which the parent will remain a shareholder."
+},
+{
+"code": "1034786",
+"text": "Summary: M&A: Cloud Communications Technology\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a Cloud Communications company.\"},{\"text\":\"For some additional details:\"}]\n\n• Revenues >$70m with a ~10% EBITDA margin.\n• Projecting 15–20% revenue growth, backed by a strong track record of meeting forecasts.\n• Specialises in cloud contact center, business communications, and SIP trunking services, in addition to developing and operating proprietary software.\n• Serves SME and mid-market customers across 4 continents."
+},
+{
+"code": "4761270",
+"text": "Summary: M&A: Talent Agency\n\n[{\"text\":\"We have an opportunity to acquire a European modelling agency.\"},{\"text\":\"It has $2.5m of EBITDA with a market-leading brand.\"}]"
+},
+{
+"code": "903458",
+"text": "Summary: Green Hydrogen Opportunity\n\n• Manufacturer of clean energy technology for the production and use of affordable green hydrogen.\n• A unique solid oxide intellectual property stack has created a strong demand backlog.\n• The early-stage VC investors are looking to explore an exit. However, the core investors, including recently secured blue chip strategic partners, wish to remain invested for the foreseeable future. \n• An offering of c. €30m is available as part of this secondary transaction - representing a ~10% shareholding. "
+},
+{
+"code": "4353646",
+"text": "Summary: M&A: GovTech\n\n[{\"text\":\"We are aware of an acquisition opportunity in the GovTech sector.\"},{\"text\":\"For some additional details:\"}]\n\n• On track to surpass £45m in revenue and £3.5m in EBITDA in the current financial year\n• Core focus on data & AI, digital transformation, and cloud services for public sector institutions\n• Predictable revenue generation with over 85% of sales attributable to central government contracts\n• Strong market positioning in a rapidly growing sector with high barriers to entry"
+},
+{
+"code": "06236",
+"text": "Summary: Architecture and Metalwork Consulting\n\n• Industry-leading, UK-based design and sales consultant for signage architecture, wayfinding, and metalwork.\n• It has in-house design, fabrication, installation and manufacturing capabilities, boasting a strong blue-chip client base across numerous sectors and geographies.\n• In FY24, revenue is foreasted to surpass £15m, with EBITDA of c£3.5m."
+},
+{
+"code": "783465",
+"text": "Summary: M&A: Fast Food Franchise\n\n[{\"text\":\"We\\u2019re managing the sale process for a fast food brand.\\n\\nBusiness Summary:\"}]\n\n• Operates on a franchise model, with a proven operational playbook for profitable expansion across local and cross-border geographies\n• Strong management team in place, keen to remain with the business\n• Trusted brand drives repeat revenue from customers\n• £1.3m of EBITDA and 40+ locations"
+},
+{
+"code": "478365",
+"text": "Summary: M&A: Global Payments Platform\n\n[{\"text\":\"We have an opportunity to acquire a global payments platform. \\n\\nIt operates on a B2B model, predominantly serving large enterprise customers.\\n\\nFinancial Profile:\"}]\n\n• >$100m in revenue, driven by transaction and FX fees.\n• >40 billion transactions processed.\n• Revenue is growing over 35% per year.\n• Forecasting profitability by the end of 2025."
+},
+{
+"code": "91254",
+"text": "Summary: Supply Chain SaaS\n\n• Supply chain management solutions delivered on a SaaS model.\n• It specialises in supply chain digitalisation - delivering mission-critical, cloud-based software solutions deeply embedded into customers' supply chain infrastructure.\n• The company has built a longstanding, entrenched customer base connecting it to a network of buyers, suppliers and wholesalers in the private/public sector.\n• Products have been developed in-house over 30 years, aimed at improving processes, cost management, reducing human error, opening potential new sales opportunities, and boosting productivity."
+},
+{
+"code": "6832241",
+"text": "Summary: M&A: AgTech\n\n[{\"text\":\"We wanted to make you aware of an acquisition opportunity in the AgTech sector.\"},{\"text\":\"For some additional details:\"}]\n\n• Currently generating $18m in ARR\n• Over 80% of revenues generated in North America and Western Europe\n• Core focus on delivering AI-driven digital agronomy solutions\n• Strong competitive edge through proprietary technologies in a fast-expanding market"
+},
+{
+"code": "237894",
+"text": "Summary: Furniture Design and Supply\n\n• One of the UK’s market leaders in B2B, bespoke furniture design and supply.\n• Organic growth of key clients and new product lines, together with an international focus is driving growth.\n• The management team seeks an investor or acquirer that can assist with future growth."
+},
+{
+"code": "738465",
+"text": "Summary: M&A: Communications Software\n\n[{\"text\":\"We represent an AI-driven managed communications software and services business exploring a sale.\\n\\nIt has a market-leading position in multiple verticals, including dental and retail markets, where this software is mission-critical.\\n\\nFor some additional details:\"}]\n\n• 4-5 year fixed contracts with customers, with a 95% renewal rate\n• 90% of revenue is recurring, with 80% gross margins\n• Strong patent portfolio across the UK and North America\n• ARR of circa $6m"
+},
+{
+"code": "09243",
+"text": "Summary: CX SaaS Opportunity\n\n• Provides a comprehensive suite of customer engagement and customer experience software solutions\n• 24% EBITDA margins\n• Anticipated multiple to receive shareholder approval: >20x EBITDA"
+},
+{
+"code": "652431",
+"text": "Summary: M&A: Business Services Group\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a business services group with over $1bn in revenue.\"},{\"text\":\"For some additional details:\"}]\n\n• Revenues north of $1bn with EBITDA of $150m+\n• Broad portfolio of services spanning BPO, marketing and technology services \n• Highly capable first and second-tier management team with proven track-record of scaling the business  \n• Global business with most of revenue coming from mature European markets\n• Shareholders open to a majority growth investment or full buy-out "
+},
+{
+"code": "932784",
+"text": "Summary: Healthcare Software\n\n• Provides analytics and data solutions which improve decision making for customers\n• Manages back-office operations, improving efficiency and ensuring regulatory compliance\n• It is profitable, with recurring revenue of over 92% and NRR above 100%. "
+},
+{
+"code": "7923884",
+"text": "Summary: M&A: Consumer Health & Wellness\n\n[{\"text\":\"We wanted to make you aware of an acquisition opportunity in the consumer health & wellness sector. \\n\"},{\"text\":\"For some additional details: \"}]\n\n• Primarily focused on health and wellness products targeting weight loss\n• Generating revenues exceeding $500M\n• Operates a franchise model with outsourced direct sales\n• In-house manufacturing operations driving a gross-margin advantage"
+},
+{
+"code": "908323",
+"text": "Summary: Automotive Product Manufacturing\n\n• Automotive products business that operates across the value chain - manufacturing, retailing, importing and distribution.\n• The Company is ISO-certified and offers an excellent opportunity to enter or expand in South America, with strong access to Chile, Colombia, Ecuador, and Peru.\n• The core product is 99% recyclable, with a long-term customer base.\n• Growth opportunities include (a) using the import and distribution infrastructure for non-automotive products; (b) expanding into the North American market."
+},
+{
+"code": "823714",
+"text": "Summary: Family Attraction Park\n\n• Retirement sale of a US family attraction park hosting >500,000 annual visitors.\n• The group owns 300 acres of prime real estate near a large population centre, providing scope for expansion.\n• Revenue has grown by over 40% since 2019. It encompasses ticket sales, gift shops, food venues, and events."
+},
+{
+"code": "9001730",
+"text": "Summary: M&A: Specialist Outdoor Products\n\n[{\"text\":\"We wanted to make you aware of an acquisition opportunity in the outdoor equipment sector. \"},{\"text\":\"For some additional details:\"}]\n\n• Core focus on high-performance outdoor lighting solutions\n• Revenues  greater than €80M with an EBITDA margin of 20%\n• Broad customer base ranging from enthusiasts to industry professionals\n• In-house production capabilities driving a sustainable margin performance"
+},
+{
+"code": "12984",
+"text": "Summary: Commercial Painting for Industrials\n\n• The Company paints plastic and metal parts for the automotive, aerospace and agricultural industries.\n• Blue-chip client base (including Tesla and Toyota) secured from investment in technology, equipment, and process optimisation.\n• Tailwinds – there is significant pent-up demand for vehicles, which will drive organic growth for several years.\n• Organic and Inorganic Growth Opportunities – geographical expansion alongside its largest customers (into Europe, South America and Asia). Capability expansion into e-coating, powder coating and plastic moulding."
+},
+{
+"code": "1717127",
+"text": "Summary: M&A: Luxury Tour Operator\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a luxury travel business.\"}]\n\n• UK-based operation serving the 50-plus market with luxury travel and tours across Europe and further afield\n• Over £8m in EBITDA with EBITDA margins of c. 10%\n• Strong history of year-over-year growth expected to continue into foreseeable future\n• Experienced management team willing to remain in the business and help continue growth"
+},
+{
+"code": "36427",
+"text": "Summary: Steel Manufacturer\n\n• A leading steel manufacturer and erector specialising in the construction of buildings.\n• With a focus on quality and innovation, it offers a comprehensive range of solutions to meet the diverse needs of its client base.\n• Their expertise in both manufacturing and erecting ensures efficient project delivery, making them a trusted partner in the construction sector."
+},
+{
+"code": "826101",
+"text": "Summary: M&A: Outsourced Sales \n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a global outsourced sales business. \"}]\n\n• EBITDA above $20m and growing \n• A leading provider of outsourced sales and marketing solutions, helping companies accelerate revenue growth and enhance customer relationships\n• Strong management team committed to remaining with the business \n• The company is exploring the opportunity to bring on a new majority partner to support the next stage of its growth journey, aiming to accelerate international expansion, enhance digital capabilities, and invest in scaling its high-performing teams"
+},
+{
+"code": "23746",
+"text": "Summary: InsurTech Opportunity\n\n• InsurTech group automating the claims management process for car and home insurers - allowing a claim to be processed from end-to-end in minutes.\n• The group has clients in 10+ countries, generating >$6m of ARR."
+},
+{
+"code": "8723645",
+"text": "Summary: M&A: Fitness Group\n\n[{\"text\":\"We have an opportunity to acquire a health club and fitness group.\\n\\nKey Highlights:\"}]\n\n• 5+ locations\n• Generating >$1m of operating income with margins above 16%\n• Trusted brand provides pricing power – consistent price increases and low churn\n• Long-standing management team, with an average tenure of 15 years"
+},
+{
+"code": "65487",
+"text": "Summary: EV Component Manufacturing\n\n• Sustainable manufacturer of electric vehicle battery components, following the circular economy model. \n• Interested in raising growth capital to fund further development. Existing investors include blue-chip strategics and renowned venture capital firms. \n• Enterprise value is circa $2.5bn."
+},
+{
+"code": "734865",
+"text": "Summary: M&A: Travel Group\n\n[{\"text\":\"We have an opportunity to acquire one of Europe\\u2019s largest coach, travel, and tourism operators.\\n\\nBusiness Overview:\"}]\n\n• EBITDA approaching $40m, with margins above 25%.\n• Highly experienced management team motivated to remain with the business post-transaction.\n• Strong brand equity, with a market-leading reputation built over multiple decades."
+},
+{
+"code": "836239",
+"text": "Summary: M&A: HR SaaS\n\n[{\"text\":\"We have a US-based HR tech business raising growth equity.\\n\\nSummary:\"}]\n\n• B2B SaaS model with approximately $4 million of ARR\n• Growing at double-digits whilst remaining EBITDA positive\n• Top performing Oracle partner in 2024"
+},
+{
+"code": "873624",
+"text": "Summary: Retail Technology Carve-Out\n\n• This business utilises cutting-edge technologies (including AI), allowing retailers to leverage data for informed decision-making.\n• The product suite improves customers' operational efficiency, security and forecasting.\n• >$800m of revenue and highly cash generative."
+},
+{
+"code": "35617",
+"text": "Summary: Wealth Management\n\n• 401K Third Party Administrator serving the SME market. With an established operating history, it has developed a robust sales model and a strong network of partnerships.\n• Growth opportunities include (a) increasing the scope of services; (b) expanding the sales/business development team; (c) acquiring smaller, regional competitors.\n• 20% Revenue CAGR | 31% EBITDA CAGR."
+},
+{
+"code": "829129",
+"text": "Summary: M&A: European Gym Platform\n\n[{\"text\":\"We wanted to make you aware of an opportunity to acquire a European gym chain with over 50 locations.\"}]\n\n• EBITDA above $30m USD and growing\n• Leading platform with strong brand recognition and high member retention serving premium end of the market\n• Attractive entry point into the fragmented health and fitness sector with significant roll-up potential\n• Experienced management team with proven operational expertise and track record of driving profitability"
+},
+{
+"code": "89327",
+"text": "Summary: AgriTech for Sustainable Food Production\n\n• AgriTech business developing a network of tech-driven farms to support sustainable, regional food production. It will deliver vegetables from farm to fork in 24 hours.\n• Broad Distribution model: Demand goes beyond grocery stores into retail, institutions and culinary.\n• Raising a $30m Series B.\n• Forecast YE28: Revenue of $365m, EBITDA of $117m and $66m of FCF.\n• TAM: >$31bn."
+},
+{
+"code": "745632",
+"text": "Summary: M&A: Mobile Network Operator\n\n[{\"text\":\"We\\u2019re managing the sale process for a mobile carrier based in the APAC region.\\n\\nOverview:\"}]\n\n• $12m of EBITDA\n• 1 million customers across multiple geographies, with a playbook for further profitable expansion\n• Asset-light business model as a Virtual Network Operator (MVNO), providing scope to outcompete capex-heavy legacy competitors\n• Built a dominant, market-leading position, with continued growth potential\n• Experienced management team looking to remain with the business post-transaction"
+},
+{
+"code": "983465",
+"text": "Summary: M&A: Digital Marketing\n\n[{\"text\":\"We have a digital marketing group exploring a transaction to accelerate organic and acquisition-driven growth.\\n\\nKey Highlights:\"}]\n\n• Delivering over 4 million ad campaigns per month\n• Vertical integration provides competitive differentiation and a sustainable margin advantage\n• Forecasting $9m of EBITDA this year and $17.5m in 2026\n• 95% of revenue from the US\n• 20% of customers have annual contracts, increasing revenue visibility. Moreover, the group has 3-5 year contracts with supply partners, providing further predictability."
+},
+{
+"code": "78643",
+"text": "Summary: Oil & Gas Production and Exploration\n\n• Oil and gas business in the production and exploration market is exploring a sale.\n• Operations produce >10,000 barrels per day, translating to EBITDAX >$450m.\n• Geothermal and lithium growth opportunities within the group, in addition to expanding production."
+},
+{
+"code": "451297",
+"text": "Summary: M&A: Tech-driven Delivery Group\n\n[{\"text\":\"We have an opportunity to acquire the largest technology-driven logistics and last-mile delivery group in Latin America.\\n\\nKey highlights:\"}]\n\n• Approaching $100m of revenue, growing 40% year-over-year.\n• Cash-flow positive, with double-digit revenue and EBITDA growth forecasted.\n• Vertically integrated, providing control throughout the supply chain and additional margin capture.\n• Dominant market share in over 30 countries, with an established distribution network, giving a competitive moat."
+},
+{
+"code": "234512",
+"text": "Summary: Consumer Bank Opportunity\n\n• Leading consumer bank in Europe is exploring a sale.\n• It has >$100m of EBITDA with double-digit YoY growth. "
+},
+{
+"code": "34675",
+"text": "Summary: M&A: Vertical SaaS\n\n[{\"text\":\"We have an opportunity to acquire a vertical SaaS platform serving the creator economy.\\n\\nKey highlights:\"}]\n\n• Market leader in its vertical with over 150,000 paying subscribers\n• Strong competitive advantages from investment in product development and proprietary AI capabilities\n• All of the revenue is recurring, with a sticky product and high gross/net retention\n• Highly cash generative, with EBITDA margins of 23%\n• Approaching $9m of EBITDA"
+},
+{
+"code": "261753",
+"text": "Summary: Staffing Opportunity\n\n• Light industrial staffing company with industry-leading gross profit (17%) and EBITDA margins (6.5%), focusing on Manufacturing and Logistics.\n• The largest customer represents only ~3% of revenue, and many customer relationships span over a decade.\n• It has earned an excellent reputation as an industry leader and the go-to staffing provider. Diversification of available labour and its reputation for excellence in efficiency, recruiting and training, give competitive advantages.\n• Operating procedures and infrastructure are scalable without the need for high capital investment."
+},
+{
+"code": "874654",
+"text": "Summary: M&A: Back Office SaaS Automation\n\n[{\"text\":\"We have an acquisition opportunity for a SaaS group automating the back-office for SMEs and large corporates.\\n\\nOverview:\"}]\n\n• ~$100m of ARR, growing organically at 30% per year.\n• Cash-flow positive, with double-digit EBITDA margins, near the rule of 40.\n• Provides deep automation for payments and invoicing, with 100+ ERP integrations, creating a sticky product with almost no churn."
+},
+{
+"code": "897899",
+"text": "Summary: Fire Sprinklers\n\n[{\"text\":null}]\n\n• "
+},
+{
+"code": "010524",
+"text": "Summary: Transportation and Logistics\n\n• Asset-based Transportation and Logistics holding company offering US, Mexico and cross-border services. The companies haul tanks, construction equipment, and dry vans.\n• Services include: Truckload/LTL, Flatbed, Oversize, Overweight, Permit Loads, Warehouse, Cross Dock, and Distribution.\n• Equipment: 57 tractors, 237 trailers, and 35+ owner-operated tractors."
+},
+{
+"code": "984558",
+"text": "Summary: Home Services Franchise\n\n[{\"text\":null}]\n\n• "
+},
+{
+"code": "817263",
+"text": "Summary: B2B Food Supply Reducing Waste\n\n• Venture-backed company in the food supply market fundamentally changing how professional kitchens source food. Their model reduces waste, provides responsibly sourced food, and operates sustainably with a tech-driven system.\n• It is approaching profitability whilst continuing to post strong growth numbers as unit economics are proven at scale."
+},
+{
+"code": "435645",
+"text": "Summary: Telehealth Platform\n\n• Proprietary telehealth platform driving digital transformation in healthcare.\n• This venture-backed leader is distrupting the market with a white-label platform facilitating personalised healthcare at scale for all conditions.\n• Combining AI with data analytics, it provides analytics to help medical professionals increase patient satisfaction.\n• Nearly 500,000 patients treated at a >94% satisfaction rate."
+},
+{
+"code": "598444",
+"text": "Summary: InsurTech\n\n[{\"text\":null}]\n\n• "
+},
+{
+"code": "658466",
+"text": "Summary: Medical Technology for Skin Cancer\n\n• The company has developed and deployed AI-driven medical hardware that detects skin cancer at an early stage.\n• It works in partnership with leading healthcare organisations and has secured regulatory approval."
+},
+{
+"code": "239178",
+"text": "Summary: Smart Home Devices\n\n• The company provides smart home devices that drive efficient energy usage across households.\n• The devices are supported by a software platform, providing landlords with analytics, asset management, budgeting, and communication capabilities.\n• After raising venture capital, the company has grown significantly, secured a large number of clients across Europe, and has a clear path to profitability. It is now open to exploring M&A opportunities to help drive the next growth phase."
+},
+{
+"code": "378264",
+"text": "Summary: AI Software Reducing Food Waste\n\n• Software platform for restaurants, utilising AI to reduce food waste.\n• With the platform, clients can run a more efficient and sustainable operation while increasing profit margins.\n• After receiving growth capital, the business has expanded whilst remaining close to profitability. It is seeking a new partner for the next stage of its journey."
+},
+{
+"code": "564786",
+"text": "Summary: Real Estate Services\n\n• Global real estate group providing services to blue-chip and tier-one clients across commercial and residential sectors.\n• Long-standing client relationships with a reoccurring revenue profile.\n• Consistent growth in EBITDA with margin expansion over the last several years, driven by excellent unit economics.\n• The company is having select, off-market M&A discussions ahead of a formal process beginning.\n• Enterprise Value expected to surpass late single-digit billions."
+},
+{
+"code": "76589",
+"text": "Summary: Agricultural Commodities Group\n\n• Agricultural commodities processor and exporter looking to raise $40m of growth capital.\n• Post-transaction, the group will continue growing organically. In addition, it has a pipeline of add-on acquisitions to expand geographically and broaden horizontal expansion along the supply chain in the global agricultural processing, logistics and distribution industry.\n• It is developing a global supply chain pipeline for Agri products – from farm to consumer. The group exports to >20 countries and has established infrastructure to support further growth.\n• It supplies products to food processors, feed mills, importers, crushing plants and wholesale distributors.\n• Revenue has grown at a CAGR of 40% over the last 5 years.\n• The management team has prioritised growth, which will continue. There is significant scope for increased margins as the group scales."
+},
+{
+"code": "67458",
+"text": "Summary: Mobility as a Service with >2m rides\n\n• Mobility as a Service company raising a $20m round.\n• It has solved middle-mile travel challenges for millions of riders with an asset-lite and dynamic inter-city transportation network.\n• The company has facilitated >2m rides across 40+ states."
+},
+{
+"code": "872364",
+"text": "Summary: B2B Cybersecurity and Compliance\n\n• B2B cybersecurity and compliance group safeguarding clients from communication channel threats.\n• The platform utilises generative AI to detect threats before they materialise.\n• It has $3.2m of ARR and is trending towards cash-flow break-even.\n• The group has raised >$50m from renowned investors and is open to offers below the total amount of capital raised."
+},
+{
+"code": "272667",
+"text": "Summary: Industrial Tech - Additives/Coatings\n\n• Industrial technology business that has developed additives and coatings for the consumer packaging, marine and medical markets.\n• It has several patents and is the market leader from a technology and IP perspective.\n• This transaction is an asset sale of IP within the company – it is accepting offers for its latest coatings technology designed for the marine industry. "
+},
+{
+"code": "023764",
+"text": "Summary: Consent and Data Privacy\n\n• B2B marketing enablement and data privacy platform - capturing the full customer journey with consent, compliance, analytics and monitoring.\n• Allows businesses to navigate the complexities of data privacy regulations.\n• It has £20m of ARR and has remained profitable whilst growing at >25% per year."
+},
+{
+"code": "783264",
+"text": "Summary: CleanTech Group - Recycled Plastic\n\n• CleanTech group that has developed a chemical recycling process for plastic. Proof of concepts completed with demonstration plants and at larger scales (c. 10 kiloton plant).\n• The IP allows lower-grade plastic to be recycled more effectively.\n• The 60-person technical team has patented technology - which is low from a Capex perspective driven by a licencing (revenue share) model.\n• It is in the early stages of developing further technology for the fibre recycling market.\n• It is raising €10m in a round of funding."
+},
+{
+"code": "874133",
+"text": "Summary: Medical Devices for Vascular Diseases\n\n• Medical device business designing and manufacturing systems to treat vascular diseases.\n• >180 patents granted, with a growing product pipeline.\n• FDA approval has been granted and the technology has proven robust commercially.\n• The management team is interested in select off-market M&A discussions."
+},
+{
+"code": "3817456",
+"text": "Summary: M&A: High-Margin Distribution Group\n\n[{\"text\":\"We represent a specialist distribution group exploring a sale.\\n\\nHighlights:\"}]\n\n• Delivered >£7 million of EBITDA in 2024 (17% margin)\n• Forecasting ~£9 million of EBITDA this year, building on years of consistent growth\n• Deep distribution network and supplier relationships provide a competitive moat\n• Scale advantage as the UK market leader with brand recognition and end-customer stickiness\n• Recurring revenue underpinned by essential, non-discretionary products"
+},
+{
+"code": "21342",
+"text": "Summary: Energy Tech\n\n• Sustainable energy group allowing businesses to reduce energy-related consumption and costs.\n• The business has two interconnected sides: (1) a software platform; and (2) energy supply. They can be sold as a package or independently, with the core customer being SMEs. \n• The financial sponsor is approaching its exit horizon and is open to sale discussions.\n• Opportunities for the next owner include internationalisation and executing a buy-and-build playbook.\n• The management team would like to remain with the business post-transaction. The current CEO will transition to an executive-chair role."
+},
+{
+"code": "76123",
+"text": "Summary: Health-conscious Energy Drinks\n\n• Consumer product business disrupting the energy drinks market - targeting health-conscious Generation Z and Millennial consumers.\n• It has a significant online presence and is now expanding in physical retail stores. Over the past years, it has curated a loyal community of customers.\n• The business has posted strong organic growth numbers and is operating at break-even.\n• The shareholders are open to a change of control transaction to help drive the business to its next stage of growth."
+},
+{
+"code": "7128187",
+"text": "Summary: AI Context Management Platform\n\n[{\"text\":\"I\\u2019m reaching out about a UK-based AI company raising pre-seed funding to solve how people manage and control context across complex, long-term AI workflows.\"}]\n\n• Solving the broken chat interface for real AI work\n• Shot to top of Hacker News on launch, and already with 800 + users \n• Founded by a highly technical team (Oxford & Edinburgh AI grads) with a track record of shipping fast\n• Raising $250–500k to complete product launch and scale early traction"
+},
+{
+"code": "54326",
+"text": "Summary: Automotive Inspection Software\n\n• Software company using AI to drive automation and compliance in the security and automotive inspection sectors.\n• It will post >$70m of ARR this year, >3x YoY growth. In 2025, ARR is forecasted to surpass $140m. By mid-2025, it will be profitable.\n• All data collected is wholly and exclusively owned by the company, providing powerful opportunities for future growth.\n• It is open to minority or majority growth equity discussions as it looks to continue driving growth - organically and inorganically."
+},
+{
+"code": "547321",
+"text": "Summary: Renewable Material Opportunity\n\n• A venture-backed biochemistry start-up that has successfully developed a renewable material to replace petrochemicals in the consumer, healthcare, and industrial product markets.\n• It is currently pre-revenue, having spent the past years developing technology and proving the concept at scale - deep patent and IP portfolio built. It will generate revenue on a standalone basis this year with recent contract wins.\n• The management team is interested in remaining with the business post-transaction to realise the long-term vision."
+},
+{
+"code": "1025634",
+"text": "Summary: Oil & Gas Products and Services\n\n• An opportunity to acquire an Oil & Gas business based in Europe. It provides products and rental services to energy clients across the globe.\n• The shareholders are open to discussions concerning a change of control transaction. However, there is no active process or sale mandate.\n• It is growing organically at 15%-20% per year and has completed add-on acquisitions.\n• It has c. $120m of EBITDA, with margins of c. 40%."
+},
+{
+"code": "982361",
+"text": "Summary: PE-Owned Staffing and Recruitment\n\n• White collar staffing and recruitment business specialising in healthcare.\n• It has high single digits of EBITDA.\n• It is owned by a private equity group. They are open to approaches from prospective acquirers as they approach the end of their investment horizon."
+},
+{
+"code": "87543",
+"text": "Summary: Smart Home Devices\n\n• Affordable range of smart home security and monitoring products.\n• In-house developed software stack with a subscription model.\n• Over 1m devices delivered to consumers.\n• $1.3m of ARR.\n• In an accelerated sales process."
+},
+{
+"code": "872354",
+"text": "Summary: Emerging Market Consumer FinTech\n\n• Regulated, non-bank FinTech group providing consumer money management, buy-now-pay-later and personal credit lines.\n• It has been growing between 50%-100% per year, which is forecasted to continue.\n• Current investors are reaching the end of their investment lifecycle. The management team and shareholders are open to growth investments or a full buyout.\n• It is currently break even and will turn profitable in 9-12 months.\n• Current investors include US private equity and European strategics."
+},
+{
+"code": "73524",
+"text": "Summary: Mobility as a Service Platform\n\n• Software-driven, Mobility as a Service platform based in Asia, providing driver-focused navigation and non-driver (public transport) services.\n• It is only operational in its home country but would like to engage with non-domestic acquirers. The shareholders are running a dual-track process ahead of a planned listing next year.\n• It is currently in the development stages of expanding product lines across middle-market freight, urban air mobility and autonomous driving.\n• The last capital raise valued the business at $1.9bn.\n• The group currently generates c$225m of revenue from 20 million subscribers. It will grow at a CAGR of 30% over the next 3 years and turn profitable in Q3/4 2024, producing $7m-$8m of EBITDA for the year."
+},
+{
+"code": "72163",
+"text": "Summary: 3D Content Creation\n\n• Profitable content marketplace at the frontier of 3D content creation.\n• The community encompasses published artists, amateur creators, and 100+ enterprise relationships with blue-chip CPG, tech, gaming, and entertainment companies.\n• It maintains one of the world’s largest databases of proprietary 3D content and has strategic relationships with generative AI players to license that content for image generation.\n• EBITDA positive, with revenue of >$25m last year, growing beyond $30m this year with $2m of EBITDA forecasted.\n• The company is exploring a sale."
+},
+{
+"code": "12795",
+"text": "Summary: Hospitality Group\n\n• Hospitality and restaurant group is exploring a sale.\n• EBITDA of circa £13m with margins driving towards 30%.\n• Excellent revenue visibility with >95% from pre-booked sales in LTM.\n• Proven playbook for expansion with 20+ locations and a payback period of 1 year.\n• Solid marketing foundations with a database of >900,000 engaged customers."
+},
+{
+"code": "078325",
+"text": "Summary: PropTech\n\n• PropTech group redefining how the new generation rents apartments driven by a proprietary tech stack.\n• 5x growth in the last 3 years (to c.$50m of revenue) whilst remaining profitable.\n• <1% average annual unwanted churn.\n• $135B+ TAM.\n• Raising a Series C round."
+},
+{
+"code": "672354",
+"text": "Summary: AI-driven Content\n\n• Digital fashion software automating traditional photography for retail brands and platforms.\n• In-house developed IP with proprietary algorithms, including full ownership/exclusive use of data to train the models.\n• It started commercialising under one year ago and has secured 100+ logos, including tier-one customers (for example, Patagonia).\n• The group is EBITDA positive and is seeking a buyout partner to accelerate commercialisation."
+},
+{
+"code": "675232",
+"text": "Summary: Satellite Propulsion Opportunity\n\n• Satellite propulsion business with strong commercial and government contracts ($75m backlog).\n• Generated >$50m of revenue YTD and will be EBITDA positive in 2024.\n• 200+ projects delivered, including multiple satellites successfully in orbit.\n• Raising a $30m round of funding."
+},
+{
+"code": "785243",
+"text": "Summary: Tech-driven Digital Media Group\n\n• Technology-driven digital media group and travel organisation providing content, group vacations, virtual and live experiences.\n• $25m of revenue driven by membership subscriptions, partnerships and booking fees.\n• High retention rates with a valuable database of high net-worth clients.\n• 25% YoY growth forecasted until 2028.\n• Investment in technology has resulted in small losses on the bottom line. It will be profitable on an ongoing basis from Q3 2024.\n• The Founder is seeking an acquirer as the business continues a transition towards a technology-centric model."
+},
+{
+"code": "782534",
+"text": "Summary: Senior-Secured Debt Opportunity\n\n• A diversified media company is raising $15m-$20m of senior-secured debt ahead of a public market listing.\n• The company has an element of contractual recurring revenue and content scheduled for Netflix Original Series.\n• PCAOB audits completed, showing a revenue increase of 90% + YoY. Revenue this year will surpass $150m, with EBITDA margins forecasted at 8%-10%.\n• It has $12m of cash and <$3M in unsecured debt."
+},
+{
+"code": "892364",
+"text": "Summary: Multi-site Medical Aesthetics\n\n• Multi-site medical aesthetics business exploring a sale.\n• It has a strong management team eager to grow the business organically and inorganically post-deal. It completed several add-on acquisitions with a robust M&A pipeline.\n• The group has a training academy, a driven management team and numerous growth opportunities with +10 locations across multiple states.\n• $4.0M+ in run-rate EBITDA."
+},
+{
+"code": "783541",
+"text": "Summary: Frozen Food Equipment\n\n• Opportunity to acquire a market-leading manufacturer of frozen food equipment as part of a corporate carve-out.\n• This subsidiary is based in North America. The transaction involves c.100 FTEs, including a highly skilled team of engineers and operators.\n• >800 clients with long-standing relationships to a diversified base of blue-chip food producers.\n• Revenue CAGR of 19% from FY23 to FY26."
+},
+{
+"code": "01932",
+"text": "Summary: Nuclear Power\n\n• Nuclear power company developing a safer, more scalable way to deliver energy.\n• Central and standardised production provides cost efficiencies, whilst modular reactor technology gives scalability.\n• It has 100+ employees and backing from leading governmental organisations.\n• The group is raising $25m."
+},
+{
+"code": "59758",
+"text": "Summary: Subscription-driven Market Research\n\n• Global market research firm providing subscription-based, contracted research and analytics for large corporations.\n• It has a vertical market focus in Education with plans to expand to a broader range of corporates.\n• Annual contracts provide excellent revenue visibility, with some clients on multi-year contracts.\n• Revenue >$75m, EBITDA >$10m.\n• The shareholders have received an off-market offer, but it has not met valuation expectations. The management team is therefore inviting a select number of other suitors to the table."
+},
+{
+"code": "801365",
+"text": "Summary: Identity Verification and AML Group\n\n• Enterprise SaaS providing cybersecurity (AML & IDV) and compliance solutions to large, sticky verticals including telecommunications and banking.\n• Proprietary AI and ML capabilities drive a more efficient and accurate process.\n• ACV > $1m | >110% NRR | close to profitability.\n• Delivered >$30m of ARR in 2024 (30% YoY growth), forecasting $38m-$39m in 2025.\n• The shareholders are interested in select, off-market acquisition discussions with strategic acquirers."
+},
+{
+"code": "8493765",
+"text": "Summary: Consultancy and Marketing Agency\n\n• Global consultancy, managed services and marketing agency serving as the trusted advisor to leading Fortune 500 companies. Key product/service areas include strategy, content delivery, customer experience, commerce (digital and physical) and analytics.\n• The group has employees (>500) who are domain experts utilising in-house developed technology to support clients. The proprietary technology platform provides a consistent leading edge over competitors.\n• It has >$36m of EBITDA at a margin of 26%."
+},
+{
+"code": "251449",
+"text": "Summary: Neobank Opportunity\n\n• Neobank based in Western Europe, raising a $125m round of funding (pre-money valuation of $350m).\n• It is a digital banking, wealth management, and premium lifestyle services platform serving individuals with disposable assets between $250,000 and $5m.\n• The suite of products includes high-reward savings accounts, mortgages, and a world-leading wealth management platform.\n• The technology utilises open banking protocols to manage clients' financial, real estate and alternative assets data, integrating with third-party providers, such as banks, pensions and trading platforms, to provide a holistic real-time view of personal wealth.\n• The service is centered around an app with market-leading user experience and functional capabilities. The proprietary cloud-based technology stack enables a modular, end-to-end banking and wealth management solution."
+},
+{
+"code": "67534",
+"text": "Summary: Customer Engagement SaaS Platform\n\n• An insights-led Customer Engagement Platform that powers customer-centric interactions - aiming CX at the right customers with the right message through the right channel at the right time.\n• Operating on a SaaS model (>$2.1m ARR), it provides an omnichannel marketing platform to power, orchestrate, and automate cross-channel communications for enterprise companies - emphasis on Banking and FinTechs.\n• >100 enterprise clients | 90% on annual contracts with $15k + ACV."
+},
+{
+"code": "92736",
+"text": "Summary: Data Center Products\n\n• Leading provider of critical data center accessories to the ever-growing digital infrastructure space.\n• The group manufactures (i) rack cabinets, enclosures, and telecom field cabinets (in/outdoor) for data centers and (ii) power distribution units and industrial security systems for the IT industry.\n• Low capex requirements with <65% capacity utilization.\n• Clients include incumbent telecoms and large data center operators in 80+ countries."
+},
+{
+"code": "37953",
+"text": "Summary: Technical Services Group\n\n• Technical services group operating across demolition, asbestos, hazardous materials, salvage and recycling.\n• Client sectors include utilities, oil/gas, healthcare, education, defense, and industrial.\n• Price guidance: circa $15m (3-4x EBITDA).\n• Based on the East Coast.\n• Retirement sale."
+},
+{
+"code": "65388",
+"text": "Summary: Retirement Planning\n\n• Retirement planning firm with proprietary software helping clients plan and budget for retirement.\n• Services include consulting, income distribution management, tax return assistance, and survivor assistance.\n• The Company has developed in-house software with an experienced and talented workforce committed to the firm.\n• CAGR >35%."
+},
+{
+"code": "812363",
+"text": "Summary: HR Tech\n\n• AI-driven, end-to-end HR SaaS business providing a one-stop solution for hiring, onboarding and employee management.\n• >$50m of ARR and EBITDA positive whilst growing at double digits.\n• Gross margins >80%, with excellent revenue retention driven by multi-year contracts.\n• The shareholders and management are interested in a strategic buyout or a growth investment to drive the company to a multi-billion dollar outcome.\n• Shareholder price target: 9x-11x ARR, depending on structure."
+},
+{
+"code": "843111",
+"text": "Summary: Wealth and Investment Management\n\n• Wealth and investment management firm raising growth equity to support a consolidation strategy.\n• The group has >$1bn of AUM and >$5m of EBITDA operating at a circa 50% margin.\n• The group has two business lines. (1) Tech-driven global wealth management and complimentary services such as business management and tax advisory. It is growing at a 39% CAGR and is accessible globally, with investors from >20 countries. (2) Alternative investment management, focusing on private equity and late-stage venture fund management."
+},
+{
+"code": "947654",
+"text": "Summary: HR SaaS \n\n• A leading provider of advanced employment solutions, leveraging AI and machine learning to match skills with job opportunities, serving governments and enterprises worldwide.\n• The company has a significant pipeline of EUR 125M, a high customer retention rate of 96%, and a strong track record of profitable operations.\n• With a global expansion strategy targeting key regions and a new SaaS offering for enterprises, this opportunity presents substantial growth potential through both upselling and new client acquisition, while capitalizing on the EUR 65B EU budget for workforce development.\n• The company benefits from a mix of recurring and non-recurring revenue streams, including license fees, maintenance contracts, and consulting services, ensuring a balanced financial profile."
+},
+{
+"code": "62554",
+"text": "Summary: Virtual Reality\n\n• Offers the most immersive VR experience available today. Users can walk and run freely in 360 degrees within their virtual environments.\n• >$40M raised from leading VCs and industry leaders.\n• 400,000+ registered users, already generated >$18m in revenue.\n• The company is raising $25m to scale marketing and production capabilities to meet increasing demand."
+},
+{
+"code": "82726",
+"text": "Summary: IT & Cybersecurity Services\n\n• Mission critical managed detection and response services provided on annual recurring contracts.\n• Developed a leading position in the Telco and Financial Services domains.\n• The group has a stable client base providing recurring revenue with EBITDA margins above 15%.\n• Owners have passed retirement age and are highly motivated to sell."
+},
+{
+"code": "512441",
+"text": "Summary: B2B SaaS | >$100m ARR\n\n• B2B SaaS group with >$100m of ARR.\n• It provides data backup and recovery solutions to enterprises across the globe. \n• The shareholders are interested in select off-market discussions with strategic acquirers."
+},
+{
+"code": "79869",
+"text": "Summary: Passport and Visa Services\n\n• Leading passport and visa services company with decades of successful operation.\n• Competitive advantage with scarce and hard-to-obtain licenses - including those in states where no new licenses are available.\n• High-end, concierge service renowned for its strong reputation, with clients including Sony, Disney, and Northrop Grumman.\n• Annual revenue >$5 million, with a 30% profit margin and 80% YoY growth."
+},
+{
+"code": "12897",
+"text": "Summary: Data Centre Co-Investment\n\n• A financial sponsor is seeking a co-investor for one of its portfolio companies to capitalise on growth and expansion plans.\n• It originally acquired the asset at a c.$75m valuation. The group requires approximately $25m from a co-sponsor or strategic investor.\n• The portfolio company is a data centre REIT based in the UK. It has a backlog of secured power providing a major competitive advantage."
+},
+{
+"code": "00000",
+"text": "Summary: Wealth Management\n\n• Wealth manager with $1.8m of EBITDA."
+},
+{
+"code": "12322",
+"text": "Summary: Light Industrial Staffing\n\n• Highly profitable light industrial staffing group with circa $6m of EBITDA at margins above 9%.\n• It has earned an excellent reputation as an industry leader – the top client has a tenure of 30 years. Many clients have been with the business for over 10 years.\n• Core markets include manufacturing, logistics, distribution, automotive, retail and food packaging.\n• The existing management team is eager to remain with the business post-transaction."
+},
+{
+"code": "634589",
+"text": "Summary: AI for the Onsite Service Industry\n\n• AI-driven technology platform for the onsite services industry.\n• The group's platform facilitates the tracking of a client's full suite of product and service offerings. It uses connected devices to drive organisational decision-making with a complete field service delivery solution.\n• It has circa $7m of revenue, which is forecasted to double over the coming year. In addition, it will turn EBITDA positive in the next financial year.\n• The group is publicly listed and looking to raise up to $10m in a private placement."
+},
+{
+"code": "98562",
+"text": "Summary: Resource Exploration & Extraction\n\n• A publicly listed copper mining business is raising a private placement of up to $150m. It is open to equity and/or debt structure to the capital raise.\n• It owns a portfolio of assets across Australia and South Africa with rights to extract deposits of cobalt, platinum, gold, copper, lithium and other rare earth elements.\n• The raise will fund expansion of existing sites."
+},
+{
+"code": "635453",
+"text": "Summary: Managed Print Services\n\n• Managed Print Services group is in the early stages of exploring a sale.\n• It is working towards $10m of EBITDA with industry-leading margins and a strong recurring revenue profile.\n• The group has 5,000 + customers with 20,000 + devices, generating over $7m of EBITDA in the last financial year. \n• The management team has built a robust operation with excellent margins - a 50% gross margin and EBITDA margins above 20%."
+},
+{
+"code": "23653",
+"text": "Summary: Plant Hire Group\n\n• Plant hire business is exploring a sale.\n• It has >£10m of EBITDA with excellent margins.\n• Operates nationally across the UK with >10 depots."
+},
+{
+"code": "63917",
+"text": "Summary: Utilities and Infrastructure Services\n\n• The group provides a range of utility and infrastructure services to the telecommunications industry. Services include testing, inspection, maintenance, and construction.\n• Construction is circa 90% of revenue, with the remainder from maintenance.\n• Revenue has grown by nearly 30% per year since 2021.\n• >$10m of EBITDA at 25% margins."
+},
+{
+"code": "67516",
+"text": "Summary: Health Club Network\n\n• Chain of health and fitness clubs (15+) with more than 2,800 members per location.\n• Revenue is driven by membership fees (64%), with 30%+ from personal trainer and facility fees.\n• EBITDA margins range from 30%-40% per location."
+},
+{
+"code": "67549",
+"text": "Summary: Residential Construction Group\n\n• Residential contractor with a core focus across Low-Income Housing Tax Credit (LIHTC) projects, multi-family renovations and disaster recovery.\n• It has a presence in over half of all States.\n• The group has strong relationships with >85% repeat business.\n• The top five clients have been with the group for 2-9 years."
+},
+{
+"code": "67656",
+"text": "Summary: Consumer Good Manufacturer\n\n• The group manufactures its own brand of bags, travel cases and accessories. Separately, it leverages its distribution network, working exclusively with other brands to diversify revenue.\n• It has a large warehouse in the US and the scale to secure excellent relationships with its suppliers and factories in China.\n• It sells to over 200 major retailers – including Amazon."
+},
+{
+"code": "67831",
+"text": "Summary: Franchised Group\n\n• Fast-casual restaurant group operating on a franchised model.\n• Industry-leading EBITDA margins – averaged above 15% in the past few years.\n• Decades of operating history.\n• 50+ franchise locations."
+},
+{
+"code": "23444",
+"text": "Summary: K-12 and Public Retirement Planning\n\n• Tech-driven retirement management and governance platform for K-12 and public retirement plans.\n• Proprietary Governance-as-a-Service technology for holistic investment comparisons, communication, and federal regulation adherence on one platform.\n• The service model uses technology to boost participation, enhance participant experience and increase public employee retention for plan sponsors.\n• The group is raising $5m of equity and $10m of contingent acquisition financing to support growth."
+},
+{
+"code": "736332",
+"text": "Summary: Cancer Drug Delivery\n\n• Life science start-up overcoming the conventional limitations of combination chemotherapies by developing next-generation antibody-drug conjugates (ADCs).\n• Targeting cervical and ovarian cancers, with a delivery system improving efficacy.\n• 8+ patent applications pending with decisions expected before round closure.\n• The group secured $1.3m in pre-seed funding and is raising up to $40m in a Seed round."
+},
+{
+"code": "37334",
+"text": "Summary: B2B Electrical Services\n\n• Commercial network cabling/low-voltage electrical company exploring a sale.\n• It provides general electrical and low-voltage construction and maintenance services for commercial clients across the US, working for several Fortune 500 companies.\n• It posted >$1m of EBITDA in 2023, which will grow above $2.2m in 2024 at margins above 30%."
+},
+{
+"code": "732333",
+"text": "Summary: Hematology & Oncology Physician Group\n\n• Multi-site private physician group exploring a buyout.\n• It specialises in Hematology and Oncology – diagnosing and treating all types of blood diseases and cancer.\n• The clinics have in-house dispensing pharmacies.\n• It has >$8m of EBITDA and >$100m of revenue."
+},
+{
+"code": "878655",
+"text": "Summary: Dairy and Cattle Agribusiness\n\n• Agricultural business in dairy, cattle farming and key feed crops has invested heavily to complete a state-of-the-art production facility appraised at ~$400M.\n• Management is restructuring through a Chapter 11 process. It is seeking $135M+ to recapitalize its existing line of credit and DIP loan facility to position it for a successful exit from the creditor protection process.\n• The group has circa 15% EBITDA margins and a healthy cash flow profile."
+},
+{
+"code": "265343",
+"text": "Summary: IT and Cloud Managed Services\n\n• Technical consulting and cloud services firm focused on data center services in the US. \n• It has in-house developed technology covering adaptive cloud infrastructure, cloud security and compliance.\n• It uses a proprietary platform and third-party products to provide a fully managed service offering targeting the mid-market. For SMBs, it has 100+ channel partners.\n• >$50m of revenue this year – the majority is recurring."
+},
+{
+"code": "25343",
+"text": "Summary: Multi-Site Physician Practice Group\n\n• Multi location physician practice group is exploring a sale.\n• It provides interventional pain management solutions driven by unreimbursed insurance policies.\n• It has c.$30m of EBITDA."
+},
+{
+"code": "34323",
+"text": "Summary: Digital Marketing and Advertising\n\n• Digital marketing and advertising group exploring a buyout.\n• It has a core vertical focus on the entertainment industry.\n• In the last financial year, the group posted >$8m of EBITDA.\n• It has excellent margins – approaching 40%."
+},
+{
+"code": "05290",
+"text": "Summary: Renewable Energy Platform\n\n• A global renewable energy platform is raising a minimum of $150m to accelerate its platform growth objectives.\n• It has successfully deployed a strategy of acquiring assets and transitioning to greenfield development. The team has a long-term ambition to be an integrated renewable energy company.\n• Today, the group has a global pipeline of ~2.65 GW, with 117 MW operating and under construction in 2024.\n• Key competitive advantages include a proprietary data management system and a strong contractual pipeline.\n• EBITDA is forecasted to reach $75m in 3 years with the capital requested."
+},
+{
+"code": "52211",
+"text": "Summary: Furniture Design and Manufacturing\n\n• Leading furniture design and manufacturing group with a strong global footprint.\n• It is approaching $6m of EBITDA with margins of circa 10%.\n• The shareholders are in the process of exploring a buyout, with advisors expected to begin a formal process over the coming months."
+},
+{
+"code": "237643",
+"text": "Summary: Insurance Premium Financing Group\n\n• Insurance premium financing group targeting non-traditional risk transfer.\n• It operates in the commercial excess and surplus (E&S) market, enabling borrowers to finance expensive E&S insurance while maximising working capital.\n• It has a proprietary risk-based underwriting process, providing high collection rates. The group has never had uncollectible loan principal.\n• Historical and projected EBITDA margins of circa 90%."
+},
+{
+"code": "33221",
+"text": "Summary: Digital Assets – Carbon Credits\n\n• Originator of sustainable digital assets that produce yield is raising $3 million for working capital to further develop proprietary digital assets.\n• Partnership with Coinbase to list on the Institutional Investor digital asset platform.\n• It connects buyers and sellers of carbon credits at scale – addressable to multibillion-dollar, high-velocity markets.\n• Multiple terms enable hedging which reduces risk and increases liquidity.\n• It has a critical edge in sourcing, structuring and distribution, with a team that has decades of experience across JP Morgan, Lazard, Evercore, AXA, Allstate, and MetLife."
+},
+{
+"code": "32783",
+"text": "Summary: Data Facilities Capital Raise\n\n• $25 million warehouse line to fund the first series of transactions contracted for purchase.\n• Offering investors a fixed income convertible security to fund the purchase of a series of existing, cash-flowing, mobile data facilities.\n• Current pay 12.5% interest on funds plus 12.5% convertible accrued note. The 25% annualized returns shall be used to warehouse the purchased facilities and are anticipated to be taken out by subsequent structured notes, reusing funds to similarly purchase the next round of cash-flowing acquisitions. Multiples of the initial $25 million line to occur in 2025.\n• Multiple LOIs for 200 units. Average $1 million annual net income; average $2.5 million asset value; average $4 million purchase price.\n• CEO previously founded two companies which achieved a billion-dollar market capitalisation."
+},
+{
+"code": "59844",
+"text": "Summary: Nut Farm\n\n• One of the largest nut farms in the US is exploring a sale.\n• It encompasses 11,000+ acres, with planning permission for residential and commercial buildings with parks and trails across 6,000+ acres, creating a unique value proposition.\n• Historical average EBITDA above $13.5m."
+},
+{
+"code": "32211",
+"text": "Summary: Aluminum Product Manufacturer\n\n• Leading manufacturer and installer of high-quality outdoor aluminum products, primarily focusing on pool cages, and other exterior products.\n• It serves both commercial and residential end markets.\n• EBITDA margins above 40%."
+},
+{
+"code": "694221",
+"text": "Summary: Orthopedic Practice\n\n• Orthopedic practice offering comprehensive orthopedic care, including the diagnosis and treatment of musculoskeletal disorders through advanced surgical procedures and pain management techniques, positioning it as a key player in the healthcare market.\n• It has EBITDA margins of c.16%, with solid profitability and a robust revenue stream.\n• The increasing prevalence of musculoskeletal conditions and the aging population drive demand for orthopedic services, providing a promising growth trajectory for the practice."
+}
+],
+"trigger_query": {
+"note": "Shape of a real mandate doc summary (gpt-4o-mini output, see buyer_match/mandate.py). Modelled on the mandate that surfaced this bug — its summary ended '...led by CEO Mark <surname>'. Target name and financials redacted; the bare 'Mark' token is what triggered the corruption.",
+"text": "- **Company Overview**: The target is a European IT services and consulting provider, founded in 1998, specializing in application development, systems integration and managed services, with a proprietary B2B integration platform.\n\n- **Sectors Served**: Clients are concentrated in logistics, retail, and manufacturing and distribution.\n\n- **Growth Strategy**: Organic growth in the low teens per annum, actively pursuing bolt-on acquisitions as part of a buy-and-build strategy.\n\n- **Ownership and Management**: Majority-owned by a private equity holder and open to a further majority stake transaction while retaining its management team, led by CEO Mark R."
+}
+}

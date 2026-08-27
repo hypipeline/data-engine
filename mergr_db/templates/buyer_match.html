@@ -546,13 +546,16 @@ function getQueryWords(q){
   var m = (q||'').toLowerCase().match(/[a-z0-9]+/g) || [];
   return [...new Set(m.filter(function(w){ return w.length>=3 && !STOP_WORDS.has(w); }))];
 }
+// ONE pass over the string, never per-word: a per-word loop re-scans the <mark> tags earlier
+// words already inserted, so a query containing the word "mark" (e.g. a CEO called Mark in a
+// mandate doc summary) rewrote its own markup into literal "<mark>...</mark>" text on the page.
+// The leading `&[a-z]+;` alternative does the same job for esc()'s entities, so query words
+// like "amp"/"quot" match the entity first and are handed back untouched.
 function highlight(escaped, words){
   if(!words.length) return escaped;
-  words.forEach(function(w){
-    var pat = new RegExp('\\b('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')\\b','gi');
-    escaped = escaped.replace(pat, '<mark>$1</mark>');
-  });
-  return escaped;
+  var alt = words.map(function(w){ return w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }).join('|');
+  var re = new RegExp('&[a-z]+;|\\b('+alt+')\\b','gi');
+  return escaped.replace(re, function(m, g1){ return g1 ? '<mark>'+g1+'</mark>' : m; });
 }
 // Post-render pass: highlight the active Filter keyword(s) wherever they appear in a freshly
 // rendered container. Substring match (mirrors the filter), skips text already inside a <mark>
