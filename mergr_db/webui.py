@@ -40,8 +40,7 @@ except OSError:
 
 # Google sign-in + per-section access control (layered *inside* the Caddy basic_auth
 # front door, which stays on as an outer defence). Adds session middleware, the access
-# guard, and the /login /auth/* /logout /admin/* routes. FAIL-SAFE: stays dormant (app
-# open, as today) until GOOGLE_CLIENT_ID is configured on the box.
+# guard, and the /login /auth/* /logout /admin/* routes.
 auth.setup_auth(app, templates)
 
 PAGE_SIZE = 50
@@ -252,38 +251,65 @@ def companies(request: Request, q: str = ""):
     order = "name" if q else "investor_count DESC NULLS LAST"
     total = query(f"SELECT count(*) n FROM companies {where}", p, one=True)["n"]
     off = (page - 1) * PAGE_SIZE
-    rows = query(f"""SELECT company_id, name, sector, city, established, investor_count
+    rows = query(f"""SELECT company_id, name, sector, city, established, investor_count, import_id
                      FROM companies {where} ORDER BY {order}
                      LIMIT {PAGE_SIZE} OFFSET {off}""", p)
     for r in rows:
         r["name_h"] = link("/company/", r["company_id"], r["name"])
+        r["import_h"] = _import_badge(r.get("import_id"))
     return render(request, "companies.html", "companies", rows=rows, q=q,
                   pager=_pager(total, page, {"q": q}))
 
 
+# ---------------------------------------------------------------- import provenance
+# Every Mergr row carries the import batch that produced it (batch 1 = the 30 Jun 2026
+# baseline). Surfacing it in the UI makes "is this new?" answerable at a glance, and makes a
+# bad import visible rather than something you have to go and query for.
+def _import_list():
+    try:
+        return query("SELECT import_id, note FROM mergr_imports ORDER BY import_id")
+    except Exception:                                   # table absent on an un-migrated db
+        return []
+
+
+def _import_badge(n):
+    if n is None:
+        return ""
+    cls = "imp-base" if n == 1 else "imp-new"
+    return f'<span class="imp {cls}" title="import batch {n}">{n}</span>'
+
+
 @app.get("/mergr/transactions", response_class=HTMLResponse)
-def transactions(request: Request, type: str = "", year: str = "", fin: str = ""):
+def transactions(request: Request, q: str = "", type: str = "", year: str = "",
+                 fin: str = "", imp: str = ""):
     page = _page(request)
     where, p = [], {}
+    if q:                                     # target name — the first thing anyone tries
+        where.append("target_name ILIKE %(q)s"); p["q"] = f"%{q}%"
     if type:
         where.append("transaction_type ILIKE %(ty)s"); p["ty"] = f"%{type}%"
     if year.isdigit():
         where.append("extract(year FROM date)=%(yr)s"); p["yr"] = int(year)
     if fin:
         where.append("deal_value IS NOT NULL")
+    if imp.isdigit():
+        where.append("import_id = %(imp)s"); p["imp"] = int(imp)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     total = query(f"SELECT count(*) n FROM transactions {clause}", p, one=True)["n"]
     off = (page - 1) * PAGE_SIZE
     rows = fmt_deal_rows(query(f"""SELECT transaction_id, target_mergr_id, date, transaction_type,
-                            target_name, deal_value, deal_value_currency, ebitda, ebitda_currency, ev_ebitda
+                            target_name, deal_value, deal_value_currency, ebitda, ebitda_currency,
+                            ev_ebitda, import_id
                      FROM transactions {clause} ORDER BY date DESC NULLS LAST
                      LIMIT {PAGE_SIZE} OFFSET {off}""", p))
     for r in rows:
         r["target_h"] = link("/company/", r["target_mergr_id"], r["target_name"])
         r["tx_h"] = link("/transaction/", r["transaction_id"], r["transaction_id"])
+        r["import_h"] = _import_badge(r.get("import_id"))
     return render(request, "transactions.html", "transactions", rows=rows,
-                  type=type, year=year, fin=fin,
-                  pager=_pager(total, page, {"type": type, "year": year, "fin": fin}))
+                  q=q, type=type, year=year, fin=fin, imp=imp, imports=_import_list(),
+                  pager=_pager(total, page, {"q": q, "type": type, "year": year,
+                                             "fin": fin, "imp": imp}))
 
 
 # ---------------------------------------------------------------- detail: deal highlights

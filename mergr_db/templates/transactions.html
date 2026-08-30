@@ -4,16 +4,24 @@
 {% block body %}
 <h1 class="page">Transactions</h1>
 <form class="toolbar" method="get">
+  <div class="field"><label>Search target name</label>
+    <input type="search" name="q" value="{{ q }}" placeholder="e.g. IntelliPay" style="min-width:220px"></div>
   <div class="field"><label>Type contains</label><input type="text" name="type" value="{{ type }}"></div>
   <div class="field"><label>Year (YYYY)</label><input type="text" name="year" value="{{ year }}" style="min-width:120px"></div>
   <label class="check"><input type="checkbox" name="fin" value="1" {{ 'checked' if fin }}> Only deals with financials</label>
+  <div class="field"><label>Import</label>
+    <select name="imp">
+      <option value="">any</option>
+      {% for i in imports %}<option value="{{ i.import_id }}" {{ 'selected' if imp == i.import_id|string }}>{{ i.import_id }} — {{ (i.note or '')[:52] }}</option>{% endfor %}
+    </select></div>
   <button type="submit">Filter</button>
-  {% if type or year or fin %}<a class="btn ghost" href="/mergr/transactions">Clear</a>{% endif %}
+  {% if q or type or year or fin or imp %}<a class="btn ghost" href="/mergr/transactions">Clear</a>{% endif %}
 </form>
 {% include "_pager.html" %}
 {{ datatable([
   ('tx_h','ID',true,true),('date','Date',false,false),('transaction_type','Type',false,false),
   ('target_h','Target',false,true),('deal_value_f','Deal value',true,false),
-  ('ebitda_f','EBITDA',true,false),('ev_ebitda_f','EV/EBITDA',true,false)], rows) }}
+  ('ebitda_f','EBITDA',true,false),('ev_ebitda_f','EV/EBITDA',true,false),
+  ('import_h','Import',true,true)], rows) }}
 {% include "_pager.html" %}
 {% endblock %}
