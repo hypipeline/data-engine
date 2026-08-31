@@ -238,18 +238,61 @@ var US_STATES = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'Califor
  RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',
  VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
  DC:'the District of Columbia',PR:'Puerto Rico'};
-var COUNTRY_NAMES = {US:'the United States',GB:'the United Kingdom',UK:'the United Kingdom',
- IE:'Ireland',DE_C:'Germany',FR:'France',NL:'the Netherlands',BE:'Belgium',LU:'Luxembourg',
- CH:'Switzerland',CA:'Canada',AU:'Australia',SG:'Singapore',NZ:'New Zealand',KY:'the Cayman Islands',
- JE:'Jersey',GG:'Guernsey',IM:'the Isle of Man',BM:'Bermuda',VG:'the British Virgin Islands'};
+// ISO 3166-1 alpha-2 -> the name used in contract wording. NorthData supplies DE/AT/CH, and
+// the wider extraction returns anything (PL, ES, RO, GB seen on softwaremind.com), so this is
+// the full list rather than a hand-picked few — an unmapped code would print as "incorporated
+// in PL". Note DE here is GERMANY: a US state is only ever read from jurisdiction_state, and
+// only when jurisdiction_country is US, so "DE" is never ambiguous between the two tables.
+var COUNTRY_NAMES = {
+ AD:'Andorra',AE:'the United Arab Emirates',AF:'Afghanistan',AG:'Antigua and Barbuda',AI:'Anguilla',
+ AL:'Albania',AM:'Armenia',AO:'Angola',AR:'Argentina',AT:'Austria',AU:'Australia',AW:'Aruba',
+ AZ:'Azerbaijan',BA:'Bosnia and Herzegovina',BB:'Barbados',BD:'Bangladesh',BE:'Belgium',
+ BF:'Burkina Faso',BG:'Bulgaria',BH:'Bahrain',BI:'Burundi',BJ:'Benin',BM:'Bermuda',BN:'Brunei',
+ BO:'Bolivia',BR:'Brazil',BS:'the Bahamas',BT:'Bhutan',BW:'Botswana',BY:'Belarus',BZ:'Belize',
+ CA:'Canada',CD:'the Democratic Republic of the Congo',CF:'the Central African Republic',
+ CG:'the Republic of the Congo',CH:'Switzerland',CI:"Côte d'Ivoire",CL:'Chile',CM:'Cameroon',
+ CN:'China',CO:'Colombia',CR:'Costa Rica',CU:'Cuba',CV:'Cabo Verde',CW:'Curaçao',CY:'Cyprus',
+ CZ:'the Czech Republic',DE:'Germany',DJ:'Djibouti',DK:'Denmark',DM:'Dominica',
+ DO:'the Dominican Republic',DZ:'Algeria',EC:'Ecuador',EE:'Estonia',EG:'Egypt',ER:'Eritrea',
+ ES:'Spain',ET:'Ethiopia',FI:'Finland',FJ:'Fiji',FM:'Micronesia',FO:'the Faroe Islands',
+ FR:'France',GA:'Gabon',GB:'the United Kingdom',GD:'Grenada',GE:'Georgia',GG:'Guernsey',
+ GH:'Ghana',GI:'Gibraltar',GL:'Greenland',GM:'the Gambia',GN:'Guinea',GQ:'Equatorial Guinea',
+ GR:'Greece',GT:'Guatemala',GW:'Guinea-Bissau',GY:'Guyana',HK:'Hong Kong',HN:'Honduras',
+ HR:'Croatia',HT:'Haiti',HU:'Hungary',ID:'Indonesia',IE:'Ireland',IL:'Israel',IM:'the Isle of Man',
+ IN:'India',IQ:'Iraq',IR:'Iran',IS:'Iceland',IT:'Italy',JE:'Jersey',JM:'Jamaica',JO:'Jordan',
+ JP:'Japan',KE:'Kenya',KG:'Kyrgyzstan',KH:'Cambodia',KM:'the Comoros',KN:'Saint Kitts and Nevis',
+ KP:'North Korea',KR:'South Korea',KW:'Kuwait',KY:'the Cayman Islands',KZ:'Kazakhstan',
+ LA:'Laos',LB:'Lebanon',LC:'Saint Lucia',LI:'Liechtenstein',LK:'Sri Lanka',LR:'Liberia',
+ LS:'Lesotho',LT:'Lithuania',LU:'Luxembourg',LV:'Latvia',LY:'Libya',MA:'Morocco',MC:'Monaco',
+ MD:'Moldova',ME:'Montenegro',MG:'Madagascar',MK:'North Macedonia',ML:'Mali',MM:'Myanmar',
+ MN:'Mongolia',MO:'Macau',MR:'Mauritania',MT:'Malta',MU:'Mauritius',MV:'the Maldives',
+ MW:'Malawi',MX:'Mexico',MY:'Malaysia',MZ:'Mozambique',NA:'Namibia',NE:'Niger',NG:'Nigeria',
+ NI:'Nicaragua',NL:'the Netherlands',NO:'Norway',NP:'Nepal',NZ:'New Zealand',OM:'Oman',
+ PA:'Panama',PE:'Peru',PG:'Papua New Guinea',PH:'the Philippines',PK:'Pakistan',PL:'Poland',
+ PR:'Puerto Rico',PT:'Portugal',PY:'Paraguay',QA:'Qatar',RO:'Romania',RS:'Serbia',RU:'Russia',
+ RW:'Rwanda',SA:'Saudi Arabia',SC:'the Seychelles',SD:'Sudan',SE:'Sweden',SG:'Singapore',
+ SI:'Slovenia',SK:'Slovakia',SL:'Sierra Leone',SM:'San Marino',SN:'Senegal',SO:'Somalia',
+ SR:'Suriname',SV:'El Salvador',SY:'Syria',SZ:'Eswatini',TC:'the Turks and Caicos Islands',
+ TD:'Chad',TG:'Togo',TH:'Thailand',TJ:'Tajikistan',TM:'Turkmenistan',TN:'Tunisia',TR:'Türkiye',
+ TT:'Trinidad and Tobago',TW:'Taiwan',TZ:'Tanzania',UA:'Ukraine',UG:'Uganda',
+ UK:'the United Kingdom',US:'the United States',UY:'Uruguay',UZ:'Uzbekistan',
+ VA:'the Vatican City',VC:'Saint Vincent and the Grenadines',VE:'Venezuela',
+ VG:'the British Virgin Islands',VI:'the U.S. Virgin Islands',VN:'Vietnam',YE:'Yemen',
+ ZA:'South Africa',ZM:'Zambia',ZW:'Zimbabwe'};
 
-// UK registrations are split by the company-number prefix: SC = Scotland, NI = Northern Ireland,
-// everything else = England and Wales. UNTESTED on live data — the NexPhase report this was
-// built against is entirely US/DE — so treat a UK line as needing a human check.
+// UK company numbers encode the register: SC/SO/SL = Scotland, NI/NC/NL = Northern Ireland,
+// everything else = England and Wales.
+//
+// FC and BR are the trap. Those are OVERSEAS companies registered as having a UK establishment —
+// the company is incorporated somewhere else entirely, so claiming UK incorporation would be
+// simply false. Seen on softwaremind.com: "Software Mind sp. z o.o." carries GB/BR009053 and is
+// a Polish company. Return '' for those and let the caller drop the clause rather than assert a
+// jurisdiction we do not actually know.
 function ukJurisdiction(regId){
-  var r = String(regId||'').toUpperCase().replace(/\s+/g,'');
-  if(r.indexOf('SC')===0) return 'Scotland';
-  if(r.indexOf('NI')===0 || r.indexOf('R')===0) return 'Northern Ireland';
+  var r = String(regId||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(r.indexOf('FC')===0 || r.indexOf('BR')===0) return '';      // overseas company, UK branch
+  if(r.indexOf('SC')===0 || r.indexOf('SO')===0 || r.indexOf('SL')===0) return 'Scotland';
+  if(r.indexOf('NI')===0 || r.indexOf('NC')===0 || r.indexOf('NL')===0) return 'Northern Ireland';
   return 'England and Wales';
 }
 
@@ -267,7 +310,10 @@ function ctrJurisdiction(a){
   }
   if(c==='GB' || c==='UK') return ukJurisdiction(a.registry_id);
   if(st) return st + (c ? ', ' + (COUNTRY_NAMES[c]||c) : '');
-  return COUNTRY_NAMES[c] || c || '';
+  // An unmapped two-letter code ("incorporated in ZZ") means nothing in a contract, so drop the
+  // clause rather than print it. Longer strings are already a name, so they pass through.
+  if(COUNTRY_NAMES[c]) return COUNTRY_NAMES[c];
+  return (c && c.length > 2) ? c : '';
 }
 
 function ctrLine(a){
