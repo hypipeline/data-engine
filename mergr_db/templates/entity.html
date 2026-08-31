@@ -22,6 +22,23 @@
   .badge-low { background:#ffeeba; color:#856404; } .badge-insufficient { background:#f8d7da; color:#721c24; }
   .badge-neutral { background:#e2e3e5; color:#383d41; }
   .report-body { padding:24px; }
+  .ctr-bar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 10px; }
+  .ctr-btn { font:inherit; font-size:12px; font-weight:600; padding:5px 11px; border-radius:6px;
+             border:1px solid #0f5f52; background:#0f5f52; color:#fff; cursor:pointer; }
+  .ctr-btn.ghost { background:#fff; color:#0f5f52; }
+  .ctr-btn:hover { filter:brightness(1.08); }
+  .ctr-btn:focus-visible { outline:2px solid #1f8a73; outline-offset:2px; }
+  .ctr-meta { font-size:12px; color:#888; }
+  .ctr-note { font-size:12px; color:#0f5f52; }
+  .ctr-pick { margin-right:8px; vertical-align:middle; }
+  .ctr-export { margin-top:12px; border-top:1px solid #eee; padding-top:10px; }
+  .ctr-lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#999;
+             font-weight:600; margin:8px 0 4px; }
+  .ctr-preview { background:#fafafa; border:1px solid #eee; border-radius:6px; padding:10px 12px;
+                 font-size:13px; line-height:1.6; }
+  .ctr-empty { color:#aaa; }
+  .ctr-out { width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+             border:1px solid #ddd; border-radius:6px; padding:8px 10px; background:#fff; resize:vertical; }
   .report-section { margin-bottom:20px; }
   .report-section h3 { font-size:13px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
   .report-row { display:flex; padding:4px 0; font-size:14px; }
@@ -197,6 +214,90 @@ function usageTotal(meta){
 // (prefilled + auto-runs), NOT the external register. US entities already carry a
 // /validate.php?... url from the port; for GB/EU we build the tool link from the
 // entity's own fields (name, registry_id, jurisdiction_country/state).
+
+// ── Contract export ───────────────────────────────────────────────────────────
+// Legal review copies affiliate lines straight into a contract schedule, in the form
+//   NEXPHASE CAPITAL FUND III-A, LP, incorporated in Delaware
+// joined by literal <br> tags. The jurisdiction has to be spelled out: the report stores
+// jurisdiction_state as a CODE ("DE"), which would otherwise read "incorporated in DE".
+var US_STATES = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
+ CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',
+ IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',
+ MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+ NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',
+ NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',
+ RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',
+ VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+ DC:'the District of Columbia',PR:'Puerto Rico'};
+var COUNTRY_NAMES = {US:'the United States',GB:'the United Kingdom',UK:'the United Kingdom',
+ IE:'Ireland',DE_C:'Germany',FR:'France',NL:'the Netherlands',BE:'Belgium',LU:'Luxembourg',
+ CH:'Switzerland',CA:'Canada',AU:'Australia',SG:'Singapore',NZ:'New Zealand',KY:'the Cayman Islands',
+ JE:'Jersey',GG:'Guernsey',IM:'the Isle of Man',BM:'Bermuda',VG:'the British Virgin Islands'};
+
+// UK registrations are split by the company-number prefix: SC = Scotland, NI = Northern Ireland,
+// everything else = England and Wales. UNTESTED on live data — the NexPhase report this was
+// built against is entirely US/DE — so treat a UK line as needing a human check.
+function ukJurisdiction(regId){
+  var r = String(regId||'').toUpperCase().replace(/\s+/g,'');
+  if(r.indexOf('SC')===0) return 'Scotland';
+  if(r.indexOf('NI')===0 || r.indexOf('R')===0) return 'Northern Ireland';
+  return 'England and Wales';
+}
+
+function ctrJurisdiction(a){
+  var c = String(a.jurisdiction_country||'').toUpperCase();
+  var st = String(a.jurisdiction_state||'').trim();
+  if(c==='US' || c==='USA'){
+    if(!st) return 'the United States';
+    return US_STATES[st.toUpperCase()] || (st + ', USA');
+  }
+  if(c==='GB' || c==='UK') return ukJurisdiction(a.registry_id);
+  if(st) return st + (c ? ', ' + (COUNTRY_NAMES[c]||c) : '');
+  return COUNTRY_NAMES[c] || c || 'an unspecified jurisdiction';
+}
+
+function ctrLine(a){
+  return (a.legal_entity_name||'') + ', incorporated in ' + ctrJurisdiction(a);
+}
+
+// Build the export text from whatever is ticked. <br> goes BETWEEN lines only, never trailing.
+function ctrBuild(){
+  if(!document.getElementById('ctr-out')) return '';   // no affiliates section on this report
+  var boxes = document.querySelectorAll('.ctr-pick:checked');
+  var lines = [];
+  boxes.forEach(function(b){ lines.push(b.getAttribute('data-line')); });
+  var out = document.getElementById('ctr-out');
+  var txt = lines.join('<br>\n');
+  if(out) out.value = txt;
+  var pv = document.getElementById('ctr-preview');
+  if(pv) pv.innerHTML = lines.length
+      ? lines.map(function(l){ return esc(l); }).join('<br>')
+      : '<span class="ctr-empty">Nothing ticked.</span>';
+  var c = document.getElementById('ctr-count');
+  if(c) c.textContent = lines.length + ' of ' + document.querySelectorAll('.ctr-pick').length + ' selected';
+  return txt;
+}
+
+function ctrCopy(){
+  var txt = ctrBuild();
+  var note = document.getElementById('ctr-note');
+  if(!txt){ note.textContent = 'Nothing ticked.'; return; }
+  // Clipboard writes are blocked in some contexts and fail silently, so the textarea below
+  // always holds the same text — a button that quietly does nothing is worse than no button.
+  navigator.clipboard.writeText(txt).then(function(){
+    note.textContent = 'Copied.';
+  }).catch(function(){
+    note.textContent = 'Copy blocked by the browser — select the text below instead.';
+    document.getElementById('ctr-out').select();
+  });
+  setTimeout(function(){ note.textContent=''; }, 4000);
+}
+
+function ctrAll(state){
+  document.querySelectorAll('.ctr-pick').forEach(function(b){ b.checked = state; });
+  ctrBuild();
+}
+
 function toolHref(o, url){
   if(url && url.indexOf('/validate.php')===0) return '/entity/tools/validate'+url.slice(13);
   if(o && o.registry_id && o.jurisdiction_country){
@@ -259,10 +360,28 @@ function renderReport(rep, meta, url){
   if(kp.length){ var s='<div class="report-section"><h3>Key People ('+kp.length+')</h3>';
     kp.forEach(function(p){ s += '<div class="evidence-item">'+esc(p.name||'')+' — '+esc(p.role||'')+'</div>'; });
     body += s+'</div>'; }
-  var ca = rep.contractable_affiliates||[];
-  if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>';
+  var ca = (rep.contractable_affiliates||[]).slice();
+  // Registry-verified entities first — those are the ones that go into a contract, and they
+  // start ticked; anything unverified sinks to the bottom and has to be opted in deliberately.
+  // Verified first, but otherwise KEEP THE REPORT'S OWN ORDER (Array.sort is stable): the
+  // extraction lists the subject's own entities before more distant ones, and alphabetising
+  // would float an unrelated predecessor firm above the funds the contract is actually about.
+  ca.sort(function(x, y){
+    return (x.registry_validated ? 0 : 1) - (y.registry_validated ? 0 : 1);
+  });
+  if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>'
+      + '<div class="ctr-bar">'
+      +   '<button type="button" class="ctr-btn" onclick="ctrCopy()">Copy for contract</button>'
+      +   '<button type="button" class="ctr-btn ghost" onclick="ctrAll(true)">Tick all</button>'
+      +   '<button type="button" class="ctr-btn ghost" onclick="ctrAll(false)">Untick all</button>'
+      +   '<span id="ctr-count" class="ctr-meta"></span><span id="ctr-note" class="ctr-note"></span>'
+      + '</div>';
     ca.forEach(function(a){
-      var line = '<div class="evidence-item"><strong>'+esc(a.legal_entity_name||'')+'</strong>';
+      var line = '<div class="evidence-item">'
+        + '<input type="checkbox" class="ctr-pick" onchange="ctrBuild()"'
+        +   (a.registry_validated ? ' checked' : '')
+        +   ' data-line="'+esc(ctrLine(a))+'">'
+        + '<strong>'+esc(a.legal_entity_name||'')+'</strong>';
       var ah = toolHref(a, a.validation_url);
       if(a.registry_validated){
         line += ah
@@ -295,6 +414,14 @@ function renderReport(rep, meta, url){
       if(a.evidence) line += '<div style="color:#aaa;margin-left:1em;font-size:0.85em;">'+esc(a.evidence)+'</div>';
       s += line+'</div>';
     });
+    // Viewer: the rendered lines as they will appear in the contract, plus the raw text that
+    // gets copied (with the literal <br> tags visible, since that is what goes on the clipboard).
+    s += '<div class="ctr-export">'
+      +   '<div class="ctr-lbl">Preview — how it will read in the contract</div>'
+      +   '<div id="ctr-preview" class="ctr-preview"></div>'
+      +   '<div class="ctr-lbl">Text to paste</div>'
+      +   '<textarea id="ctr-out" class="ctr-out" rows="6" readonly onclick="this.select()"></textarea>'
+      + '</div>';
     body += s+'</div>'; }
   var oe = rep.other_entities||[];
   if(oe.length){ var s='<div class="report-section"><h3>Other Entities Considered ('+oe.length+')</h3>';
@@ -370,7 +497,7 @@ function runLookup(u, push){
   var rf=(document.getElementById('refresh')&&document.getElementById('refresh').checked)?'&refresh=1':'';
   var es=new EventSource(EBASE+'/lookup/stream?url='+encodeURIComponent(u)+rf);
   es.addEventListener('log', function(ev){ var e=JSON.parse(ev.data); var d=document.getElementById('elog'); d.insertAdjacentHTML('beforeend', renderEntry(e)); d.scrollTop=d.scrollHeight; });
-  es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, r.meta||{}, u);
+  es.addEventListener('result', function(ev){ var r=JSON.parse(ev.data); document.getElementById('report').innerHTML=renderReport(r.report||{}, r.meta||{}, u); ctrBuild();
     var m=r.meta||{}; document.getElementById('meta').innerHTML='Done · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.input_tokens||0)+'/'+(m.output_tokens||0)+' tokens · '+(m.model||''); es.close(); loadHistory(); loadRunTabs(domainOf(u), null); });
   es.addEventListener('error', function(ev){ try{ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Error: '+esc(JSON.parse(ev.data))+'</span>'; }catch(_){ document.getElementById('meta').innerHTML='<span style="color:#dc2626">Stream error</span>'; } es.close(); });
   es.addEventListener('done', function(){ es.close(); });
@@ -415,6 +542,7 @@ function renderStored(res, url){
   (res.progress_log||[]).forEach(function(e){ try{ d.insertAdjacentHTML('beforeend', renderEntry(e)); }catch(_){} });
   d.scrollTop=d.scrollHeight;
   document.getElementById('report').innerHTML=renderReport(res.report||{}, res.meta||{}, url);
+  ctrBuild();
   var m=res.meta||{};
   document.getElementById('meta').innerHTML='Historical run · '+(m.total_time_s||'?')+'s · $'+(m.cost_usd||'?')+' · '+(m.model||'')
     +(res.cached_at?' · '+esc(fmtWhen(res.cached_at)):'');
@@ -474,6 +602,7 @@ function loadModelResult(cid, model, url, endpoint, label){
         rpt.innerHTML='<div class="report-card conf-insufficient"><div class="report-header"><div class="report-entity">Model output was not valid JSON</div></div><div class="report-body"><pre style="white-space:pre-wrap;word-break:break-word;font-size:12px">'+esc((res.raw||'').slice(0,6000))+'</pre></div></div>'; return; }
       var meta={ model:model, cost_usd:res.cost_usd, total_time_s:(res.latency_ms!=null?(res.latency_ms/1000).toFixed(1):null) };
       rpt.innerHTML = renderReport(report, meta, url);
+      ctrBuild();
     })
     .catch(function(){ document.getElementById('report').innerHTML='<div class="report-card"><div class="report-body">Failed to load result.</div></div>'; });
 }
