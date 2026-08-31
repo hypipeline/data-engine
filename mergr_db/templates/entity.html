@@ -39,6 +39,15 @@
   .ctr-empty { color:#aaa; }
   .ctr-out { width:100%; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
              border:1px solid #ddd; border-radius:6px; padding:8px 10px; background:#fff; resize:vertical; }
+  .ctr-bar { position:relative; }
+  .ctr-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:40; width:min(560px,92vw);
+             background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px 14px;
+             box-shadow:0 8px 28px rgba(0,0,0,.14); }
+  .ctr-pop-head { display:flex; justify-content:space-between; align-items:center; font-size:11px;
+                  text-transform:uppercase; letter-spacing:.5px; color:#999; font-weight:600; margin-bottom:8px; }
+  .ctr-x { border:0; background:none; font-size:18px; line-height:1; color:#999; cursor:pointer; padding:0 2px; }
+  .ctr-x:hover { color:#333; }
+  .ctr-preview { max-height:320px; overflow:auto; }
   .report-section { margin-bottom:20px; }
   .report-section h3 { font-size:13px; font-weight:600; color:#888; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
   .report-row { display:flex; padding:4px 0; font-size:14px; }
@@ -244,30 +253,39 @@ function ukJurisdiction(regId){
   return 'England and Wales';
 }
 
+// Returns '' when we cannot name a real incorporating jurisdiction — the line then carries the
+// entity name alone. Two cases produce '': nothing recorded at all, and "US" with no state.
+// A company does not incorporate in "the United States", it incorporates in Delaware or Nevada,
+// so "incorporated in the United States" is not contract-grade wording and is better omitted
+// than asserted.
 function ctrJurisdiction(a){
   var c = String(a.jurisdiction_country||'').toUpperCase();
   var st = String(a.jurisdiction_state||'').trim();
   if(c==='US' || c==='USA'){
-    if(!st) return 'the United States';
+    if(!st) return '';
     return US_STATES[st.toUpperCase()] || (st + ', USA');
   }
   if(c==='GB' || c==='UK') return ukJurisdiction(a.registry_id);
   if(st) return st + (c ? ', ' + (COUNTRY_NAMES[c]||c) : '');
-  return COUNTRY_NAMES[c] || c || 'an unspecified jurisdiction';
+  return COUNTRY_NAMES[c] || c || '';
 }
 
 function ctrLine(a){
-  return (a.legal_entity_name||'') + ', incorporated in ' + ctrJurisdiction(a);
+  var j = ctrJurisdiction(a);
+  return (a.legal_entity_name||'') + (j ? ', incorporated in ' + j : '');
 }
 
-// Build the export text from whatever is ticked. <br> goes BETWEEN lines only, never trailing.
+// Build the export from whatever is ticked. The clipboard carries TWO flavours: text/plain
+// with real newlines, and text/html with <br> between lines. Pasting plain text into a WYSIWYG
+// usually yields separate <p> paragraphs (wider spacing than intended); the HTML flavour makes
+// the editor produce true line breaks. No literal "<br>" is ever shown to the user.
 function ctrBuild(){
   if(!document.getElementById('ctr-out')) return '';   // no affiliates section on this report
   var boxes = document.querySelectorAll('.ctr-pick:checked');
   var lines = [];
   boxes.forEach(function(b){ lines.push(b.getAttribute('data-line')); });
   var out = document.getElementById('ctr-out');
-  var txt = lines.join('<br>\n');
+  var txt = lines.join('\n');                       // what a human sees and can select
   if(out) out.value = txt;
   var pv = document.getElementById('ctr-preview');
   if(pv) pv.innerHTML = lines.length
@@ -282,16 +300,44 @@ function ctrCopy(){
   var txt = ctrBuild();
   var note = document.getElementById('ctr-note');
   if(!txt){ note.textContent = 'Nothing ticked.'; return; }
-  // Clipboard writes are blocked in some contexts and fail silently, so the textarea below
-  // always holds the same text — a button that quietly does nothing is worse than no button.
-  navigator.clipboard.writeText(txt).then(function(){
-    note.textContent = 'Copied.';
-  }).catch(function(){
-    note.textContent = 'Copy blocked by the browser — select the text below instead.';
-    document.getElementById('ctr-out').select();
-  });
-  setTimeout(function(){ note.textContent=''; }, 4000);
+  var htmlTxt = txt.split('\n').map(function(l){ return esc(l); }).join('<br>');
+  var ok = function(){ note.textContent = 'Copied.'; setTimeout(function(){ note.textContent=''; }, 4000); };
+  // A copy that silently does nothing is worse than no button, so every failure path either
+  // falls back or tells the user to select the text themselves.
+  var fallback = function(){
+    navigator.clipboard.writeText(txt).then(ok).catch(function(){
+      note.textContent = 'Copy blocked by the browser — select the text below instead.';
+      var o = document.getElementById('ctr-out'); if(o) o.select();
+    });
+  };
+  if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+    try{
+      navigator.clipboard.write([new ClipboardItem({
+        'text/html':  new Blob([htmlTxt], {type:'text/html'}),
+        'text/plain': new Blob([txt],     {type:'text/plain'})
+      })]).then(ok).catch(fallback);
+    }catch(e){ fallback(); }
+  } else { fallback(); }
 }
+
+function ctrTogglePreview(ev, force){
+  if(ev) ev.stopPropagation();
+  var pop = document.getElementById('ctr-pop'), btn = document.getElementById('ctr-pv-btn');
+  if(!pop) return;
+  var show = (force === undefined) ? pop.hidden : force;
+  pop.hidden = !show;
+  if(btn) btn.setAttribute('aria-expanded', String(show));
+  if(show) ctrBuild();
+}
+
+// Close on click-away / Escape, so the popover never strands itself over the list.
+document.addEventListener('click', function(e){
+  var pop = document.getElementById('ctr-pop');
+  if(pop && !pop.hidden && !pop.contains(e.target) && e.target.id !== 'ctr-pv-btn') ctrTogglePreview(null, false);
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') ctrTogglePreview(null, false);
+});
 
 function ctrAll(state){
   document.querySelectorAll('.ctr-pick').forEach(function(b){ b.checked = state; });
@@ -372,9 +418,19 @@ function renderReport(rep, meta, url){
   if(ca.length){ var s='<div class="report-section"><h3>Contractable Affiliates ('+ca.length+')</h3>'
       + '<div class="ctr-bar">'
       +   '<button type="button" class="ctr-btn" onclick="ctrCopy()">Copy for contract</button>'
+      +   '<button type="button" class="ctr-btn ghost" id="ctr-pv-btn" aria-expanded="false"'
+      +     ' onclick="ctrTogglePreview(event)">Preview</button>'
       +   '<button type="button" class="ctr-btn ghost" onclick="ctrAll(true)">Tick all</button>'
       +   '<button type="button" class="ctr-btn ghost" onclick="ctrAll(false)">Untick all</button>'
       +   '<span id="ctr-count" class="ctr-meta"></span><span id="ctr-note" class="ctr-note"></span>'
+      +   '<div id="ctr-pop" class="ctr-pop" hidden>'
+      +     '<div class="ctr-pop-head">How it will read in the contract'
+      +       '<button type="button" class="ctr-x" onclick="ctrTogglePreview(event, false)"'
+      +         ' aria-label="Close preview">&times;</button></div>'
+      +     '<div id="ctr-preview" class="ctr-preview"></div>'
+      +     '<div class="ctr-lbl">Text to paste &mdash; click to select</div>'
+      +     '<textarea id="ctr-out" class="ctr-out" rows="4" readonly onclick="this.select()"></textarea>'
+      +   '</div>'
       + '</div>';
     ca.forEach(function(a){
       var line = '<div class="evidence-item">'
@@ -414,14 +470,6 @@ function renderReport(rep, meta, url){
       if(a.evidence) line += '<div style="color:#aaa;margin-left:1em;font-size:0.85em;">'+esc(a.evidence)+'</div>';
       s += line+'</div>';
     });
-    // Viewer: the rendered lines as they will appear in the contract, plus the raw text that
-    // gets copied (with the literal <br> tags visible, since that is what goes on the clipboard).
-    s += '<div class="ctr-export">'
-      +   '<div class="ctr-lbl">Preview — how it will read in the contract</div>'
-      +   '<div id="ctr-preview" class="ctr-preview"></div>'
-      +   '<div class="ctr-lbl">Text to paste</div>'
-      +   '<textarea id="ctr-out" class="ctr-out" rows="6" readonly onclick="this.select()"></textarea>'
-      + '</div>';
     body += s+'</div>'; }
   var oe = rep.other_entities||[];
   if(oe.length){ var s='<div class="report-section"><h3>Other Entities Considered ('+oe.length+')</h3>';
