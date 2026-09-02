@@ -45,7 +45,7 @@ def _why_not(ddb, email):
     return f"delivery is '{delivery}'"
 
 
-def unsandbox(conn, email, actor):
+def unsandbox(conn, email, actor, note=None):
     """Lift a sandbox: DynamoDB first, then the replica.
 
     Upstream is written first and conditionally. If the write is refused the
@@ -54,6 +54,10 @@ def unsandbox(conn, email, actor):
     Only `sandboxed` lifts. A spam complaint is deliberately not liftable here —
     the record is kept, and re-mailing someone who pressed the spam button is how
     a sending domain is lost.
+
+    The audit row is written here rather than by the caller: a privileged upstream
+    write that leaves no trace is the thing worth preventing, and this is not the
+    only possible caller. `note` carries caller context (e.g. an impersonation).
     """
     email = (email or "").strip().lower()
     if not email:
@@ -101,5 +105,11 @@ def unsandbox(conn, email, actor):
              WHERE email=%s
         """, (now, actor, email))
     conn.commit()
+
+    # Written after the row is cleared, so it keeps what the row no longer holds.
+    import auth
+    auth.audit(actor, "tdc.unsandbox", email,
+               f"was {prior[0] or 'sandboxed'}: {prior[1] or 'no reason recorded'}"
+               + (f" ({note})" if note else ""))
 
     return {"email": email, "prior_bounce_type": prior[0], "prior_bounce_reason": prior[1]}

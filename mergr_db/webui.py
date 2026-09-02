@@ -1343,11 +1343,9 @@ def tdc_unsandbox(request: Request, email: str = Form(...)):
     eff = (auth.current_user(request) or {}).get("email")
     conn = POOL.getconn()
     try:
-        r = tdc_admin.unsandbox(conn, email, actor)
+        r = tdc_admin.unsandbox(conn, email, actor,
+                                note=f"as {eff}" if eff and eff != actor else None)
         msg = f"Sandbox lifted for {r['email']} — mailable again."
-        auth._audit(actor, "tdc.unsandbox", r["email"],
-                    f"was {r['prior_bounce_type'] or 'sandboxed'}: {r['prior_bounce_reason'] or 'no reason recorded'}"
-                    + (f" (as {eff})" if eff and eff != actor else ""))
     except tdc_admin.NotLiftable as e:
         msg = f"Not lifted — {e}"
     except Exception as e:

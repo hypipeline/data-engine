@@ -120,6 +120,12 @@ def _audit(actor, action, target=None, detail=None):
         pass  # auditing must never break a request
 
 
+def audit(actor, action, target=None, detail=None):
+    """Record a privileged action. Public entry point for other sub-apps; never
+    raises, so a caller can log unconditionally without guarding the call."""
+    _audit(actor, action, target, detail)
+
+
 def _remember_user(email, name):
     try:
         conn = _pg()
