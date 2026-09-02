@@ -29,11 +29,34 @@ async def scrape(ctx,tid):
             if r and r.status in (301,302,404): return tid,None
             await asyncio.sleep(0.2); h=await pg.content()
             if "awswaf" in h:
-                for _ in range(6):
-                    await asyncio.sleep(5); h=await pg.content()
-                    if "awswaf" not in h: break
+                # Re-reading content only helps if the challenge resolves in-page; when it does
+                # not, RELOAD. Sitting on a stale challenge shell is how 177 deals were recorded
+                # as party-less while their live pages had an investor listed.
+                for attempt_waf in range(8):
+                    await asyncio.sleep(5)
+                    h = await pg.content()
+                    if "awswaf" not in h:
+                        break
+                    if attempt_waf in (3, 6):
+                        try:
+                            await pg.reload(wait_until="domcontentloaded", timeout=45000)
+                            h = await pg.content()
+                        except Exception:
+                            pass
+                        if "awswaf" not in h:
+                            break
                 else: return tid,None
-            return tid, parse_txn_parties(h)
+            parties = parse_txn_parties(h)
+            # A page with NO party sections at all is almost always a bad fetch, not a deal
+            # with no parties: every real transaction page carries at least an Investor(s) or
+            # a Seller(s) block. Recording the empty result would make a transient failure
+            # look like a permanent fact — verified 29 Aug 2026 on txn 98288, stored as
+            # "no parties" while the live page shows Investor(s): Cambrex. 177 of 33,507
+            # scrapes were poisoned this way. Return None so the id is simply retried.
+            if not parties.get("acquirers") and not parties.get("sellers") \
+                    and "tra-section" not in h:
+                return tid, None
+            return tid, parties
         except Exception:
             if attempt==0:
                 await pg.close(); await asyncio.sleep(0.5); continue

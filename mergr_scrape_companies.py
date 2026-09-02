@@ -384,14 +384,44 @@ JS_EXTRACT = """() => {
 }"""
 
 
+# An HTTP error page still renders a <title>, which the parser reads as the company name —
+# "500 Internal Service Error" is a truthy name, so without this guard the junk gets SAVED and
+# counted as a real record. Verified 28 Aug 2026: 269 such records written in one run.
+ERROR_PAGE_NAMES = {
+    "500 internal service error", "500 internal server error", "502 bad gateway",
+    "503 service unavailable", "504 gateway time-out", "504 gateway timeout",
+    "404 not found", "403 forbidden", "access denied", "bad gateway",
+    "javascript is disabled", "page not found", "too many requests",
+}
+
+
+def is_error_page(data):
+    """True when the parsed 'record' is really an error page wearing a company's id."""
+    if not data:
+        return True
+    if (data.get("name") or "").strip().lower() in ERROR_PAGE_NAMES:
+        return True
+    # a real listing always carries structure beyond a title; an error shell never does
+    return not any(data.get(k) for k in ("sector", "url", "description", "street", "city"))
+
+
 async def fetch_company(pg, company_id):
-    """Fetch and parse a single company page using a reusable tab."""
+    """Fetch and parse a single company page using a reusable tab.
+
+    Statuses are split into PERMANENT (`redirect` — the id does not exist, safe to skip-list)
+    and TRANSIENT (everything else — must stay retryable). Getting that wrong is expensive:
+    a transient failure written to the skip file blacklists a real company forever.
+    """
     try:
         url = f"https://mergr.com/company/{company_id}"
         response = await pg.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-        # Redirected = invalid ID
         if pg.url != url and "/company/" not in pg.url:
+            # A redirect to LOGIN means our session died, not that the id is dead. Treating it
+            # as dead would blacklist every remaining id in the run — the single most damaging
+            # failure this scraper can have. Session loss is transient and must halt the run.
+            if any(w in pg.url.lower() for w in ("login", "signin", "sign-in", "auth", "subscribe", "pricing")):
+                return company_id, None, "session-lost"
             return company_id, None, "redirect"
 
         html = await pg.content()
@@ -405,7 +435,9 @@ async def fetch_company(pg, company_id):
 
         data = parse_company_page(html, company_id)
         if data and data.get("name"):
-            return company_id, data, "ok"
+            # TRANSIENT, never skip-listed: Mergr serves 5xx pages intermittently and the
+            # parser reads their title as a company name.
+            return (company_id, None, "errorpage") if is_error_page(data) else (company_id, data, "ok")
 
         return company_id, None, "nodata"
     except Exception as e:
@@ -473,6 +505,11 @@ async def main():
         waf_hits = 0
         errors = 0
         start = time.time()
+        # A genuine gap in Mergr's id space is small (largest measured: 172 consecutive).
+        # Anything far beyond that is an outage or a dead session, not dead ids.
+        MAX_CONSECUTIVE_REDIRECTS = 600
+        consecutive_redirects = 0
+        errorpages = 0
         skip_log = open(SKIP_FILE, "a")
         queue = asyncio.Queue()
         for cid in todo:
@@ -495,7 +532,36 @@ async def main():
                     sector = data.get("sector", "")
                     print(f"[{scraped}] ID {cid}: {name} | {sector}", flush=True)
                     errors = 0
+                    consecutive_redirects = 0        # a live id proves the session is alive
+                elif status == "session-lost":
+                    # Never skip-list these, and stop immediately: every id fetched from here on
+                    # would redirect to login and look "dead". Re-run after logging in again.
+                    print(f"\n*** SESSION LOST at id {cid} — redirected to login/paywall.", flush=True)
+                    print("*** Stopping WITHOUT writing to the skip file. Nothing is blacklisted.",
+                          flush=True)
+                    print("*** Re-run once no other Mergr session is active.", flush=True)
+                    raise SystemExit(2)
+                elif status == "errorpage":
+                    # Mergr served an HTTP error page. Transient — retried on the next run
+                    # because it is neither written to disk nor to the skip file.
+                    errorpages += 1
+                    if errorpages % 25 == 0:
+                        print(f"  [ID {cid}] error pages: {errorpages} (not skip-listed)", flush=True)
+                    if errorpages >= 200 and scraped == 0:
+                        print("\n*** Nothing but error pages — Mergr looks unhealthy. Stopping.", flush=True)
+                        raise SystemExit(3)
                 elif status == "redirect":
+                    # CIRCUIT BREAKER: a long unbroken run of redirects is far more likely to be a
+                    # dead session or an outage than a genuine block of non-existent ids, and each
+                    # one written here is a PERMANENT blacklist entry. Stop instead of poisoning.
+                    consecutive_redirects += 1
+                    if consecutive_redirects >= MAX_CONSECUTIVE_REDIRECTS:
+                        print(f"\n*** {consecutive_redirects} consecutive redirects at id {cid}.",
+                              flush=True)
+                        print("*** That looks like an outage or a lost session, not dead ids.", flush=True)
+                        print("*** Stopping; the last entries written may need re-checking with", flush=True)
+                        print("***   python3 mergr_delta.py recheck --range <lo>-<hi>", flush=True)
+                        raise SystemExit(4)
                     skip_log.write(f"{cid}\n")
                     skipped += 1
                     if scraped == 0 or skipped % 500 == 0:

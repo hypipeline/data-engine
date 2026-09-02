@@ -91,10 +91,41 @@ def extract_icon_text(small_tag, icon_class):
     return val if val else None
 
 
+def _column_index(soup):
+    """Map the listing's columns by their HEADER TEXT rather than by fixed position.
+
+    The old parser hard-coded tds[3]=type, tds[4]=acquirer, tds[5]=seller. Any row whose cell
+    count differs shifts every field sideways, and the damage is silent: the acquirer lands in
+    the seller column and the deal ends up with NO acquirer at all. Measured 29 Aug 2026 —
+    33,507 deals (15% of the database) had no acquirer, and 646 had the same entity filed under
+    both roles. Mergr's own listing shows the acquirer plainly (De La Rue -> Atlas Holdings), so
+    the data was never missing; we were reading the wrong cell.
+
+    Returns {"date": i, "target": i, "type": i, "acquirer": i, "seller": i} for whichever
+    columns are present, or {} when no header row can be found (caller falls back to positions).
+    """
+    want = {"date": "date", "target": "target", "transaction type": "type",
+            "acquirer": "acquirer", "seller": "seller"}
+    for thead in soup.find_all("thead"):
+        cells = thead.find_all(["th", "td"])
+        if not cells:
+            continue
+        idx = {}
+        for i, c in enumerate(cells):
+            head = " ".join(c.get_text(" ", strip=True).split()).lower()
+            for label, key in want.items():
+                if head.startswith(label):
+                    idx.setdefault(key, i)
+        if "acquirer" in idx and "target" in idx:
+            return idx
+    return {}
+
+
 def parse_transaction_rows(html):
     """Parse all transaction rows from a listing page."""
     soup = BeautifulSoup(html, "html.parser")
     transactions = []
+    col = _column_index(soup)
 
     for tr in soup.find_all("tr", class_="transaction-row-main"):
         txn = {}
@@ -139,26 +170,45 @@ def parse_transaction_rows(html):
                 if desc:
                     txn["target"]["description"] = desc[:1000]
 
-        # Transaction type & value
-        if len(tds) > 3:
-            type_span = tds[3].find("span", class_="text-primary")
+        # ACQUIRER / SELLER ARE THE LAST TWO CELLS — never a fixed index.
+        #
+        # A row that carries a deal value renders EXTRA <td>s (6 cells normally, 7-8 with a
+        # value box), which shifts acquirer and seller one or two places right. The old parser
+        # read fixed tds[4]/tds[5] and so, on precisely the rows big enough to disclose a value,
+        # picked up "$1,500" instead of the buyer and recorded NO ACQUIRER. Measured 29 Aug 2026:
+        # 33,507 deals (15% of the database) had no acquirer, and one listing page alone went
+        # from 21 to 24 acquirers under this fix — ZF's ADAS unit -> Harman International,
+        # Sound United -> Harman (seller Masimo), Nilfisk -> Freudenberg, all previously lost.
+        # The header row has only one layout while the body rows have several, so mapping by
+        # header does not help either; counting from the right does.
+        i_type = col.get("type", 3)
+        i_acq = len(tds) - 2
+        i_sell = len(tds) - 1
+        # the type label can also drift right with the value cell, so find it by class
+        type_cell = None
+        for td in tds[1:i_acq]:
+            if td.find("span", class_="text-primary"):
+                type_cell = td
+                break
+        if type_cell is not None:
+            type_span = type_cell.find("span", class_="text-primary")
             if type_span:
                 txn["transaction_type"] = type_span.get_text(strip=True)
-            value_text = tds[3].get_text(strip=True)
+            value_text = type_cell.get_text(strip=True)
             if txn.get("transaction_type"):
                 value_text = value_text.replace(txn["transaction_type"], "").strip()
             if value_text and value_text != "-":
                 txn["value"] = value_text
 
         # Acquirer
-        if len(tds) > 4:
-            acquirers = parse_entity(tds[4])
+        if i_acq > 2:
+            acquirers = parse_entity(tds[i_acq])
             if acquirers:
                 txn["acquirers"] = acquirers
 
-        # Seller
-        if len(tds) > 5:
-            sellers = parse_entity(tds[5])
+        # Seller  (legitimately empty on a take-private: there is no selling shareholder)
+        if i_sell > 2:
+            sellers = parse_entity(tds[i_sell])
             if sellers:
                 txn["sellers"] = sellers
 
