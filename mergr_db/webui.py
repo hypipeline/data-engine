@@ -21,6 +21,8 @@ from fastapi.templating import Jinja2Templates
 
 import entity_client
 import li_profile_finder as lpf
+from pedb import service as pedb_svc
+from pedb import sync as pedb_sync
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -1297,3 +1299,40 @@ def bm_run_sync():
             yield f"event: {kind}\ndata: {json.dumps(data)}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------- PE DB
+# Backend for The Deal Chronicle. Subscribers are a replica of the DynamoDB table
+# the public sign-up Lambda writes to — DynamoDB stays the source of truth so
+# sign-ups keep working when this box is down.
+
+@app.get("/pedb", response_class=HTMLResponse)
+def pedb_page(request: Request, flash: str = ""):
+    conn = POOL.getconn()
+    try:
+        ctx = dict(
+            c=pedb_svc.counts(conn),
+            domains=pedb_svc.by_domain_linked(conn, 50),
+            recent=pedb_svc.recent(conn, 50),
+            days=pedb_svc.signups_by_day(conn, 30),
+            last=pedb_svc.last_sync(conn),
+        )
+    finally:
+        POOL.putconn(conn)
+    return render(request, "pedb.html", "pedb",
+                  table=pedb_sync.TABLE, region=pedb_sync.REGION, flash=flash, **ctx)
+
+
+@app.post("/pedb/sync")
+def pedb_sync_now(request: Request):
+    """Pull DynamoDB -> Postgres. Small table, so it runs inline rather than as a job."""
+    conn = POOL.getconn()
+    try:
+        r = pedb_sync.run_sync(conn=conn)
+        msg = (f"Synced — {r['scanned']} scanned, {r['inserted']} new, "
+               f"{r['updated']} updated, {r['removed']} removed.")
+    except Exception as e:
+        msg = f"Sync failed: {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/pedb?{urlencode({'flash': msg})}", status_code=303)

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}PE DB — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* PE DB — page-scoped. Backend for The Deal Chronicle. */
+  .pd-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .pd-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+    background:var(--border);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden;margin-bottom:18px}
+  .pd-stat{background:var(--panel);padding:14px 16px}
+  .pd-stat .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    display:block;margin-bottom:6px}
+  .pd-stat .v{font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .pd-stat .v.warn{color:#b0281f}
+  .pd-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .pd-head h2{margin:0;font-size:15px}
+  .pd-head .right{margin-left:auto;font-size:12px;color:var(--muted)}
+  .pd-spark{display:flex;align-items:flex-end;gap:2px;height:56px;margin-top:4px}
+  .pd-spark i{flex:1;background:var(--border);min-height:2px;border-radius:1px 1px 0 0;display:block}
+  .pd-spark i.has{background:#b0281f}
+  .pd-spark-x{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px}
+  table.pd{width:100%;border-collapse:collapse}
+  table.pd th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border)}
+  table.pd td{padding:6px 10px;border-bottom:1px solid var(--border);font-size:13px}
+  table.pd td.n{text-align:right;font-variant-numeric:tabular-nums;width:80px}
+  .pill{font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;
+    border-radius:3px;border:1px solid var(--border)}
+  .pill.confirmed{background:#b0281f;border-color:#b0281f;color:#fff}
+  .pill.pending{border-color:var(--muted);color:var(--muted)}
+  .pill.unsubscribed{border-style:dashed;color:var(--muted)}
+  .muted{color:var(--muted)}
+  .pd-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pd-sync .out{font-size:12px;color:var(--muted)}
+  .pd-empty{color:var(--muted);font-size:13px;padding:10px 0}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="margin:0 0 4px">PE DB</h1>
+<p class="muted" style="margin:0 0 18px;font-size:13px">
+  Subscribers to The Dispatch — a replica of the DynamoDB table the public sign-up writes to.
+  DynamoDB stays the source of truth; this copy exists so it can be queried and joined.</p>
+
+<div class="pd-panel">
+  <div class="pd-head">
+    <h2>Sync</h2>
+    <span class="right">
+      {% if last %}
+        last run {{ last.started_at.strftime('%d %b %H:%M') if last.started_at }} —
+        {% if last.ok %}{{ last.scanned }} scanned, {{ last.inserted }} new, {{ last.updated }} updated{% else %}
+        <span style="color:#b0281f">failed: {{ last.error }}</span>{% endif %}
+      {% else %}never run{% endif %}
+    </span>
+  </div>
+  <form method="post" action="/pedb/sync" class="pd-sync">
+    <button class="btn" type="submit">Sync from DynamoDB</button>
+    <span class="out">reads {{ table }} in {{ region }} · IAM instance role, no stored credentials</span>
+  </form>
+  {% if flash %}<p class="out" style="margin:10px 0 0">{{ flash }}</p>{% endif %}
+</div>
+
+<div class="pd-stats">
+  <div class="pd-stat"><span class="k">Confirmed</span><span class="v">{{ c.confirmed or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Pending</span><span class="v">{{ c.pending or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Unsubscribed</span><span class="v">{{ c.unsubscribed or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Confirm rate</span><span class="v">{{ c.confirm_rate or 0 }}%</span></div>
+  <div class="pd-stat"><span class="k">Last 7 days</span><span class="v">{{ c.last7 or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Last 30 days</span><span class="v">{{ c.last30 or 0 }}</span></div>
+  {% if c.unsynced %}<div class="pd-stat"><span class="k">Not in SendGrid</span>
+    <span class="v warn">{{ c.unsynced }}</span></div>{% endif %}
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Sign-ups, last 30 days</h2></div>
+  {% set mx = (days | map(attribute='signups') | max) or 1 %}
+  <div class="pd-spark">
+    {% for d in days %}<i class="{{ 'has' if d.signups }}"
+      style="height:{{ (4 + (d.signups / mx * 52)) if d.signups else 2 }}px"
+      title="{{ d.day }} — {{ d.signups }} sign-up{{ '' if d.signups == 1 else 's' }}"></i>{% endfor %}
+  </div>
+  <div class="pd-spark-x">
+    <span>{{ days[0].day if days }}</span><span>{{ days[-1].day if days }}</span>
+  </div>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Subscribers by firm</h2>
+    <span class="right">matched against Mergr where the domain is known</span></div>
+  {% if domains %}
+  <table class="pd">
+    <thead><tr><th>Domain</th><th class="n">Confirmed</th><th class="n">Total</th>
+      <th>Known to Mergr as</th></tr></thead>
+    <tbody>
+      {% for d in domains %}
+      <tr>
+        <td>{{ d.domain }}</td>
+        <td class="n">{{ d.confirmed }}</td>
+        <td class="n">{{ d.subs }}</td>
+        <td>
+          {% if d.firm_id %}<a href="/mergr/firm/{{ d.firm_id }}">{{ d.firm_name }}</a>
+            <span class="muted">· firm</span>
+          {% elif d.company_id %}<a href="/mergr/company/{{ d.company_id }}">{{ d.company_name }}</a>
+            <span class="muted">· company</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="pd-empty">No subscribers yet. Run a sync.</p>{% endif %}
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Recent sign-ups</h2></div>
+  {% if recent %}
+  <table class="pd">
+    <thead><tr><th>Email</th><th>Status</th><th>Signed up</th><th>Confirmed</th><th></th></tr></thead>
+    <tbody>
+      {% for r in recent %}
+      <tr>
+        <td>{{ r.email }}</td>
+        <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
+        <td class="muted">{{ r.created_at.strftime('%d %b %H:%M') if r.created_at else '—' }}</td>
+        <td class="muted">{{ r.confirmed_at.strftime('%d %b %H:%M') if r.confirmed_at else '—' }}</td>
+        <td>{% if r.sg_synced is false %}<span class="muted" title="{{ r.sg_error }}">not in SendGrid</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="pd-empty">Nothing yet.</p>{% endif %}
+</div>
+{% endblock %}

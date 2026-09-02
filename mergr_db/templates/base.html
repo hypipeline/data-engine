@@ -21,7 +21,7 @@
     <a class="brand" href="/"><span class="dot"></span> Data Engine</a>
     {% if tool %}
       <span class="topsep">/</span>
-      <a class="toolname" href="/{{ tool }}" style="text-decoration:none;color:inherit">{{ {'mergr':'Mergr','entity':'Entity Lookup','buyer-match':'Buyer Match','linkedin':'LinkedIn Finder','linkedin-profiles':'LinkedIn Profile Finder'}[tool] }}</a>
+      <a class="toolname" href="/{{ tool }}" style="text-decoration:none;color:inherit">{{ {'mergr':'Mergr','entity':'Entity Lookup','buyer-match':'Buyer Match','linkedin':'LinkedIn Finder','linkedin-profiles':'LinkedIn Profile Finder','pedb':'PE DB'}[tool] }}</a>
     {% endif %}
     <nav class="nav">
       {% if tool == 'mergr' %}
@@ -42,6 +42,7 @@
       {% if _al is none or 'linkedin' in _al %}<a href="/linkedin"    class="tool {{ 'on' if tool=='linkedin' }}">LinkedIn Finder</a>{% endif %}
       {% if _al is none or 'linkedin-profiles' in _al %}<a href="/linkedin-profiles" class="tool {{ 'on' if tool=='linkedin-profiles' }}">Profile Finder</a>{% endif %}
       {% if _al is none or 'acquirer-finder' in _al %}<a href="/acquirer-finder" class="tool {{ 'on' if tool=='acquirer-finder' }}">Acquirer Finder</a>{% endif %}
+      {% if _al is none or 'pedb' in _al %}<a href="/pedb" class="tool {{ 'on' if tool=='pedb' }}">PE DB</a>{% endif %}
       {% if auth_user %}
         <span style="width:1px;height:18px;background:#e5e7eb;margin:0 4px;"></span>
         {% if auth_is_admin and not auth_impersonating %}<a href="/admin/access" class="tool">Access</a>{% endif %}
