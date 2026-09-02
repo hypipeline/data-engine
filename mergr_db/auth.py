@@ -60,7 +60,7 @@ SECTIONS = [
     {"key": "linkedin",          "label": "LinkedIn Finder",        "href": "/linkedin"},
     {"key": "linkedin-profiles", "label": "LinkedIn Profile Finder", "href": "/linkedin-profiles"},
     {"key": "acquirer-finder",   "label": "Acquirer Finder",        "href": "/acquirer-finder"},
-    {"key": "pedb",              "label": "PE DB",                  "href": "/pedb"},
+    {"key": "tdc",              "label": "TDC",                  "href": "/tdc"},
 ]
 SECTION_KEYS = [s["key"] for s in SECTIONS]
 
@@ -265,8 +265,8 @@ def section_for_path(path):
         return "linkedin-profiles"
     if path.startswith("/linkedin"):
         return "linkedin"
-    if path.startswith("/pedb"):
-        return "pedb"
+    if path.startswith("/tdc"):
+        return "tdc"
     if path.startswith("/acquirer-finder") or path.startswith("/af/"):
         return "acquirer-finder"
     return None

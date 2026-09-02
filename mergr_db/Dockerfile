@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY buyer_match ./buyer_match
 COPY acquirer_gen ./acquirer_gen
-COPY pedb ./pedb
+COPY tdc ./tdc
 COPY templates ./templates
 COPY static ./static
 

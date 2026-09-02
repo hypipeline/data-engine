@@ -21,8 +21,8 @@ from fastapi.templating import Jinja2Templates
 
 import entity_client
 import li_profile_finder as lpf
-from pedb import service as pedb_svc
-from pedb import sync as pedb_sync
+from tdc import service as tdc_svc
+from tdc import sync as tdc_sync
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -189,11 +189,11 @@ def home(request: Request):
         counts["linkedin"] = li["n"] if li else 0
     except Exception:
         counts["linkedin"] = None
-    try:                                              # pedb schema may not exist yet
-        pd = query("SELECT count(*) n FROM pedb.subscribers WHERE status='confirmed'", one=True)
-        counts["pedb_subs"] = pd["n"] if pd else 0
+    try:                                              # tdc schema may not exist yet
+        pd = query("SELECT count(*) n FROM tdc.subscribers WHERE status='confirmed'", one=True)
+        counts["tdc_subs"] = pd["n"] if pd else 0
     except Exception:
-        counts["pedb_subs"] = None
+        counts["tdc_subs"] = None
     return render(request, "home.html", "home",
                   counts=counts, entity_up=entity_client.health())
 
@@ -1306,39 +1306,39 @@ def bm_run_sync():
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-# ---------------------------------------------------------------- PE DB
+# ---------------------------------------------------------------- TDC
 # Backend for The Deal Chronicle. Subscribers are a replica of the DynamoDB table
 # the public sign-up Lambda writes to — DynamoDB stays the source of truth so
 # sign-ups keep working when this box is down.
 
-@app.get("/pedb", response_class=HTMLResponse)
-def pedb_page(request: Request, flash: str = ""):
+@app.get("/tdc", response_class=HTMLResponse)
+def tdc_page(request: Request, flash: str = ""):
     conn = POOL.getconn()
     try:
-        pedb_svc.ensure_schema(conn)
+        tdc_svc.ensure_schema(conn)
         ctx = dict(
-            c=pedb_svc.counts(conn),
-            domains=pedb_svc.by_domain_linked(conn, 50),
-            recent=pedb_svc.recent(conn, 50),
-            days=pedb_svc.signups_by_day(conn, 30),
-            last=pedb_svc.last_sync(conn),
+            c=tdc_svc.counts(conn),
+            domains=tdc_svc.by_domain_linked(conn, 50),
+            recent=tdc_svc.recent(conn, 50),
+            days=tdc_svc.signups_by_day(conn, 30),
+            last=tdc_svc.last_sync(conn),
         )
     finally:
         POOL.putconn(conn)
-    return render(request, "pedb.html", "pedb",
-                  table=pedb_sync.TABLE, region=pedb_sync.REGION, flash=flash, **ctx)
+    return render(request, "tdc.html", "tdc",
+                  table=tdc_sync.TABLE, region=tdc_sync.REGION, flash=flash, **ctx)
 
 
-@app.post("/pedb/sync")
-def pedb_sync_now(request: Request):
+@app.post("/tdc/sync")
+def tdc_sync_now(request: Request):
     """Pull DynamoDB -> Postgres. Small table, so it runs inline rather than as a job."""
     conn = POOL.getconn()
     try:
-        r = pedb_sync.run_sync(conn=conn)
+        r = tdc_sync.run_sync(conn=conn)
         msg = (f"Synced — {r['scanned']} scanned, {r['inserted']} new, "
                f"{r['updated']} updated, {r['removed']} removed.")
     except Exception as e:
         msg = f"Sync failed: {e}"
     finally:
         POOL.putconn(conn)
-    return RedirectResponse(f"/pedb?{urlencode({'flash': msg})}", status_code=303)
+    return RedirectResponse(f"/tdc?{urlencode({'flash': msg})}", status_code=303)

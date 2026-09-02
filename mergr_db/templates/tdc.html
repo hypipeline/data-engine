@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}PE DB — Data Engine{% endblock %}
+{% block title %}TDC — Data Engine{% endblock %}
 {% block head %}
 <style>
-  /* PE DB — page-scoped. Backend for The Deal Chronicle. */
+  /* TDC — page-scoped. Backend for The Deal Chronicle. */
   .pd-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow)}
   .pd-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
@@ -38,7 +38,7 @@
 {% endblock %}
 
 {% block body %}
-<h1 style="margin:0 0 4px">PE DB</h1>
+<h1 style="margin:0 0 4px">TDC</h1>
 <p class="muted" style="margin:0 0 18px;font-size:13px">
   Subscribers to The Dispatch — a replica of the DynamoDB table the public sign-up writes to.
   DynamoDB stays the source of truth; this copy exists so it can be queried and joined.</p>
@@ -54,7 +54,7 @@
       {% else %}never run{% endif %}
     </span>
   </div>
-  <form method="post" action="/pedb/sync" class="pd-sync">
+  <form method="post" action="/tdc/sync" class="pd-sync">
     <button class="btn" type="submit">Sync from DynamoDB</button>
     <span class="out">reads {{ table }} in {{ region }} · IAM instance role, no stored credentials</span>
   </form>

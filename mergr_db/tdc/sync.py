@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PE DB — pull the subscriber replica from DynamoDB into Postgres.
+TDC — pull the subscriber replica from DynamoDB into Postgres.
 
 DynamoDB is the upstream source of truth: the public sign-up Lambda writes there,
 and must keep working when Data Engine is down. Postgres holds the queryable copy
@@ -10,7 +10,7 @@ Credentials: none. The EC2 instance carries an IAM role scoped to Scan/Query on
 the one table, so boto3 resolves it from instance metadata. Nothing on disk.
 
 Runnable two ways:
-  * python -m pedb.sync            (CLI / cron)
+  * python -m tdc.sync            (CLI / cron)
   * run_sync(progress=cb)          (in-process; the Sync button streams progress)
 """
 import os
@@ -19,11 +19,11 @@ from datetime import datetime, timezone
 import psycopg2
 import psycopg2.extras
 
-from pedb import service as svc
+from tdc import service as svc
 
 PG_DSN = os.environ.get("DATABASE_URL", "postgres://mergr:mergr@127.0.0.1:5433/mergr")
-TABLE = os.environ.get("PEDB_SUBSCRIBERS_TABLE", "dealchronicle-subscribers")
-REGION = os.environ.get("PEDB_DDB_REGION", "us-east-1")
+TABLE = os.environ.get("TDC_SUBSCRIBERS_TABLE", "dealchronicle-subscribers")
+REGION = os.environ.get("TDC_DDB_REGION", "us-east-1")
 SOURCE = f"dynamodb:{TABLE}"
 
 
@@ -80,7 +80,7 @@ def run_sync(conn=None, progress=None):
     run_id = None
     try:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO pedb.sync_runs (source) VALUES (%s) RETURNING id", (SOURCE,))
+            cur.execute("INSERT INTO tdc.sync_runs (source) VALUES (%s) RETURNING id", (SOURCE,))
             run_id = cur.fetchone()[0]
         conn.commit()
 
@@ -97,7 +97,7 @@ def run_sync(conn=None, progress=None):
                     continue
                 seen.append(email)
                 cur.execute("""
-                    INSERT INTO pedb.subscribers
+                    INSERT INTO tdc.subscribers
                       (email, domain, status, cadence, regions, sectors,
                        created_at, confirmed_at, unsubscribed_at, sg_synced, sg_error, synced_at)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
@@ -121,11 +121,11 @@ def run_sync(conn=None, progress=None):
             # Rows that vanished upstream. Deleting is right: a subscriber erased
             # from DynamoDB (a GDPR erasure request) must not survive in the replica.
             if seen:
-                cur.execute("DELETE FROM pedb.subscribers WHERE NOT (email = ANY(%s))", (seen,))
+                cur.execute("DELETE FROM tdc.subscribers WHERE NOT (email = ANY(%s))", (seen,))
                 stats["removed"] = cur.rowcount
 
         with conn.cursor() as cur:
-            cur.execute("""UPDATE pedb.sync_runs
+            cur.execute("""UPDATE tdc.sync_runs
                            SET finished_at=now(), scanned=%s, inserted=%s, updated=%s,
                                removed=%s, ok=TRUE
                            WHERE id=%s""",
@@ -139,7 +139,7 @@ def run_sync(conn=None, progress=None):
         conn.rollback()
         if run_id:
             with conn.cursor() as cur:
-                cur.execute("UPDATE pedb.sync_runs SET finished_at=now(), ok=FALSE, error=%s WHERE id=%s",
+                cur.execute("UPDATE tdc.sync_runs SET finished_at=now(), ok=FALSE, error=%s WHERE id=%s",
                             (str(e)[:500], run_id))
             conn.commit()
         say(f"failed — {e}")
