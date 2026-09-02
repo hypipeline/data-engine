@@ -16,7 +16,6 @@ Runnable two ways:
 import os
 from datetime import datetime, timezone
 
-import boto3
 import psycopg2
 import psycopg2.extras
 
@@ -52,6 +51,9 @@ def _ss(item, key):
 
 def scan_subscribers():
     """Only sub# rows. The table also holds rate-limit counters (ip#, em#, global)."""
+    # Imported here, not at module scope: webui imports this module at startup, and a
+    # missing boto3 should break the Sync button, not the whole dashboard.
+    import boto3
     ddb = boto3.client("dynamodb", region_name=REGION)
     out, kwargs = [], {"TableName": TABLE}
     while True:
