@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS tdc.subscribers (
     synced_at        timestamptz DEFAULT now() -- when this row was last pulled from DynamoDB
 );
 CREATE INDEX IF NOT EXISTS subscribers_status_idx  ON tdc.subscribers (status);
-CREATE INDEX IF NOT EXISTS subscribers_delivery_idx ON tdc.subscribers (delivery);
 CREATE INDEX IF NOT EXISTS subscribers_domain_idx  ON tdc.subscribers (domain);
 CREATE INDEX IF NOT EXISTS subscribers_created_idx ON tdc.subscribers (created_at DESC);
 
@@ -52,3 +51,8 @@ ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS sandboxed_at timestamptz;
 ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS complained_at timestamptz;
 ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_synced;
 ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_error;
+
+-- Indexes on the columns added above must follow the ALTERs, not sit with the
+-- CREATE TABLE: on an existing table the CREATE TABLE is a no-op, so an index
+-- declared there runs against the old shape and rolls the whole file back.
+CREATE INDEX IF NOT EXISTS subscribers_delivery_idx ON tdc.subscribers (delivery);
