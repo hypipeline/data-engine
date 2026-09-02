@@ -30,7 +30,13 @@
   .pill.confirmed{background:#b0281f;border-color:#b0281f;color:#fff}
   .pill.pending{border-color:var(--muted);color:var(--muted)}
   .pill.unsubscribed{border-style:dashed;color:var(--muted)}
-  .pill.sandboxed,.pill.complained{background:#b0281f;border-color:#b0281f;color:#fff}
+  .pill.sandboxed{border-color:#a86a12;color:#a86a12;background:transparent}
+  .pill.complained{background:#7a1d16;border-color:#7a1d16;color:#fff}
+  .lift{font:inherit;font-size:11px;padding:1px 7px;margin-left:6px;cursor:pointer;
+    background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:3px}
+  .lift:hover{color:var(--fg);border-color:var(--muted)}
+  .lift:focus-visible{outline:2px solid #a86a12;outline-offset:1px}
+  form.inline{display:inline}
   .muted{color:var(--muted)}
   .pd-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .pd-sync .out{font-size:12px;color:var(--muted)}
@@ -44,7 +50,8 @@
   Subscribers to The Dispatch — a replica of the DynamoDB table the public sign-up writes to.
   <strong>Mailable</strong> is the only number that matters at send time: confirmed <em>and</em>
   deliverable. Consent and deliverability are separate — an address can be confirmed and
-  sandboxed at once, and a sandbox is lifted by an admin, never automatically.</p>
+  sandboxed at once, and a sandbox is lifted by an admin, never automatically. A spam
+  complaint is not liftable at all — the record is kept and the address stays off the list.</p>
 
 <div class="pd-panel">
   <div class="pd-head">
@@ -128,9 +135,24 @@
       <tr>
         <td>{{ r.email }}</td>
         <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
-        <td>{% if r.delivery != 'ok' %}<span class="pill sandboxed"
-              title="{{ r.bounce_type }} — {{ r.bounce_reason }}">{{ r.delivery }}</span>
-            {% else %}<span class="muted">ok</span>{% endif %}</td>
+        <td>
+          {% if r.delivery == 'sandboxed' %}
+            <span class="pill sandboxed"
+                  title="{{ r.bounce_type or 'bounce' }} — {{ r.bounce_reason or 'no reason recorded' }}">sandboxed</span>
+            <form method="post" action="/tdc/unsandbox" class="inline"
+                  onsubmit="return confirm('Lift the sandbox on {{ r.email }}?\n\nIt bounced: {{ (r.bounce_reason or 'no reason recorded')|replace("\\", "")|replace("'", "")|replace("\n", " ")|truncate(120) }}\n\nIt will be mailed again from the next send.')">
+              <input type="hidden" name="email" value="{{ r.email }}">
+              <button class="lift" type="submit"
+                      title="Clear the bounce and make this address mailable again">Lift</button>
+            </form>
+          {% elif r.delivery == 'complained' %}
+            <span class="pill complained"
+                  title="Spam complaint on {{ r.complained_at }} — kept on record, not liftable">complained</span>
+          {% elif r.unsandboxed_at %}
+            <span class="muted"
+                  title="Sandbox lifted by {{ r.unsandboxed_by }} on {{ r.unsandboxed_at.strftime('%d %b %Y %H:%M') }}">ok · lifted</span>
+          {% else %}<span class="muted">ok</span>{% endif %}
+        </td>
         <td class="muted">{{ r.created_at.strftime('%d %b %H:%M') if r.created_at else '—' }}</td>
         <td class="muted">{{ r.confirmed_at.strftime('%d %b %H:%M') if r.confirmed_at else '—' }}</td>
       </tr>

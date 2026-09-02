@@ -100,8 +100,9 @@ def run_sync(conn=None, progress=None):
                     INSERT INTO tdc.subscribers
                       (email, domain, status, cadence, regions, sectors,
                        created_at, confirmed_at, unsubscribed_at,
-                       delivery, bounce_type, bounce_reason, sandboxed_at, complained_at, synced_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+                       delivery, bounce_type, bounce_reason, sandboxed_at, complained_at,
+                       unsandboxed_at, unsandboxed_by, synced_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
                     ON CONFLICT (email) DO UPDATE SET
                       domain=EXCLUDED.domain, status=EXCLUDED.status, cadence=EXCLUDED.cadence,
                       regions=EXCLUDED.regions, sectors=EXCLUDED.sectors,
@@ -109,7 +110,9 @@ def run_sync(conn=None, progress=None):
                       unsubscribed_at=EXCLUDED.unsubscribed_at,
                       delivery=EXCLUDED.delivery, bounce_type=EXCLUDED.bounce_type,
                       bounce_reason=EXCLUDED.bounce_reason, sandboxed_at=EXCLUDED.sandboxed_at,
-                      complained_at=EXCLUDED.complained_at, synced_at=now()
+                      complained_at=EXCLUDED.complained_at,
+                      unsandboxed_at=EXCLUDED.unsandboxed_at,
+                      unsandboxed_by=EXCLUDED.unsandboxed_by, synced_at=now()
                     RETURNING (xmax = 0) AS inserted
                 """, (
                     email, email.split("@")[-1] or None,
@@ -119,6 +122,7 @@ def run_sync(conn=None, progress=None):
                     _s(it, "delivery") or "ok", _s(it, "bounceType") or None,
                     _s(it, "bounceReason") or None,
                     _ts(it, "sandboxedAt"), _ts(it, "complainedAt"),
+                    _ts(it, "unsandboxedAt"), _s(it, "unsandboxedBy") or None,
                 ))
                 stats["inserted" if cur.fetchone()[0] else "updated"] += 1
 

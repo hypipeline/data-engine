@@ -49,6 +49,10 @@ ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS bounce_type text;
 ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS bounce_reason text;
 ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS sandboxed_at timestamptz;
 ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS complained_at timestamptz;
+-- Who lifted a sandbox, and when. Kept after the lift: if the address bounces
+-- again, that it was manually cleared before is the first thing to know.
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS unsandboxed_at timestamptz;
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS unsandboxed_by text;
 ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_synced;
 ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_error;
 

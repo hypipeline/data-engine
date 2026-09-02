@@ -103,7 +103,8 @@ def by_domain_linked(conn, limit=50):
 def recent(conn, limit=50):
     return _rows(conn, """
         SELECT email, domain, status, cadence, created_at, confirmed_at, unsubscribed_at,
-               coalesce(delivery,'ok') AS delivery, bounce_type, bounce_reason, sandboxed_at
+               coalesce(delivery,'ok') AS delivery, bounce_type, bounce_reason, sandboxed_at,
+               complained_at, unsandboxed_at, unsandboxed_by
         FROM tdc.subscribers
         ORDER BY created_at DESC NULLS LAST
         LIMIT %s

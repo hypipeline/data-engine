@@ -23,6 +23,7 @@ import entity_client
 import li_profile_finder as lpf
 from tdc import service as tdc_svc
 from tdc import sync as tdc_sync
+from tdc import admin as tdc_admin
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -1327,6 +1328,34 @@ def tdc_page(request: Request, flash: str = ""):
         POOL.putconn(conn)
     return render(request, "tdc.html", "tdc",
                   table=tdc_sync.TABLE, region=tdc_sync.REGION, flash=flash, **ctx)
+
+
+@app.post("/tdc/unsandbox")
+def tdc_unsandbox(request: Request, email: str = Form(...)):
+    """Lift a sandbox so the address can be mailed again.
+
+    The actor recorded is the account that actually signed in, not the effective
+    one: an admin impersonating someone must not be able to launder a privileged
+    write through their identity.
+    """
+    who = auth.real_user(request) or {}
+    actor = who.get("email") or "unknown"
+    eff = (auth.current_user(request) or {}).get("email")
+    conn = POOL.getconn()
+    try:
+        r = tdc_admin.unsandbox(conn, email, actor)
+        msg = f"Sandbox lifted for {r['email']} — mailable again."
+        auth._audit(actor, "tdc.unsandbox", r["email"],
+                    f"was {r['prior_bounce_type'] or 'sandboxed'}: {r['prior_bounce_reason'] or 'no reason recorded'}"
+                    + (f" (as {eff})" if eff and eff != actor else ""))
+    except tdc_admin.NotLiftable as e:
+        msg = f"Not lifted — {e}"
+    except Exception as e:
+        conn.rollback()
+        msg = f"Not lifted — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc?{urlencode({'flash': msg})}", status_code=303)
 
 
 @app.post("/tdc/sync")
