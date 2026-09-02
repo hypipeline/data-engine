@@ -8,7 +8,7 @@
 
 <div class="tdc-halves">
   <div class="pd-panel tdc-half">
-    <div class="pd-head"><h2>Dispatch</h2><span class="right">who receives it</span></div>
+    <div class="pd-head"><h2><a href="/tdc/dispatch">Dispatch</a></h2><span class="right">who receives it</span></div>
     <div class="tdc-nums">
       <span><b>{{ c.mailable or 0 }}</b> mailable</span>
       <span><b>{{ c.confirmed or 0 }}</b> confirmed</span>
@@ -28,7 +28,7 @@
   </div>
 
   <div class="pd-panel tdc-half">
-    <div class="pd-head"><h2>Deals</h2><span class="right">what it publishes</span></div>
+    <div class="pd-head"><h2><a href="/tdc/deals">Deals</a></h2><span class="right">what it publishes</span></div>
     <div class="tdc-nums"><span class="muted">nothing yet — no deal has been through this half</span></div>
     <ul class="tdc-list">
       {% for it in deals %}
@@ -54,6 +54,8 @@
 </div>
 
 <style>
+  .pd-head h2 a{color:inherit;text-decoration:none}
+  .pd-head h2 a:hover{text-decoration:underline}
   .tdc-halves{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}
   .tdc-half{margin-bottom:18px}
   .tdc-nums{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);

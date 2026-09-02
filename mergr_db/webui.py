@@ -1316,8 +1316,8 @@ def bm_run_sync():
 # sign-ups keep working when this box is down.
 
 def _tdc_shell(half):
-    """Sub-nav context. `half` is 'dispatch' or 'deals'; None for the landing page."""
-    return {"subnav": {"dispatch": tdc_nav.DISPATCH, "deals": tdc_nav.DEALS}.get(half)}
+    """Sub-nav context. `half` is 'dispatch' or 'deals'; None for the TDC landing page."""
+    return {"subnav": tdc_nav.subnav(half)}
 
 
 def _tdc_soon(request, half, items, key):
@@ -1342,8 +1342,44 @@ def tdc_home(request: Request):
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_home.html", "tdc", c=c, page_title="TDC",
-                  dispatch=tdc_nav.DISPATCH, deals=tdc_nav.DEALS,
+                  halves=tdc_nav.HALVES, dispatch=tdc_nav.DISPATCH, deals=tdc_nav.DEALS,
                   mergr_firms=firms, mergr_companies=companies, **_tdc_shell(None))
+
+
+@app.get("/tdc/dispatch", response_class=HTMLResponse)
+def tdc_dispatch(request: Request):
+    """The Dispatch half as a whole — the numbers first, then its screens."""
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        c = tdc_svc.counts(conn)
+        ctx = dict(days=tdc_svc.signups_by_day(conn, 30), last=tdc_svc.last_sync(conn))
+    finally:
+        POOL.putconn(conn)
+
+    counts = {"subscribers": c.get("total") or 0,
+              "deliverability": (c.get("sandboxed") or 0) + (c.get("complained") or 0),
+              "sends": None}
+    screens = [dict(it, count=counts.get(it["key"])) for it in tdc_nav.DISPATCH]
+    stats = [
+        {"k": "Mailable", "v": c.get("mailable") or 0},
+        {"k": "Confirmed", "v": c.get("confirmed") or 0},
+        {"k": "Pending", "v": c.get("pending") or 0},
+        {"k": "Unsubscribed", "v": c.get("unsubscribed") or 0},
+        {"k": "Confirm rate", "v": str(c.get("confirm_rate") or 0) + "%"},
+        {"k": "Sandboxed", "v": c.get("sandboxed") or 0, "warn": True},
+        {"k": "Complained", "v": c.get("complained") or 0, "warn": True},
+    ]
+    return render(request, "tdc_half.html", "tdc-dispatch",
+                  half=tdc_nav.by_key(tdc_nav.HALVES, "dispatch"),
+                  stats=stats, screens=screens, page_title="Dispatch",
+                  built_n=sum(1 for it in tdc_nav.DISPATCH if it["built"]),
+                  subactive="dispatch",
+                  footnote_head="Nothing has been sent",
+                  footnote=("The list is real and the sign-up path works end to end, but no "
+                            "issue has ever gone out. Until Sends exists, a confirmed "
+                            "subscriber is someone waiting."),
+                  **_tdc_shell("dispatch"), **ctx)
 
 
 @app.get("/tdc/dispatch/subscribers", response_class=HTMLResponse)
@@ -1387,6 +1423,28 @@ def tdc_sends(request: Request):
 
 
 @app.get("/tdc/deals", response_class=HTMLResponse)
+def tdc_deals(request: Request):
+    """The Deals half as a whole. Every number here is zero, and says so plainly."""
+    screens = [dict(it, count=None) for it in tdc_nav.DEALS]
+    return render(request, "tdc_half.html", "tdc-deals",
+                  half=tdc_nav.by_key(tdc_nav.HALVES, "deals"),
+                  stats=None, screens=screens, page_title="Deals",
+                  built_n=sum(1 for it in tdc_nav.DEALS if it["built"]),
+                  subactive="deals", stages=tdc_nav.STAGES, counts={},
+                  pipeline_note=("No deal has entered the pipeline. There is no deal schema "
+                                 "yet — the ten records the site publishes are sample data "
+                                 "held as files in the site repo, and their party names are "
+                                 "plain strings rather than entities."),
+                  footnote_head="What has to happen first",
+                  footnote=("The entity resolver. Both halves of TDC are meant to meet at the "
+                            "entity — a subscriber's domain and a deal's party resolving to the "
+                            "same record — and it is the one piece that gets more expensive the "
+                            "longer it waits, because deferring it means re-resolving every "
+                            "story already published."),
+                  **_tdc_shell("deals"))
+
+
+@app.get("/tdc/deals/queue", response_class=HTMLResponse)
 def tdc_deals_queue(request: Request):
     return _tdc_soon(request, "deals", tdc_nav.DEALS, "queue")
 

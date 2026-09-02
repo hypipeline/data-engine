@@ -35,10 +35,10 @@
       {% endif %}
       {% if tool == 'tdc' %}
         <a href="/tdc" class="{{ 'active' if active=='tdc' }}">Overview</a>
-        <a href="/tdc/dispatch/subscribers"
-           class="{{ 'active' if active in ('tdc-subscribers','tdc-deliverability','tdc-sends') }}">Dispatch</a>
+        <a href="/tdc/dispatch"
+           class="{{ 'active' if active in ('tdc-dispatch','tdc-subscribers','tdc-deliverability','tdc-sends') }}">Dispatch</a>
         <a href="/tdc/deals"
-           class="{{ 'active' if active in ('tdc-queue','tdc-entities','tdc-sources','tdc-publish') }}">Deals</a>
+           class="{{ 'active' if active in ('tdc-deals','tdc-queue','tdc-entities','tdc-sources','tdc-publish') }}">Deals</a>
       {% endif %}
       <span class="grow"></span>
       {# tool switcher — only the sections this user may see #}

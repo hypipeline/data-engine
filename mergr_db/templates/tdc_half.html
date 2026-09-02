@@ -1,0 +1,95 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">{{ half.label }}</h1>
+<p class="tdc-blurb">{{ half.blurb }}</p>
+
+{% if stats %}
+<div class="pd-stats">
+  {% for s in stats %}
+  <div class="pd-stat"><span class="k">{{ s.k }}</span>
+    <span class="v {{ 'warn' if s.warn and s.v }}">{{ s.v }}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if days %}
+<div class="pd-panel">
+  <div class="pd-head"><h2>Sign-ups, last 30 days</h2>
+    <span class="right">
+      {% if last %}last sync {{ last.started_at.strftime('%d %b %H:%M') if last.started_at }}
+      {% else %}never synced{% endif %}</span></div>
+  {% set mx = (days | map(attribute='signups') | max) or 1 %}
+  <div class="pd-spark">
+    {% for d in days %}<i class="{{ 'has' if d.signups }}"
+      style="height:{{ (4 + (d.signups / mx * 52)) if d.signups else 2 }}px"
+      title="{{ d.day }} — {{ d.signups }} sign-up{{ '' if d.signups == 1 else 's' }}"></i>{% endfor %}
+  </div>
+  <div class="pd-spark-x">
+    <span>{{ days[0].day if days }}</span><span>{{ days[-1].day if days }}</span>
+  </div>
+</div>
+{% endif %}
+
+{% if stages %}
+<div class="pd-panel">
+  <div class="pd-head"><h2>Pipeline</h2>
+    <span class="right">a deal cannot skip a stage</span></div>
+  <div class="stages">
+    {% for name, what in stages %}
+    <div class="stage {{ 'end' if loop.last }}">
+      <span class="n">{{ counts.get(name, 0) }}</span>
+      <span class="s">{{ name }}</span>
+      <span class="w">{{ what }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="pd-empty">{{ pipeline_note }}</p>
+</div>
+{% endif %}
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Screens</h2>
+    <span class="right">{{ built_n }} of {{ screens|length }} built</span></div>
+  <ul class="half-list">
+    {% for it in screens %}
+    <li>
+      <div class="hl-top">
+        <a href="{{ it.href }}">{{ it.label }}</a>
+        {% if not it.built %}<span class="tag">not built</span>{% endif %}
+        {% if it.count is not none %}<span class="ct">{{ it.count }}</span>{% endif %}
+      </div>
+      <span class="d">{{ it.blurb }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+{% if footnote %}
+<div class="pd-panel">
+  <div class="pd-head"><h2>{{ footnote_head }}</h2></div>
+  <p class="pd-empty" style="padding-top:0">{{ footnote }}</p>
+</div>
+{% endif %}
+
+<style>
+  .half-list{list-style:none;margin:0;padding:0}
+  .half-list li{padding:11px 0;border-bottom:1px solid var(--border)}
+  .half-list li:last-child{border-bottom:0}
+  .hl-top{display:flex;align-items:baseline;gap:8px}
+  .half-list a{font-weight:600;text-decoration:none;font-size:14px}
+  .half-list a:hover{text-decoration:underline}
+  .half-list .d{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  .half-list .ct{margin-left:auto;font-size:13px;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  .half-list .tag{font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+    padding:1px 5px;border-radius:2px;border:1px solid var(--border);color:var(--muted)}
+  .stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;
+    background:var(--border);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden}
+  .stage{background:var(--panel);padding:11px 12px;display:flex;flex-direction:column;gap:3px}
+  .stage .n{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+  .stage .s{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .stage .w{font-size:11px;color:var(--muted);line-height:1.35}
+  .stage.end .s{color:#b0281f}
+</style>
+{% endblock %}
