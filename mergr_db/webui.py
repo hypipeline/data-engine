@@ -1444,6 +1444,11 @@ def tdc_deals(request: Request):
                   **_tdc_shell("deals"))
 
 
+@app.get("/tdc/deals/leads", response_class=HTMLResponse)
+def tdc_deals_leads(request: Request):
+    return _tdc_soon(request, "deals", tdc_nav.DEALS, "leads")
+
+
 @app.get("/tdc/deals/queue", response_class=HTMLResponse)
 def tdc_deals_queue(request: Request):
     return _tdc_soon(request, "deals", tdc_nav.DEALS, "queue")

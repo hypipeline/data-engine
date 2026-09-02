@@ -174,3 +174,51 @@ CREATE TABLE IF NOT EXISTS tdc.field_provenance (
     conflicts   jsonb NOT NULL DEFAULT '[]'::jsonb,
     PRIMARY KEY (deal_id, field)
 );
+
+-- ---------------------------------------------------------------- lead
+-- A hypothesis that a deal exists. This is where the pipeline actually starts.
+--
+-- A lead is not an early deal and not a source: it is a signal that something may
+-- have happened, often with no document describing it at all. A PSC cessation at a
+-- broker, an adviser posting that they "advised the shareholders of", a name
+-- appearing twice in a week. None of those are stories; any of them may become one.
+--
+-- Leads are cheap and disposable. The point of the table is recall — the cost of
+-- missing a deal is total, the cost of dismissing a bad lead is a click.
+CREATE TABLE IF NOT EXISTS tdc.lead (
+    id          text PRIMARY KEY,
+
+    -- Where it came from. Note that 'aggregator' is permitted HERE and nowhere else:
+    -- Mergr may raise a lead, and tdc.source.kind has no value that could ever hold
+    -- it as a citation. The separation between the two enums is the whole rule.
+    channel     text NOT NULL
+                CHECK (channel IN ('filing','press','adviser','party','watchlist',
+                                   'aggregator','manual')),
+    signal      text NOT NULL,     -- what was noticed, in words a person can triage
+    url         text,
+    doc_type    text,              -- PSC07, MR01, RSS item, LinkedIn post…
+
+    -- The name as noticed, before any resolution. Usually all there is.
+    entity_hint text,
+    entity_id   text REFERENCES tdc.entity(id),
+
+    noticed_at  timestamptz NOT NULL DEFAULT now(),
+    occurred_at date,              -- if the signal implies a date; frequently null
+
+    -- Triage. A lead is promoted only when it reaches the minimum viable story —
+    -- a buyer, a seller and a date — which is exactly the threshold tdc.deal enforces.
+    status      text NOT NULL DEFAULT 'new'
+                CHECK (status IN ('new','working','promoted','dismissed','duplicate')),
+    dismissed_reason text,
+    deal_id     text REFERENCES tdc.deal(id),
+
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS lead_status_idx ON tdc.lead (status, noticed_at DESC);
+CREATE INDEX IF NOT EXISTS lead_channel_idx ON tdc.lead (channel);
+CREATE INDEX IF NOT EXISTS lead_entity_idx ON tdc.lead (entity_id);
+
+-- The deal's own pipeline starts once a lead is promoted, so 'source' is no longer
+-- the first thing that happens to a story — it is the first thing that happens to a
+-- story that already exists.

@@ -51,13 +51,25 @@ DISPATCH = [
 ]
 
 DEALS = [
+    {"key": "leads", "label": "Leads", "href": "/tdc/deals/leads",
+     "built": False,
+     "blurb": "Signals that a deal may exist, before there is a story.",
+     "will": ["Companies House sweeps — PSC cessations and charges in watched sectors",
+              "Adviser announcements, which cover far more mid-market deals than the trade press",
+              "Trade press and party releases",
+              "Mergr deltas — permitted as a lead, and never as a citation",
+              "Triage: promote when it reaches a buyer, a seller and a date; dismiss with a reason"],
+     "why": "Where the pipeline actually starts, and the part that decides whether the "
+            "publication covers a market or reprints one. Everything downstream is about not "
+            "publishing something wrong; this is the only stage about not missing it."},
     {"key": "queue", "label": "Queue", "href": "/tdc/deals/queue",
      "built": False,
      "blurb": "Everything in flight, by status.",
      "will": ["Deals ordered by what needs attention, not by date",
               "Status through the pipeline: source, extracted, verified, drafted, edited, review",
               "What is blocked and on what — a missing source, an unresolved party"],
-     "why": "The working list. Until deals exist there is nothing to queue."},
+     "why": "The working list, of leads that became stories. Until a lead is promoted "
+            "there is nothing to queue."},
     {"key": "entities", "label": "Entities", "href": "/tdc/deals/entities",
      "built": False,
      "blurb": "Resolution against Mergr, and the matches too weak to accept.",
