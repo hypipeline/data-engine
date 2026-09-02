@@ -1,0 +1,47 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">Coverage</h1>
+<p class="tdc-blurb">
+  The firms we watch for leads — a reading list, not a CRM. Seeded from the ON advisory-firm
+  roster using name, website and active flag only. <strong>Check</strong> marks a row where the
+  LinkedIn page was resolved by name similarity we do not trust: the finder always returns an
+  answer, so a weak match is a row for you to look at rather than an error to correct
+  automatically.</p>
+
+<div class="pd-stats">
+  <div class="pd-stat"><span class="k">Firms</span><span class="v">{{ rows|length }}</span></div>
+  <div class="pd-stat"><span class="k">With LinkedIn</span>
+    <span class="v">{{ rows|selectattr('linkedin_url')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Need a check</span>
+    <span class="v {{ 'warn' if rows|selectattr('needs_check')|list|length }}">
+      {{ rows|selectattr('needs_check')|list|length }}</span></div>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Firms</h2>
+    <span class="right">weakest matches first</span></div>
+  {% if rows %}
+  <table class="pd">
+    <thead><tr><th>Firm</th><th>Website</th><th>LinkedIn</th><th class="n">Staff</th><th></th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>{% if r.website %}<a href="{{ r.website }}" target="_blank" rel="noopener">
+              {{ r.website|replace('https://','')|replace('http://','')|replace('www.','')|truncate(38) }}</a>
+            {% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if r.linkedin_url %}<a href="{{ r.linkedin_url }}" target="_blank" rel="noopener">
+              {{ r.linkedin_url|replace('https://www.linkedin.com/company/','')|truncate(34) }}</a>
+            {% else %}<span class="muted">not found</span>{% endif %}</td>
+        <td class="n muted">{{ r.employees if r.employees is not none else '—' }}</td>
+        <td>{% if r.needs_check %}<span class="pill sandboxed"
+              title="firm name vs resolved LinkedIn slug scored {{ r.name_match }} — likely a different company">check</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="pd-empty">Nothing seeded yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

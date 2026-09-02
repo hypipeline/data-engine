@@ -51,6 +51,9 @@ DISPATCH = [
 ]
 
 DEALS = [
+    {"key": "coverage", "label": "Coverage", "href": "/tdc/deals/coverage",
+     "built": True,
+     "blurb": "The firms we watch for leads — website and LinkedIn."},
     {"key": "leads", "label": "Leads", "href": "/tdc/deals/leads",
      "built": False,
      "blurb": "Signals that a deal may exist, before there is a story.",

@@ -222,3 +222,28 @@ CREATE INDEX IF NOT EXISTS lead_entity_idx ON tdc.lead (entity_id);
 -- The deal's own pipeline starts once a lead is promoted, so 'source' is no longer
 -- the first thing that happens to a story — it is the first thing that happens to a
 -- story that already exists.
+
+-- ---------------------------------------------------------------- coverage
+-- The firms we watch for leads. Deliberately thin: a name, a website, a LinkedIn
+-- page. It is a reading list, not a CRM — nothing about a relationship with the
+-- firm belongs here, and none is copied from wherever the roster came from.
+--
+-- needs_check exists because the LinkedIn Finder never answers "I don't know": it
+-- resolved 20 of 20 firms including ones it plainly got wrong, matching Mainstreet
+-- Capital to a similarly-named US listed BDC. A low name match is not an error to
+-- correct automatically; it is a row for a person to look at.
+CREATE TABLE IF NOT EXISTS tdc.coverage (
+    id          bigserial PRIMARY KEY,
+    name        text NOT NULL UNIQUE,
+    website     text,
+    linkedin_url text,
+    employees   integer,
+    origin      text,              -- where the name came from, e.g. on.advisory_firms
+    resolved_by text,              -- finder | footer | manual
+    name_match  numeric(3,2),      -- firm name vs resolved LinkedIn slug
+    needs_check boolean NOT NULL DEFAULT false,
+    active      boolean NOT NULL DEFAULT true,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS coverage_active_idx ON tdc.coverage (active, name);

@@ -25,6 +25,7 @@ from tdc import service as tdc_svc
 from tdc import sync as tdc_sync
 from tdc import admin as tdc_admin
 from tdc import nav as tdc_nav
+from tdc import coverage as tdc_cov
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -1441,6 +1442,19 @@ def tdc_deals(request: Request):
                             "same record — and it is the one piece that gets more expensive the "
                             "longer it waits, because deferring it means re-resolving every "
                             "story already published."),
+                  **_tdc_shell("deals"))
+
+
+@app.get("/tdc/deals/coverage", response_class=HTMLResponse)
+def tdc_deals_coverage(request: Request):
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        rows = tdc_cov.rows(conn)
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_coverage.html", "tdc-coverage",
+                  rows=rows, subactive="coverage", page_title="Coverage",
                   **_tdc_shell("deals"))
 
 
