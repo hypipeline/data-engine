@@ -1,0 +1,87 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">Deliverability</h1>
+<p class="tdc-blurb">
+  The second axis. Consent is the subscriber's — they subscribe and unsubscribe. Deliverability
+  is the system's: the SendGrid event webhook sandboxes an address the moment it bounces, and
+  only an admin lifts it. A spam complaint is never liftable — the record is kept and the
+  address stays off the list.</p>
+
+<div class="pd-stats">
+  <div class="pd-stat"><span class="k">Mailable</span><span class="v">{{ c.mailable or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Sandboxed</span>
+    <span class="v {{ 'warn' if c.sandboxed }}">{{ c.sandboxed or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Complained</span>
+    <span class="v {{ 'warn' if c.complained }}">{{ c.complained or 0 }}</span></div>
+  <div class="pd-stat"><span class="k">Confirmed</span><span class="v">{{ c.confirmed or 0 }}</span></div>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Quarantine</h2>
+    <span class="right">bounce events arrive from the SendGrid webhook, signed and verified</span></div>
+  {% if rows %}
+  <table class="pd">
+    <thead><tr><th>Email</th><th>Delivery</th><th>Reason</th><th>Since</th><th>Consent</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.email }}</td>
+        <td>
+          {% if r.delivery == 'sandboxed' %}<span class="pill sandboxed">sandboxed</span>
+          {% elif r.delivery == 'complained' %}<span class="pill complained">complained</span>
+          {% else %}<span class="muted">ok</span>{% endif %}
+        </td>
+        <td class="muted">
+          {% if r.delivery == 'sandboxed' %}
+            {{ r.bounce_type or 'bounce' }} — {{ r.bounce_reason or 'no reason recorded' }}
+          {% elif r.delivery == 'complained' %}
+            marked as spam by the recipient
+          {% elif r.unsandboxed_at %}
+            lifted by {{ r.unsandboxed_by }} on {{ r.unsandboxed_at.strftime('%d %b %Y %H:%M') }}
+          {% endif %}
+        </td>
+        <td class="muted">
+          {{ (r.sandboxed_at or r.complained_at or r.unsandboxed_at).strftime('%d %b %H:%M')
+             if (r.sandboxed_at or r.complained_at or r.unsandboxed_at) else '—' }}
+        </td>
+        <td>
+          <span class="pill {{ r.status }}">{{ r.status }}</span>
+          {% if r.delivery == 'sandboxed' %}
+            <form method="post" action="/tdc/unsandbox" class="inline"
+                  onsubmit="return confirm('Lift the sandbox on {{ r.email }}?\n\nIt bounced: {{ (r.bounce_reason or 'no reason recorded')|replace("\\", "")|replace("'", "")|replace("\n", " ")|truncate(120) }}\n\nIt will be mailed again from the next send.')">
+              <input type="hidden" name="email" value="{{ r.email }}">
+              <button class="lift" type="submit">Lift</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="pd-empty">Nothing quarantined. Every confirmed address is deliverable.</p>
+  {% endif %}
+  {% if flash %}<p class="pd-empty" style="color:var(--fg)">{{ flash }}</p>{% endif %}
+</div>
+
+{% if bad_domains %}
+<div class="pd-panel">
+  <div class="pd-head"><h2>By domain</h2>
+    <span class="right">a whole domain going at once is a blocklisting, not bad addresses</span></div>
+  <table class="pd">
+    <thead><tr><th>Domain</th><th class="n">Sandboxed</th><th class="n">Complained</th>
+      <th class="n">Subscribers</th></tr></thead>
+    <tbody>
+      {% for d in bad_domains %}
+      <tr>
+        <td>{{ d.domain }}</td>
+        <td class="n">{{ d.sandboxed }}</td>
+        <td class="n">{{ d.complained }}</td>
+        <td class="n muted">{{ d.subs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

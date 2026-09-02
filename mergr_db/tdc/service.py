@@ -130,3 +130,37 @@ def last_sync(conn, source="dynamodb:dealchronicle-subscribers"):
         FROM tdc.sync_runs WHERE source = %s
         ORDER BY started_at DESC LIMIT 1
     """, (source,))
+
+
+def deliverability(conn, limit=200):
+    """Anything carrying a deliverability event — currently quarantined, or lifted before.
+
+    Lifted addresses stay on this screen deliberately: if one bounces again, that it was
+    manually cleared once already is the first thing worth seeing.
+    """
+    return _rows(conn, """
+        SELECT email, domain, status, coalesce(delivery,'ok') AS delivery,
+               bounce_type, bounce_reason, sandboxed_at, complained_at,
+               unsandboxed_at, unsandboxed_by
+        FROM tdc.subscribers
+        WHERE coalesce(delivery,'ok') <> 'ok' OR unsandboxed_at IS NOT NULL
+        ORDER BY coalesce(sandboxed_at, complained_at, unsandboxed_at) DESC NULLS LAST
+        LIMIT %s
+    """, (limit,))
+
+
+def bounce_domains(conn, limit=20):
+    """Quarantine grouped by domain. A single domain going bad at once is a blocklisting,
+    not a set of unrelated bad addresses, and it wants a different response."""
+    return _rows(conn, """
+        SELECT domain,
+               count(*) FILTER (WHERE delivery = 'sandboxed')  AS sandboxed,
+               count(*) FILTER (WHERE delivery = 'complained') AS complained,
+               count(*)                                        AS subs
+        FROM tdc.subscribers
+        WHERE domain IS NOT NULL
+        GROUP BY domain
+        HAVING count(*) FILTER (WHERE coalesce(delivery,'ok') <> 'ok') > 0
+        ORDER BY 2 DESC, 3 DESC
+        LIMIT %s
+    """, (limit,))

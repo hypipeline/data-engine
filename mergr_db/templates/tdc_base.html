@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title or 'TDC' }} — Data Engine{% endblock %}
+{% block head %}
+<style>
+  /* TDC — shared across both halves of the section. */
+  .pd-panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .pd-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+    background:var(--border);border:1px solid var(--border);border-radius:var(--radius);
+    overflow:hidden;margin-bottom:18px}
+  .pd-stat{background:var(--panel);padding:14px 16px}
+  .pd-stat .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    display:block;margin-bottom:6px}
+  .pd-stat .v{font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .pd-stat .v.warn{color:#b0281f}
+  .pd-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .pd-head h2{margin:0;font-size:15px}
+  .pd-head .right{margin-left:auto;font-size:12px;color:var(--muted)}
+  .pd-spark{display:flex;align-items:flex-end;gap:2px;height:56px;margin-top:4px}
+  .pd-spark i{flex:1;background:var(--border);min-height:2px;border-radius:1px 1px 0 0;display:block}
+  .pd-spark i.has{background:#b0281f}
+  .pd-spark-x{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px}
+  table.pd{width:100%;border-collapse:collapse}
+  table.pd th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border)}
+  table.pd td{padding:6px 10px;border-bottom:1px solid var(--border);font-size:13px}
+  table.pd td.n{text-align:right;font-variant-numeric:tabular-nums;width:80px}
+  .pill{font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;
+    border-radius:3px;border:1px solid var(--border)}
+  .pill.confirmed{background:#b0281f;border-color:#b0281f;color:#fff}
+  .pill.pending{border-color:var(--muted);color:var(--muted)}
+  .pill.unsubscribed{border-style:dashed;color:var(--muted)}
+  .pill.sandboxed{border-color:#a86a12;color:#a86a12;background:transparent}
+  .pill.complained{background:#7a1d16;border-color:#7a1d16;color:#fff}
+  .lift{font:inherit;font-size:11px;padding:1px 7px;margin-left:6px;cursor:pointer;
+    background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:3px}
+  .lift:hover{color:var(--fg);border-color:var(--muted)}
+  .lift:focus-visible{outline:2px solid #a86a12;outline-offset:1px}
+  form.inline{display:inline}
+  .muted{color:var(--muted)}
+  .pd-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pd-sync .out{font-size:12px;color:var(--muted)}
+  .pd-empty{color:var(--muted);font-size:13px;padding:10px 0}
+
+  /* sub-navigation within a half */
+  .tdc-sub{display:flex;gap:2px;margin:0 0 18px;border-bottom:1px solid var(--border);
+    flex-wrap:wrap}
+  .tdc-sub a{display:flex;align-items:center;gap:7px;padding:8px 13px;font-size:13px;
+    text-decoration:none;color:var(--muted);border-bottom:2px solid transparent;
+    margin-bottom:-1px}
+  .tdc-sub a:hover{color:var(--fg)}
+  .tdc-sub a.on{color:var(--fg);border-bottom-color:#b0281f;font-weight:600}
+  .tdc-sub .tag{font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+    padding:1px 5px;border-radius:2px;border:1px solid currentColor;color:var(--muted);
+    opacity:.75}
+  .tdc-title{margin:0 0 4px;font-size:20px}
+  .tdc-blurb{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:70ch}
+</style>
+{% endblock %}
+
+{% block body %}
+{% if subnav %}
+<nav class="tdc-sub">
+  {% for it in subnav %}
+    <a href="{{ it.href }}" class="{{ 'on' if it.key == subactive }}">{{ it.label }}{%
+      if not it.built %}<span class="tag">soon</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+{% block tdc %}{% endblock %}
+{% endblock %}

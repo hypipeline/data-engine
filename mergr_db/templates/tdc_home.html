@@ -1,0 +1,72 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">TDC</h1>
+<p class="tdc-blurb">
+  Backend for The Deal Chronicle. Two halves: <strong>Dispatch</strong> is who receives the
+  publication, <strong>Deals</strong> is what it publishes. They meet at the entity — a
+  subscriber's domain and a deal's party resolve against the same Mergr tables.</p>
+
+<div class="tdc-halves">
+  <div class="pd-panel tdc-half">
+    <div class="pd-head"><h2>Dispatch</h2><span class="right">who receives it</span></div>
+    <div class="tdc-nums">
+      <span><b>{{ c.mailable or 0 }}</b> mailable</span>
+      <span><b>{{ c.confirmed or 0 }}</b> confirmed</span>
+      <span><b>{{ c.pending or 0 }}</b> pending</span>
+      {% if c.sandboxed %}<span class="warn"><b>{{ c.sandboxed }}</b> sandboxed</span>{% endif %}
+      {% if c.complained %}<span class="warn"><b>{{ c.complained }}</b> complained</span>{% endif %}
+    </div>
+    <ul class="tdc-list">
+      {% for it in dispatch %}
+      <li>
+        <a href="{{ it.href }}">{{ it.label }}</a>
+        {% if not it.built %}<span class="tag">not built</span>{% endif %}
+        <span class="d">{{ it.blurb }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="pd-panel tdc-half">
+    <div class="pd-head"><h2>Deals</h2><span class="right">what it publishes</span></div>
+    <div class="tdc-nums"><span class="muted">nothing yet — no deal has been through this half</span></div>
+    <ul class="tdc-list">
+      {% for it in deals %}
+      <li>
+        <a href="{{ it.href }}">{{ it.label }}</a>
+        {% if not it.built %}<span class="tag">not built</span>{% endif %}
+        <span class="d">{{ it.blurb }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Where the halves meet</h2></div>
+  <p class="pd-empty" style="padding-top:0">
+    Subscriber domains already resolve to Mergr firms — that column is live on
+    <a href="/tdc/dispatch/subscribers">Subscribers</a> today. Deal parties will resolve
+    against the same {{ '{:,}'.format(mergr_firms) }} firms and
+    {{ '{:,}'.format(mergr_companies) }} companies, which makes the reader at a firm and the
+    adviser on a deal one record. Mergr stays a lead in that arrangement and can never become
+    a citation.</p>
+</div>
+
+<style>
+  .tdc-halves{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}
+  .tdc-half{margin-bottom:18px}
+  .tdc-nums{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);
+    padding-bottom:12px;margin-bottom:4px;border-bottom:1px solid var(--border)}
+  .tdc-nums b{font-size:17px;color:var(--fg);font-variant-numeric:tabular-nums;font-weight:600}
+  .tdc-nums .warn b{color:#b0281f}
+  .tdc-list{list-style:none;margin:0;padding:0}
+  .tdc-list li{padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .tdc-list li:last-child{border-bottom:0}
+  .tdc-list a{font-weight:600;text-decoration:none}
+  .tdc-list a:hover{text-decoration:underline}
+  .tdc-list .d{display:block;color:var(--muted);margin-top:2px}
+  .tdc-list .tag{font-size:9px;letter-spacing:.09em;text-transform:uppercase;margin-left:6px;
+    padding:1px 5px;border-radius:2px;border:1px solid var(--border);color:var(--muted)}
+</style>
+{% endblock %}

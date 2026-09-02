@@ -1,0 +1,24 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">{{ screen.label }}</h1>
+<p class="tdc-blurb">{{ screen.blurb }}</p>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Not built</h2>
+    <span class="right">this screen is a placeholder, not an empty result</span></div>
+  <p class="pd-empty" style="padding-top:0">{{ screen.why }}</p>
+  {% if screen.will %}
+  <h3 class="soon-h">What it will hold</h3>
+  <ul class="soon-list">
+    {% for w in screen.will %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+
+<style>
+  .soon-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    margin:16px 0 8px;font-weight:600}
+  .soon-list{margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.7}
+  .soon-list li{padding-left:2px}
+</style>
+{% endblock %}

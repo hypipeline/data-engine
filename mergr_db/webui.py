@@ -24,6 +24,7 @@ import li_profile_finder as lpf
 from tdc import service as tdc_svc
 from tdc import sync as tdc_sync
 from tdc import admin as tdc_admin
+from tdc import nav as tdc_nav
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -142,6 +143,8 @@ def _tool_for(active):
         return "linkedin"
     if active == "linkedin-profiles":
         return "linkedin-profiles"
+    if active and active.startswith("tdc"):
+        return "tdc"
     return None            # hub / home — no tool chrome
 
 
@@ -1312,8 +1315,39 @@ def bm_run_sync():
 # the public sign-up Lambda writes to — DynamoDB stays the source of truth so
 # sign-ups keep working when this box is down.
 
+def _tdc_shell(half):
+    """Sub-nav context. `half` is 'dispatch' or 'deals'; None for the landing page."""
+    return {"subnav": {"dispatch": tdc_nav.DISPATCH, "deals": tdc_nav.DEALS}.get(half)}
+
+
+def _tdc_soon(request, half, items, key):
+    screen = tdc_nav.by_key(items, key)
+    return render(request, "tdc_soon.html", "tdc-" + key,
+                  screen=screen, subactive=key, page_title=screen.get("label"),
+                  **_tdc_shell(half))
+
+
 @app.get("/tdc", response_class=HTMLResponse)
-def tdc_page(request: Request, flash: str = ""):
+def tdc_home(request: Request):
+    """Both halves at a glance. Dispatch carries live numbers; Deals has none yet."""
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        c = tdc_svc.counts(conn)
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM firms")
+            firms = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM companies")
+            companies = cur.fetchone()[0]
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_home.html", "tdc", c=c, page_title="TDC",
+                  dispatch=tdc_nav.DISPATCH, deals=tdc_nav.DEALS,
+                  mergr_firms=firms, mergr_companies=companies, **_tdc_shell(None))
+
+
+@app.get("/tdc/dispatch/subscribers", response_class=HTMLResponse)
+def tdc_subscribers(request: Request, flash: str = ""):
     conn = POOL.getconn()
     try:
         tdc_svc.ensure_schema(conn)
@@ -1326,8 +1360,50 @@ def tdc_page(request: Request, flash: str = ""):
         )
     finally:
         POOL.putconn(conn)
-    return render(request, "tdc.html", "tdc",
-                  table=tdc_sync.TABLE, region=tdc_sync.REGION, flash=flash, **ctx)
+    return render(request, "tdc_subscribers.html", "tdc-subscribers",
+                  table=tdc_sync.TABLE, region=tdc_sync.REGION, flash=flash,
+                  subactive="subscribers", page_title="Subscribers",
+                  **_tdc_shell("dispatch"), **ctx)
+
+
+@app.get("/tdc/dispatch/deliverability", response_class=HTMLResponse)
+def tdc_deliverability(request: Request, flash: str = ""):
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        ctx = dict(c=tdc_svc.counts(conn),
+                   rows=tdc_svc.deliverability(conn),
+                   bad_domains=tdc_svc.bounce_domains(conn))
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_deliverability.html", "tdc-deliverability",
+                  flash=flash, subactive="deliverability", page_title="Deliverability",
+                  **_tdc_shell("dispatch"), **ctx)
+
+
+@app.get("/tdc/dispatch/sends", response_class=HTMLResponse)
+def tdc_sends(request: Request):
+    return _tdc_soon(request, "dispatch", tdc_nav.DISPATCH, "sends")
+
+
+@app.get("/tdc/deals", response_class=HTMLResponse)
+def tdc_deals_queue(request: Request):
+    return _tdc_soon(request, "deals", tdc_nav.DEALS, "queue")
+
+
+@app.get("/tdc/deals/entities", response_class=HTMLResponse)
+def tdc_deals_entities(request: Request):
+    return _tdc_soon(request, "deals", tdc_nav.DEALS, "entities")
+
+
+@app.get("/tdc/deals/sources", response_class=HTMLResponse)
+def tdc_deals_sources(request: Request):
+    return _tdc_soon(request, "deals", tdc_nav.DEALS, "sources")
+
+
+@app.get("/tdc/deals/publish", response_class=HTMLResponse)
+def tdc_deals_publish(request: Request):
+    return _tdc_soon(request, "deals", tdc_nav.DEALS, "publish")
 
 
 @app.post("/tdc/unsandbox")
@@ -1353,7 +1429,9 @@ def tdc_unsandbox(request: Request, email: str = Form(...)):
         msg = f"Not lifted — {e}"
     finally:
         POOL.putconn(conn)
-    return RedirectResponse(f"/tdc?{urlencode({'flash': msg})}", status_code=303)
+    back = request.headers.get("referer") or "/tdc/dispatch/deliverability"
+    back = back.split("?")[0]
+    return RedirectResponse(f"{back}?{urlencode({'flash': msg})}", status_code=303)
 
 
 @app.post("/tdc/sync")
@@ -1368,4 +1446,5 @@ def tdc_sync_now(request: Request):
         msg = f"Sync failed: {e}"
     finally:
         POOL.putconn(conn)
-    return RedirectResponse(f"/tdc?{urlencode({'flash': msg})}", status_code=303)
+    return RedirectResponse(f"/tdc/dispatch/subscribers?{urlencode({'flash': msg})}",
+                            status_code=303)
