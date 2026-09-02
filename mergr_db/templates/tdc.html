@@ -30,6 +30,7 @@
   .pill.confirmed{background:#b0281f;border-color:#b0281f;color:#fff}
   .pill.pending{border-color:var(--muted);color:var(--muted)}
   .pill.unsubscribed{border-style:dashed;color:var(--muted)}
+  .pill.sandboxed,.pill.complained{background:#b0281f;border-color:#b0281f;color:#fff}
   .muted{color:var(--muted)}
   .pd-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .pd-sync .out{font-size:12px;color:var(--muted)}
@@ -41,7 +42,9 @@
 <h1 style="margin:0 0 4px">TDC</h1>
 <p class="muted" style="margin:0 0 18px;font-size:13px">
   Subscribers to The Dispatch — a replica of the DynamoDB table the public sign-up writes to.
-  DynamoDB stays the source of truth; this copy exists so it can be queried and joined.</p>
+  <strong>Mailable</strong> is the only number that matters at send time: confirmed <em>and</em>
+  deliverable. Consent and deliverability are separate — an address can be confirmed and
+  sandboxed at once, and a sandbox is lifted by an admin, never automatically.</p>
 
 <div class="pd-panel">
   <div class="pd-head">
@@ -68,8 +71,11 @@
   <div class="pd-stat"><span class="k">Confirm rate</span><span class="v">{{ c.confirm_rate or 0 }}%</span></div>
   <div class="pd-stat"><span class="k">Last 7 days</span><span class="v">{{ c.last7 or 0 }}</span></div>
   <div class="pd-stat"><span class="k">Last 30 days</span><span class="v">{{ c.last30 or 0 }}</span></div>
-  {% if c.unsynced %}<div class="pd-stat"><span class="k">Not in SendGrid</span>
-    <span class="v warn">{{ c.unsynced }}</span></div>{% endif %}
+  <div class="pd-stat"><span class="k">Mailable</span><span class="v">{{ c.mailable or 0 }}</span></div>
+  {% if c.sandboxed %}<div class="pd-stat"><span class="k">Sandboxed</span>
+    <span class="v warn">{{ c.sandboxed }}</span></div>{% endif %}
+  {% if c.complained %}<div class="pd-stat"><span class="k">Complained</span>
+    <span class="v warn">{{ c.complained }}</span></div>{% endif %}
 </div>
 
 <div class="pd-panel">
@@ -116,15 +122,17 @@
   <div class="pd-head"><h2>Recent sign-ups</h2></div>
   {% if recent %}
   <table class="pd">
-    <thead><tr><th>Email</th><th>Status</th><th>Signed up</th><th>Confirmed</th><th></th></tr></thead>
+    <thead><tr><th>Email</th><th>Status</th><th>Delivery</th><th>Signed up</th><th>Confirmed</th></tr></thead>
     <tbody>
       {% for r in recent %}
       <tr>
         <td>{{ r.email }}</td>
         <td><span class="pill {{ r.status }}">{{ r.status }}</span></td>
+        <td>{% if r.delivery != 'ok' %}<span class="pill sandboxed"
+              title="{{ r.bounce_type }} — {{ r.bounce_reason }}">{{ r.delivery }}</span>
+            {% else %}<span class="muted">ok</span>{% endif %}</td>
         <td class="muted">{{ r.created_at.strftime('%d %b %H:%M') if r.created_at else '—' }}</td>
         <td class="muted">{{ r.confirmed_at.strftime('%d %b %H:%M') if r.confirmed_at else '—' }}</td>
-        <td>{% if r.sg_synced is false %}<span class="muted" title="{{ r.sg_error }}">not in SendGrid</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

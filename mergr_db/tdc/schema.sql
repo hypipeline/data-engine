@@ -16,11 +16,15 @@ CREATE TABLE IF NOT EXISTS tdc.subscribers (
     created_at       timestamptz,
     confirmed_at     timestamptz,
     unsubscribed_at  timestamptz,
-    sg_synced        boolean,                  -- reached SendGrid's contact list?
-    sg_error         text,
+    delivery         text,                     -- ok | sandboxed | complained | blocked
+    bounce_type      text,                     -- hard | blocked | dropped
+    bounce_reason    text,
+    sandboxed_at     timestamptz,
+    complained_at    timestamptz,
     synced_at        timestamptz DEFAULT now() -- when this row was last pulled from DynamoDB
 );
 CREATE INDEX IF NOT EXISTS subscribers_status_idx  ON tdc.subscribers (status);
+CREATE INDEX IF NOT EXISTS subscribers_delivery_idx ON tdc.subscribers (delivery);
 CREATE INDEX IF NOT EXISTS subscribers_domain_idx  ON tdc.subscribers (domain);
 CREATE INDEX IF NOT EXISTS subscribers_created_idx ON tdc.subscribers (created_at DESC);
 
@@ -38,3 +42,13 @@ CREATE TABLE IF NOT EXISTS tdc.sync_runs (
     error       text
 );
 CREATE INDEX IF NOT EXISTS sync_runs_source_idx ON tdc.sync_runs (source, started_at DESC);
+
+-- Consent and deliverability are independent axes: an address can be confirmed and
+-- sandboxed at once, and neither may mask the other. Sending requires both clear.
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS delivery text;
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS bounce_type text;
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS bounce_reason text;
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS sandboxed_at timestamptz;
+ALTER TABLE tdc.subscribers ADD COLUMN IF NOT EXISTS complained_at timestamptz;
+ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_synced;
+ALTER TABLE tdc.subscribers DROP COLUMN IF EXISTS sg_error;

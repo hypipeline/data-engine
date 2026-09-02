@@ -99,22 +99,26 @@ def run_sync(conn=None, progress=None):
                 cur.execute("""
                     INSERT INTO tdc.subscribers
                       (email, domain, status, cadence, regions, sectors,
-                       created_at, confirmed_at, unsubscribed_at, sg_synced, sg_error, synced_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
+                       created_at, confirmed_at, unsubscribed_at,
+                       delivery, bounce_type, bounce_reason, sandboxed_at, complained_at, synced_at)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, now())
                     ON CONFLICT (email) DO UPDATE SET
                       domain=EXCLUDED.domain, status=EXCLUDED.status, cadence=EXCLUDED.cadence,
                       regions=EXCLUDED.regions, sectors=EXCLUDED.sectors,
                       created_at=EXCLUDED.created_at, confirmed_at=EXCLUDED.confirmed_at,
                       unsubscribed_at=EXCLUDED.unsubscribed_at,
-                      sg_synced=EXCLUDED.sg_synced, sg_error=EXCLUDED.sg_error, synced_at=now()
+                      delivery=EXCLUDED.delivery, bounce_type=EXCLUDED.bounce_type,
+                      bounce_reason=EXCLUDED.bounce_reason, sandboxed_at=EXCLUDED.sandboxed_at,
+                      complained_at=EXCLUDED.complained_at, synced_at=now()
                     RETURNING (xmax = 0) AS inserted
                 """, (
                     email, email.split("@")[-1] or None,
                     _s(it, "status"), _s(it, "cadence"),
                     _ss(it, "regions"), _ss(it, "sectors"),
                     _ts(it, "createdAt"), _ts(it, "confirmedAt"), _ts(it, "unsubscribedAt"),
-                    (it.get("sgSynced") or {}).get("BOOL"),
-                    _s(it, "sgError") or None,
+                    _s(it, "delivery") or "ok", _s(it, "bounceType") or None,
+                    _s(it, "bounceReason") or None,
+                    _ts(it, "sandboxedAt"), _ts(it, "complainedAt"),
                 ))
                 stats["inserted" if cur.fetchone()[0] else "updated"] += 1
 

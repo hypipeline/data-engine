@@ -41,7 +41,11 @@ def counts(conn):
           count(*) FILTER (WHERE status = 'unsubscribed')           AS unsubscribed,
           count(*) FILTER (WHERE created_at > now() - interval '7 days')  AS last7,
           count(*) FILTER (WHERE created_at > now() - interval '30 days') AS last30,
-          count(*) FILTER (WHERE status = 'confirmed' AND sg_synced IS FALSE) AS unsynced
+          count(*) FILTER (WHERE delivery = 'sandboxed')                 AS sandboxed,
+          count(*) FILTER (WHERE delivery = 'complained')                AS complained,
+          -- the only number that matters at send time: both axes clear
+          count(*) FILTER (WHERE status = 'confirmed'
+                             AND coalesce(delivery,'ok') = 'ok')         AS mailable
         FROM tdc.subscribers
     """)
     conf, pend = r.get("confirmed", 0), r.get("pending", 0)
@@ -99,7 +103,7 @@ def by_domain_linked(conn, limit=50):
 def recent(conn, limit=50):
     return _rows(conn, """
         SELECT email, domain, status, cadence, created_at, confirmed_at, unsubscribed_at,
-               sg_synced, sg_error
+               coalesce(delivery,'ok') AS delivery, bounce_type, bounce_reason, sandboxed_at
         FROM tdc.subscribers
         ORDER BY created_at DESC NULLS LAST
         LIMIT %s
