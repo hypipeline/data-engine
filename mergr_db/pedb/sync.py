@@ -20,6 +20,8 @@ import boto3
 import psycopg2
 import psycopg2.extras
 
+from pedb import service as svc
+
 PG_DSN = os.environ.get("DATABASE_URL", "postgres://mergr:mergr@127.0.0.1:5433/mergr")
 TABLE = os.environ.get("PEDB_SUBSCRIBERS_TABLE", "dealchronicle-subscribers")
 REGION = os.environ.get("PEDB_DDB_REGION", "us-east-1")
@@ -71,6 +73,7 @@ def run_sync(conn=None, progress=None):
 
     own = conn is None
     conn = conn or psycopg2.connect(PG_DSN)
+    svc.ensure_schema(conn)
     stats = {"scanned": 0, "inserted": 0, "updated": 0, "removed": 0}
     run_id = None
     try:

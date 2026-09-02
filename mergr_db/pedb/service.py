@@ -3,7 +3,20 @@ PE DB — read queries over the subscriber replica.
 
 Everything here reads Postgres only; the DynamoDB pull lives in pedb.sync.
 """
+import os
+
 from psycopg2.extras import RealDictCursor
+
+_SCHEMA = os.path.join(os.path.dirname(__file__), "schema.sql")
+
+
+def ensure_schema(conn):
+    """Apply pedb/schema.sql. Idempotent, and cheap enough to call on every page
+    load — the compose file only mounts the root schema at database creation, so
+    a sub-app has to bring its own (same approach as buyer_match.email_domains)."""
+    with open(_SCHEMA, encoding="utf-8") as fh, conn.cursor() as cur:
+        cur.execute(fh.read())
+    conn.commit()
 
 
 def _rows(conn, sql, args=None):

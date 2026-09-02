@@ -1310,6 +1310,7 @@ def bm_run_sync():
 def pedb_page(request: Request, flash: str = ""):
     conn = POOL.getconn()
     try:
+        pedb_svc.ensure_schema(conn)
         ctx = dict(
             c=pedb_svc.counts(conn),
             domains=pedb_svc.by_domain_linked(conn, 50),

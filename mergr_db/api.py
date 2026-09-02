@@ -17,6 +17,7 @@ from psycopg2 import pool as pgpool
 from mergr_money import money_obj, mult_obj, money_str
 from domain_utils import website_to_domain
 import entity_client
+from pedb import service as pedb_svc
 
 DSN = os.environ["DATABASE_URL"]
 API_USER = os.environ.get("API_USER", "mergr")
@@ -249,5 +250,52 @@ def entity_lookup(url: str = Query(..., description="Company website URL to reso
     return payload
 
 
+# ---------------------------------------------------------------- pedb
+# Backend for The Deal Chronicle. Read-only over the subscriber replica; the
+# public site reaches this through its Lambda, never directly.
+pedb = APIRouter(prefix="/pedb", tags=["pedb"], dependencies=[Depends(auth)])
+
+
+@pedb.get("/subscribers/stats")
+def pedb_stats():
+    """Headline counts, plus when the replica was last refreshed — a caller should
+    be able to tell stale numbers from quiet ones."""
+    conn = POOL.getconn()
+    try:
+        return {**pedb_svc.counts(conn), "last_sync": pedb_svc.last_sync(conn)}
+    finally:
+        POOL.putconn(conn)
+
+
+@pedb.get("/subscribers/by-domain")
+def pedb_by_domain(limit: int = Query(50, le=500), linked: bool = False):
+    """linked=true also resolves each domain against Mergr firms/companies."""
+    conn = POOL.getconn()
+    try:
+        fn = pedb_svc.by_domain_linked if linked else pedb_svc.by_domain
+        return fn(conn, limit)
+    finally:
+        POOL.putconn(conn)
+
+
+@pedb.get("/subscribers/recent")
+def pedb_recent(limit: int = Query(50, le=500)):
+    conn = POOL.getconn()
+    try:
+        return pedb_svc.recent(conn, limit)
+    finally:
+        POOL.putconn(conn)
+
+
+@pedb.get("/subscribers/by-day")
+def pedb_by_day(days: int = Query(30, le=365)):
+    conn = POOL.getconn()
+    try:
+        return pedb_svc.signups_by_day(conn, days)
+    finally:
+        POOL.putconn(conn)
+
+
 app.include_router(mergr)
 app.include_router(entity)
+app.include_router(pedb)
