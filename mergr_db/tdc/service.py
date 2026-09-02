@@ -8,14 +8,17 @@ import os
 from psycopg2.extras import RealDictCursor
 
 _SCHEMA = os.path.join(os.path.dirname(__file__), "schema.sql")
+_SCHEMA_DEALS = os.path.join(os.path.dirname(__file__), "schema_deals.sql")
 
 
 def ensure_schema(conn):
     """Apply tdc/schema.sql. Idempotent, and cheap enough to call on every page
     load — the compose file only mounts the root schema at database creation, so
     a sub-app has to bring its own (same approach as buyer_match.email_domains)."""
-    with open(_SCHEMA, encoding="utf-8") as fh, conn.cursor() as cur:
-        cur.execute(fh.read())
+    with conn.cursor() as cur:
+        for path in (_SCHEMA, _SCHEMA_DEALS):
+            with open(path, encoding="utf-8") as fh:
+                cur.execute(fh.read())
     conn.commit()
 
 
