@@ -73,6 +73,22 @@
   </a>
   {% endif %}
 
+  {% if _al is none or 'pedb' in _al %}
+  <a class="tool-card" href="/pedb">
+    <div class="tool-card-h">
+      <span class="tool-card-title">PE DB</span>
+      <span class="tool-card-tag">The Deal Chronicle</span>
+    </div>
+    <p class="tool-card-desc">Backend for thedealchronicle.com. Subscribers to The Dispatch,
+       replicated from the public sign-up, with each firm matched against Mergr.</p>
+    <div class="tool-card-stats">
+      {% if counts.pedb_subs is not none %}<span><b>{{ "{:,}".format(counts.pedb_subs) }}</b> subscribers</span>{% endif %}
+      <span>sign-ups&nbsp;→&nbsp;<b>by firm</b></span>
+    </div>
+    <span class="tool-card-cta">Open PE DB →</span>
+  </a>
+  {% endif %}
+
   {% if _al is none or 'linkedin-profiles' in _al %}
   <a class="tool-card" href="/linkedin-profiles">
     <div class="tool-card-h">

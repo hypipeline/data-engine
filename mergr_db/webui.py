@@ -189,6 +189,11 @@ def home(request: Request):
         counts["linkedin"] = li["n"] if li else 0
     except Exception:
         counts["linkedin"] = None
+    try:                                              # pedb schema may not exist yet
+        pd = query("SELECT count(*) n FROM pedb.subscribers WHERE status='confirmed'", one=True)
+        counts["pedb_subs"] = pd["n"] if pd else 0
+    except Exception:
+        counts["pedb_subs"] = None
     return render(request, "home.html", "home",
                   counts=counts, entity_up=entity_client.health())
 
