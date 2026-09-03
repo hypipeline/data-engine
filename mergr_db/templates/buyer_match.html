@@ -1446,6 +1446,7 @@ function renderAiBuyers(res){
     +'<label class="bmv-vlabel" style="margin-left:6px;cursor:pointer" title="Only buyers this model uniquely suggested (no other model agreed)"><input type="checkbox" id="ai-model-only" '+(aiModelOnly?'checked':'')+(aiModelFilter?'':' disabled')+' onchange="setAiModelOnly(this.checked)" style="vertical-align:middle;margin-right:3px">only</label>'
     +'<span class="bmv-vlabel" style="margin-left:10px">Filter</span>'
     +'<input class="bmv-filter" type="search" placeholder="keyword…" title="Show only rows matching this keyword" value="'+esc(aiTxtFilter)+'" oninput="setAiTxtFilter(this.value)">'
+    +'<span class="bmv-vlabel" id="ai-matchcount" style="margin-left:10px;font-weight:700"></span>'
     +'<span class="bmv-selcount" id="ai-selcount"></span>'
     +'<span class="grow"></span><span class="bmv-vlabel">View</span><div class="bmv-seg" id="ai-viewseg">'
     +'<button data-v="table" class="'+(aiView==='table'?'active':'')+'" onclick="setAiView(\'table\')" title="Condensed table with tick-box multi-select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Condensed</button>'
@@ -1468,6 +1469,11 @@ function aiVisible(){
   if(aiTxtFilter) b=b.filter(function(x){return bmTextMatch(x, aiTxtFilter);});
   return b;
 }
+function updateAiMatchCount(n){
+  var el=document.getElementById('ai-matchcount'); if(!el) return;
+  var total=((aiData&&aiData.buyers)||[]).length;
+  el.textContent=(total && n<total) ? ('Showing '+n+' of '+total) : '';   // filter/match count — distinct from the selection pill
+}
 function updateAiSelCount(){
   var el=document.getElementById('ai-selcount'); if(!el) return;
   var base=(aiData&&aiData.buyers)||[]; if(!base.length){ el.textContent=''; return; }
@@ -1477,6 +1483,7 @@ function updateAiSelCount(){
 function paintAi(){
   var el=document.getElementById('ai-list'); if(!el){ updateCartBar(); return; }
   var rows=aiVisible();
+  updateAiMatchCount(rows.length);
   if(!rows.length){ el.innerHTML='<div class="empty-box" style="margin-top:14px">No buyers match this filter.</div>'; updateCartBar(); return; }
   el.innerHTML = aiView==='table' ? aiTable(rows) : '<div class="bmv-sheets">'+rows.map(aiBuyerCard).join('')+'</div>';
   markFilter(el, aiTxtFilter);
