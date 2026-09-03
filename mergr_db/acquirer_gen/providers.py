@@ -233,23 +233,26 @@ def call_openai(key, model, target, s):
     return _ok("openai", model, text, u.get("input_tokens", 0), u.get("output_tokens", 0), web, t0, prompt={"system": system, "user": user})
 
 
-def call_openai_compat(provider, base_url, key, model, target, s, web_native=False):
+def call_openai_compat(provider, base_url, key, model, target, s, web_native=False, wire_model=None):
     t0 = time.time()
     system, user = _prompt_for(target, s)
     body = {
-        "model": model, "max_tokens": s.get("max_tokens", 6000),
+        "model": wire_model or model, "max_tokens": s.get("max_tokens", 6000),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     if web_native:                                  # ask Perplexity to search deeper/broader
         body["web_search_options"] = {"search_context_size": s.get("search_context", "high")}
-    if "perplexity" in base_url:                    # force JSON output (deep-research writes prose essays otherwise)
+    if "perplexity" in base_url or "perplexity/" in (wire_model or ""):   # force JSON (Sonar direct OR via OpenRouter)
         body["response_format"] = {"type": "json_schema",
                                    "json_schema": {"schema": _schema_for(s.get("part", "both"))}}
     if s.get("temperature") is not None:
         body["temperature"] = s["temperature"]
     try:
-        r = httpx.post(base_url, headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                       json=body, timeout=TIMEOUT)
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        if "openrouter.ai" in base_url:             # label the app in the OpenRouter dashboard
+            headers["HTTP-Referer"] = "https://dataengine.hyndlandpartners.com"
+            headers["X-Title"] = "Data Engine"
+        r = httpx.post(base_url, headers=headers, json=body, timeout=TIMEOUT)
         j = r.json()
     except Exception as e:                          # noqa: BLE001
         return _err(provider, model, e, t0)
@@ -268,7 +271,7 @@ def call_openai_compat(provider, base_url, key, model, target, s, web_native=Fal
 
 
 KEY_ENV = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY",
-           "perplexity": "PERPLEXITY_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+           "perplexity": "OPENROUTER_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}   # Sonar now routed via OpenRouter
 
 
 def run_provider(provider, model, target, settings):
@@ -280,8 +283,11 @@ def run_provider(provider, model, target, settings):
     if provider == "openai":
         return call_openai(key, model, target, settings)
     if provider == "perplexity":
-        return call_openai_compat("perplexity", "https://api.perplexity.ai/chat/completions",
-                                  key, model, target, settings, web_native=True)
+        # Sonar via OpenRouter (was api.perplexity.ai direct). Keep the bare model name for
+        # pricing / labels / retry; only the request body uses OpenRouter's "perplexity/…" id.
+        return call_openai_compat("perplexity", "https://openrouter.ai/api/v1/chat/completions",
+                                  key, model, target, settings, web_native=True,
+                                  wire_model=f"perplexity/{model}")
     if provider == "deepseek":
         s = dict(settings, max_tokens=min(settings.get("max_tokens", 6000), 8000))  # DeepSeek output ceiling
         return call_openai_compat("deepseek", "https://api.deepseek.com/chat/completions",
