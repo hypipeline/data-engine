@@ -1455,6 +1455,7 @@ function renderAiBuyers(res){
 }
 function setAiView(v){ aiView=v; var seg=document.getElementById('ai-viewseg'); if(seg)seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v===v); }); paintAi(); }
 function setAiSelFilter(v){ aiSelFilter=v; paintAi(); }
+function aiModelLabel(m){ return String(m||'').replace(/\s*\((?:split|combined)\)\s*$/,''); }  // rec_sources holds the stripped label; dropdown values keep ' (split)'
 function setAiModelFilter(v){ aiModelFilter=v; var cb=document.getElementById('ai-model-only'); if(cb){ cb.disabled=!v; if(!v){ cb.checked=false; aiModelOnly=false; } } paintAi(); }
 function setAiModelOnly(c){ aiModelOnly=c; paintAi(); }
 var aiTxtFilter='';
@@ -1463,7 +1464,7 @@ function aiVisible(){
   var b=aiSorted();
   if(aiSelFilter==='sel') b=b.filter(function(x){return x._selid&&bmSelHas(x._selid);});
   else if(aiSelFilter==='un') b=b.filter(function(x){return !(x._selid&&bmSelHas(x._selid));});
-  if(aiModelFilter) b=b.filter(function(x){ var s=x.rec_sources||[]; return aiModelOnly ? (s.length===1 && s[0]===aiModelFilter) : (s.indexOf(aiModelFilter)!==-1); });
+  if(aiModelFilter){ var mf=aiModelLabel(aiModelFilter); b=b.filter(function(x){ var s=(x.rec_sources||[]).map(aiModelLabel); return aiModelOnly ? (s.length===1 && s[0]===mf) : (s.indexOf(mf)!==-1); }); }
   if(aiTxtFilter) b=b.filter(function(x){return bmTextMatch(x, aiTxtFilter);});
   return b;
 }
