@@ -69,6 +69,8 @@ def generate(conn, target, provider, model, settings, index=None, do_log=True, o
         on_progress(part, "error" if (res.get("error") and not n) else "done", n)
     res["cost_usd"] = pricing.cost_usd(model, res["usage"])
     res["calls"] = [_call_record(settings.get("part", "both"), res)]
+    for _c in res["calls"]:                          # per-call cost for the audit / cost breakdown
+        _c["cost_usd"] = round(pricing.cost_usd(model, _c.get("usage", {})), 6)
     if index is None:
         index = verify.build_index(conn)
     res["acquirers"] = verify.match_acquirers(index, res.get("acquirers", []))
@@ -112,6 +114,8 @@ def generate_split(conn, target, provider, model, settings, index=None, do_log=T
     res["parse_ok"] = bool(res["acquirers"]) or bool(res["deals"])
     res["cost_usd"] = pricing.cost_usd(model, usage)
     res["calls"] = [_call_record("acquirers", ra), _call_record("deals", rd)]
+    for _c in res["calls"]:                          # per-call cost so each split query shows its own $
+        _c["cost_usd"] = round(pricing.cost_usd(model, _c.get("usage", {})), 6)
     res["acquirers"] = verify.match_acquirers(index, res["acquirers"])
     res["counts"] = verify.counts(res["acquirers"])
     res["counts"]["deals"] = len(res["deals"])
