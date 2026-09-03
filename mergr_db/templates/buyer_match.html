@@ -1182,6 +1182,7 @@ function dhPaintSections(){
 var aiPollTimer=null, aiStart=0, aiData=null, aiSort='score';
 var aiView='sheet';       // 'sheet' = rich tearsheet | 'table' = condensed multi-select
 var aiSelFilter='';       // '' all | 'sel' selected | 'un' not selected
+var aiModelFilter='', aiModelOnly=false;   // filter AI buyers by which model suggested them ('' = all); aiModelOnly => that model is the SOLE recommender
 var BM_AI_ACTIVE='bm_ai_active';   // localStorage: id of an in-flight AI run, so we can reattach after a reload/close
 async function doAiSearch(){
   var q=document.getElementById('query').value.trim(); if(!q) return;
@@ -1434,10 +1435,15 @@ function renderAiBuyers(res){
   if(res.retry_error){ warn = '<div class="error-box" style="margin-bottom:12px">↻ Retry failed: '+esc(res.retry_error)+'</div>' + warn; }
   var meta=document.getElementById('search-meta'); meta.style.display='';
   meta.innerHTML=(errs.length?'<span style="color:#b91c1c;font-weight:800">⚠ '+errs.length+' model error'+(errs.length>1?'s':'')+' · </span>':'')+'<b>'+(c.buyers||0)+'</b> buyers · ★<b>'+(c.both||0)+'</b> recommended+proven · '+(c.consensus||0)+' multi-model · '+(c.in_on||0)+' ON · '+(c.deals||0)+' deals · <b>$'+Number(res.total_cost||0).toFixed(2)+'</b>';
+  if(aiModelFilter && !(res.models||[]).some(function(m){return m.model===aiModelFilter;})){ aiModelFilter=''; aiModelOnly=false; }  // drop a stale model filter not in this run
+  var modelOpts=(res.models||[]).map(function(m){return '<option value="'+esc(m.model)+'"'+(aiModelFilter===m.model?' selected':'')+'>'+esc(m.model)+'</option>';}).join('');
   var tools='<div class="dh-toolbar"><span class="bmv-vlabel">Sort</span><select class="bmv-specsel" onchange="aiSort=this.value;paintAi()"><option value="score">Confidence</option><option value="consensus">Consensus</option><option value="on">ON first</option><option value="deals">Most deals</option></select>'
     +'<span class="bmv-vlabel" style="margin-left:10px">Selection</span>'
     +'<select class="bmv-specsel" onchange="setAiSelFilter(this.value)">'
     +'<option value="">All</option><option value="sel"'+(aiSelFilter==='sel'?' selected':'')+'>Selected</option><option value="un"'+(aiSelFilter==='un'?' selected':'')+'>Not selected</option></select>'
+    +'<span class="bmv-vlabel" style="margin-left:10px">Model</span>'
+    +'<select class="bmv-specsel" onchange="setAiModelFilter(this.value)"><option value="">All models</option>'+modelOpts+'</select>'
+    +'<label class="bmv-vlabel" style="margin-left:6px;cursor:pointer" title="Only buyers this model uniquely suggested (no other model agreed)"><input type="checkbox" id="ai-model-only" '+(aiModelOnly?'checked':'')+(aiModelFilter?'':' disabled')+' onchange="setAiModelOnly(this.checked)" style="vertical-align:middle;margin-right:3px">only</label>'
     +'<span class="bmv-vlabel" style="margin-left:10px">Filter</span>'
     +'<input class="bmv-filter" type="search" placeholder="keyword…" title="Show only rows matching this keyword" value="'+esc(aiTxtFilter)+'" oninput="setAiTxtFilter(this.value)">'
     +'<span class="bmv-selcount" id="ai-selcount"></span>'
@@ -1449,12 +1455,15 @@ function renderAiBuyers(res){
 }
 function setAiView(v){ aiView=v; var seg=document.getElementById('ai-viewseg'); if(seg)seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.v===v); }); paintAi(); }
 function setAiSelFilter(v){ aiSelFilter=v; paintAi(); }
+function setAiModelFilter(v){ aiModelFilter=v; var cb=document.getElementById('ai-model-only'); if(cb){ cb.disabled=!v; if(!v){ cb.checked=false; aiModelOnly=false; } } paintAi(); }
+function setAiModelOnly(c){ aiModelOnly=c; paintAi(); }
 var aiTxtFilter='';
 function setAiTxtFilter(v){ aiTxtFilter=v; paintAi(); }
 function aiVisible(){
   var b=aiSorted();
   if(aiSelFilter==='sel') b=b.filter(function(x){return x._selid&&bmSelHas(x._selid);});
   else if(aiSelFilter==='un') b=b.filter(function(x){return !(x._selid&&bmSelHas(x._selid));});
+  if(aiModelFilter) b=b.filter(function(x){ var s=x.rec_sources||[]; return aiModelOnly ? (s.length===1 && s[0]===aiModelFilter) : (s.indexOf(aiModelFilter)!==-1); });
   if(aiTxtFilter) b=b.filter(function(x){return bmTextMatch(x, aiTxtFilter);});
   return b;
 }
