@@ -247,3 +247,15 @@ CREATE TABLE IF NOT EXISTS tdc.coverage (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS coverage_active_idx ON tdc.coverage (active, name);
+
+-- Bridge validation. Name similarity was the wrong instrument: it cleared
+-- Mainstreet Capital -> a similarly-named US listed BDC at 0.73, and flagged
+-- AAB -> aab-accountants at 0.33 despite that being correct. Resemblance is not
+-- evidence. A reciprocal link is, so both directions are checked and recorded
+-- separately rather than collapsed into a score.
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS site_links_linkedin boolean;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS linkedin_lists_site boolean;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS bridge text
+    CHECK (bridge IN ('both','site_only','linkedin_only','neither','unreachable'));
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS bridge_note text;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS checked_at timestamptz;

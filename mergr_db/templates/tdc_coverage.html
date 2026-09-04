@@ -12,7 +12,12 @@
   <div class="pd-stat"><span class="k">Firms</span><span class="v">{{ rows|length }}</span></div>
   <div class="pd-stat"><span class="k">With LinkedIn</span>
     <span class="v">{{ rows|selectattr('linkedin_url')|list|length }}</span></div>
-  <div class="pd-stat"><span class="k">Need a check</span>
+  <div class="pd-stat"><span class="k">Both directions</span>
+    <span class="v">{{ rows|selectattr('bridge','equalto','both')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">One direction</span>
+    <span class="v">{{ (rows|selectattr('bridge','equalto','site_only')|list|length)
+                      + (rows|selectattr('bridge','equalto','linkedin_only')|list|length) }}</span></div>
+  <div class="pd-stat"><span class="k">Unproven</span>
     <span class="v {{ 'warn' if rows|selectattr('needs_check')|list|length }}">
       {{ rows|selectattr('needs_check')|list|length }}</span></div>
 </div>
@@ -22,7 +27,8 @@
     <span class="right">weakest matches first</span></div>
   {% if rows %}
   <table class="pd">
-    <thead><tr><th>Firm</th><th>Website</th><th>LinkedIn</th><th class="n">Staff</th><th></th></tr></thead>
+    <thead><tr><th>Firm</th><th>Website</th><th>LinkedIn</th><th class="n">Staff</th>
+      <th title="site links to LinkedIn / LinkedIn carries the domain">Bridge</th></tr></thead>
     <tbody>
       {% for r in rows %}
       <tr>
@@ -34,8 +40,17 @@
               {{ r.linkedin_url|replace('https://www.linkedin.com/company/','')|truncate(34) }}</a>
             {% else %}<span class="muted">not found</span>{% endif %}</td>
         <td class="n muted">{{ r.employees if r.employees is not none else '—' }}</td>
-        <td>{% if r.needs_check %}<span class="pill sandboxed"
-              title="firm name vs resolved LinkedIn slug scored {{ r.name_match }} — likely a different company">check</span>{% endif %}</td>
+        <td>
+          {% if r.bridge == 'both' %}
+            <span class="pill confirmed" title="site links to this LinkedIn page, and the page carries this domain">both</span>
+          {% elif r.bridge in ('site_only','linkedin_only') %}
+            <span class="pill pending" title="only one direction holds — {{ r.bridge_note or 'the other could not be confirmed' }}">{{ r.bridge|replace('_only',' only') }}</span>
+          {% elif r.bridge == 'unreachable' %}
+            <span class="pill sandboxed" title="{{ r.bridge_note }}">unreachable</span>
+          {% elif r.bridge == 'neither' %}
+            <span class="pill complained" title="neither end points at the other — probably a different company">unproven</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>

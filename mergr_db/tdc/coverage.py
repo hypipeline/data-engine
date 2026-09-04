@@ -58,9 +58,100 @@ def upsert(conn, name, website, linkedin_url, employees, origin, resolved_by, ma
 
 def rows(conn, include_inactive=False):
     sql = """SELECT id, name, website, linkedin_url, employees, name_match,
-                    needs_check, active, resolved_by
-             FROM tdc.coverage {} ORDER BY needs_check DESC, name"""
+                    needs_check, active, resolved_by, bridge, bridge_note,
+                    site_links_linkedin, linkedin_lists_site, checked_at
+             FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     where = "" if include_inactive else "WHERE active"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(sql.format(where))
         return cur.fetchall()
+
+
+# --------------------------------------------------------------- validation
+# Not discovery. The pairing already exists; this asks whether it is true, in the
+# only way that is evidence rather than resemblance — does each end point at the
+# other? The two directions are independent and are kept apart, because a firm
+# that links its LinkedIn but has no website listed on LinkedIn is a different
+# situation from one where neither holds.
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/128.0 Safari/537.36")
+
+
+def _fetch(url, timeout=12):
+    if not url.startswith("http"):
+        url = "https://" + url
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _slug(linkedin_url):
+    m = re.search(r"/company/([^/?#]+)", linkedin_url or "")
+    return m.group(1).rstrip("/").lower() if m else None
+
+
+def _domain(website):
+    d = re.sub(r"^https?://", "", (website or "").strip().lower())
+    d = d.split("/")[0].split("?")[0]
+    return re.sub(r"^www\.", "", d)
+
+
+def site_links_linkedin(website, linkedin_url):
+    """Direction one: the firm's own site points at that LinkedIn page."""
+    want = _slug(linkedin_url)
+    if not want:
+        return None
+    body = _fetch(website)
+    for found in re.findall(r"linkedin\.com/(?:company|showcase)/([A-Za-z0-9\-_.%]+)", body, re.I):
+        if found.rstrip("/").lower() == want:
+            return True
+    return False
+
+
+def linkedin_lists_site(website, linkedin_url):
+    """Direction two: the LinkedIn page carries that domain. Checked against the
+    whole page rather than a parsed website field — the guest view does not always
+    render one — so this is 'the domain appears', which is weaker but still a fact
+    about the page and never a guess about the name."""
+    dom = _domain(website)
+    if not dom:
+        return None
+    body = _fetch(linkedin_url, timeout=15)
+    return bool(re.search(re.escape(dom), body, re.I))
+
+
+def validate(conn, row):
+    site, li = row.get("website"), row.get("linkedin_url")
+    a = b = None
+    notes = []
+    if site and li:
+        try:
+            a = site_links_linkedin(site, li)
+        except Exception as e:
+            notes.append("site " + type(e).__name__)
+        try:
+            b = linkedin_lists_site(site, li)
+        except Exception as e:
+            notes.append("linkedin " + type(e).__name__)
+
+    if a and b:
+        verdict = "both"
+    elif a:
+        verdict = "site_only"
+    elif b:
+        verdict = "linkedin_only"
+    elif a is None and b is None:
+        verdict = "unreachable"
+    else:
+        verdict = "neither"
+
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE tdc.coverage
+                          SET site_links_linkedin=%s, linkedin_lists_site=%s, bridge=%s,
+                              bridge_note=%s, checked_at=now(),
+                              needs_check = (%s IN ('neither','unreachable')),
+                              updated_at=now()
+                        WHERE id=%s""",
+                    (a, b, verdict, "; ".join(notes) or None, verdict, row["id"]))
+    conn.commit()
+    return verdict, a, b, "; ".join(notes)
