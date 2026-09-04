@@ -453,7 +453,14 @@ class GoogleMixin:
         if not html:
             self._progress('google', "Google: search failed")
             return None
-        m = re.search(r'linkedin\.com/company/[A-Za-z0-9_\-\.%]+', html, re.I)
+        # A slug may legitimately contain an ampersand — "brown-gibbons-lang-&-company" —
+        # and Google entity-encodes it, so unescape before matching or the & is never seen.
+        html = _htmllib.unescape(html)
+        # & is allowed inside a slug but never when it opens a query parameter (&sa=U,
+        # &ved=..., &usg=...). Excluding & outright was the old behaviour: it kept the
+        # tracking params out and silently truncated every firm with & in its name.
+        m = re.search(r'linkedin\.com/company/(?:[A-Za-z0-9_\-.%]|&(?![A-Za-z]+=))+',
+                      html, re.I)
         if not m:
             self._progress('google', "Google: no LinkedIn company link found")
             return None
