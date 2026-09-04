@@ -5,9 +5,11 @@ Seeded from the ON advisory_firms roster: name, website and is_active only. Note
 and contact history are relationship data and are deliberately never read.
 """
 import difflib
+import html
 import json
 import os
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -76,13 +78,76 @@ def rows(conn, include_inactive=False):
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/128.0 Safari/537.36")
 
+# A company slug may contain an ampersand (brown-gibbons-lang-&-company). Allow it,
+# but never where it opens a query parameter, or Google's &sa=/&ved= tracking lands
+# inside the slug. Excluding & outright is what truncated BGL to a URL that 404s.
+LINKEDIN_RE = r"linkedin\.com/(?:company|showcase)/((?:[A-Za-z0-9_\-.%]|&(?![A-Za-z]+=))+)"
+
 
 def _fetch(url, timeout=12):
     if not url.startswith("http"):
         url = "https://" + url
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+        # Unescaped here so every caller sees raw &, not &amp;.
+        return html.unescape(r.read().decode("utf-8", "replace"))
+
+
+def slug_from_site(website):
+    """The firm's own footer. Authoritative when present, and free."""
+    m = re.search(LINKEDIN_RE, _fetch(website), re.I)
+    return m.group(1).rstrip("/") if m else None
+
+
+def page_live(linkedin_url):
+    """True / False / None — None meaning we could not tell, which is not the same
+    as dead and must not be recorded as if it were."""
+    try:
+        _fetch(linkedin_url, 15)
+        return True
+    except urllib.error.HTTPError as e:
+        return False if e.code == 404 else None
+    except Exception:
+        return None
+
+
+def resolve(website):
+    """Finder proposes, the firm's own site repairs, liveness decides.
+
+    Google's result HTML truncates slugs at an ampersand — the character is simply
+    absent from the SERP — so the finder cannot recover those however good its regex
+    is. When its answer is dead, the firm's own footer is asked instead, and that is
+    the better authority anyway: a company knows its own LinkedIn page.
+
+    Returns (url, employees, how). `how` is never a guess dressed as a fact.
+    """
+    url = emp = None
+    try:
+        url, emp = find_linkedin(website)
+    except Exception:
+        pass
+
+    if url and page_live(url) is False:
+        try:
+            slug = slug_from_site(website)
+        except Exception:
+            slug = None
+        if slug:
+            repaired = "https://www.linkedin.com/company/" + slug
+            if page_live(repaired) is not False:
+                return repaired, emp, "site-repair"
+        return url, emp, "finder-dead"
+
+    if url:
+        return url, emp, "finder"
+
+    try:
+        slug = slug_from_site(website)
+    except Exception:
+        slug = None
+    if slug:
+        return "https://www.linkedin.com/company/" + slug, None, "site"
+    return None, None, "unresolved"
 
 
 def _slug(linkedin_url):
@@ -102,7 +167,7 @@ def site_links_linkedin(website, linkedin_url):
     if not want:
         return None
     body = _fetch(website)
-    for found in re.findall(r"linkedin\.com/(?:company|showcase)/([A-Za-z0-9\-_.%]+)", body, re.I):
+    for found in re.findall(LINKEDIN_RE, body, re.I):
         if found.rstrip("/").lower() == want:
             return True
     return False
