@@ -484,7 +484,7 @@ def _media(page, base_url, own_host=None):
     return links, imgs
 
 
-def strip_template(pages, threshold=0.6):
+def strip_template(pages, threshold=0.6, min_run=4):
     """Remove what repeats across a site's own pages.
 
     There is no reliable content boundary in the markup to extract instead. On the
@@ -496,6 +496,18 @@ def strip_template(pages, threshold=0.6):
     preference panels, footers. Content is what one page has and its siblings do
     not. That is the same rule that separates a firm's real outbound links from its
     FINRA footer, applied to text instead.
+
+    Frequency alone over-strips. A section heading repeats on every deal page
+    because every deal page has that section — "Team Members" and the tagline above
+    the photographs are on all six of Acuity's, and losing them leaves three names
+    floating with nothing to say they are the deal team.
+
+    What separates them is shape, not frequency: chrome arrives in blocks, because
+    nav, cookie panels and footers are contiguous regions of the document. On the
+    Six Degrees page the real chrome is two runs of 33 and 56 consecutive repeated
+    lines, while the section label is a run of 2 and a role is a run of 1, each
+    surrounded by text unique to that page. So only runs of min_run or more are
+    removed.
 
     `pages` is a list of line-lists. Needs at least two to say anything; with one
     page there is nothing to compare against and it is returned untouched.
@@ -510,9 +522,19 @@ def strip_template(pages, threshold=0.6):
     template = {l for l, n in seen.items() if n >= cut}
     out, removed = [], []
     for lines in pages:
-        kept = [l for l in lines if l not in template]
-        out.append(kept)
-        removed.append(sum(len(l) for l in lines if l in template))
+        flags = [l in template for l in lines]
+        drop = [False] * len(lines)
+        i = 0
+        while i < len(flags):
+            j = i
+            while j < len(flags) and flags[j] == flags[i]:
+                j += 1
+            if flags[i] and (j - i) >= min_run:
+                for k in range(i, j):
+                    drop[k] = True
+            i = j
+        out.append([l for l, d in zip(lines, drop) if not d])
+        removed.append(sum(len(l) for l, d in zip(lines, drop) if d))
     return out, removed
 
 
