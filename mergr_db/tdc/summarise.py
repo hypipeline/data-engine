@@ -14,7 +14,7 @@ from psycopg2.extras import RealDictCursor
 
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = os.environ.get("TDC_SUMMARY_MODEL", "google/gemini-2.5-flash")
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 # Fallback only. OpenRouter reports the actual charge per request when asked, and
 # that is used when present — a rate table goes stale silently, and a cost we
@@ -33,14 +33,34 @@ Rules:
   award entries. For those set is_deal false and leave every field null.
 - The firm publishing the document is usually an ADVISER, not a party. Do not record it
   as acquirer or target unless the document plainly says it bought or sold something.
-- people are individuals named in the document with their stated role and firm.
 - Quote consideration exactly as written, including the currency, or null.
+
+ADVISERS — one entry per advising FIRM, each with:
+  firm     the firm's name as written.
+  service  what they did. Use one of: corporate finance, legal, tax, financial due
+           diligence, commercial due diligence, debt advisory, insurance, broking,
+           accountancy, management consulting, other. Pick the closest; use "other"
+           rather than inventing a category. This is usually inferable from the wording
+           even when the side is not — "legal advice was provided by" means legal.
+  side     buy, sell, lender, or null. buy = acting for the acquirer or its backer.
+           sell = acting for the seller, the target, or its shareholders. lender = acting
+           for a debt provider. **null when the document does not say.** A firm named
+           without a side is normal and null is the correct answer — never guess from
+           who published the document, and never assume the publisher is sell-side.
+  people   individuals at THAT firm named in the document, each {"name", "role"} with
+           role being their stated job title or null.
+
+people (top level) is for individuals who are NOT advisers — executives, founders,
+shareholders — each {"name", "role", "firm"}.
 
 Reply with JSON only, no prose, matching:
 {"is_deal": bool, "headline": str|null, "summary": str|null, "acquirer": str|null,
  "target": str|null, "vendor": str|null, "consideration": str|null, "date_hint": str|null,
- "sector": str|null, "advisers": [str], "people": [{"name": str, "role": str|null,
- "firm": str|null}], "confidence": number}"""
+ "sector": str|null,
+ "advisers": [{"firm": str, "service": str, "side": "buy"|"sell"|"lender"|null,
+               "people": [{"name": str, "role": str|null}]}],
+ "people": [{"name": str, "role": str|null, "firm": str|null}],
+ "confidence": number}"""
 
 
 def _rate(model):
@@ -172,7 +192,7 @@ def spend(conn):
     """What the reading has cost, by model. Reported and estimated kept apart."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT model,
+            SELECT model || '  ' || prompt_version                 AS model,
                    count(*)                                        AS calls,
                    count(*) FILTER (WHERE is_deal)                 AS deals,
                    count(*) FILTER (WHERE NOT ok)                  AS failed,
@@ -181,15 +201,19 @@ def spend(conn):
                    sum(cost_usd)                                   AS cost,
                    sum(cost_usd) FILTER (WHERE cost_source='estimated') AS cost_estimated,
                    round(avg(latency_ms))                          AS avg_ms
-            FROM tdc.item_summary GROUP BY model ORDER BY model""")
+            FROM tdc.item_summary GROUP BY model, prompt_version
+             ORDER BY model, prompt_version""")
         return cur.fetchall()
 
 
-def summaries_for(conn, item_ids, model=MODEL):
+def summaries_for(conn, item_ids, model=MODEL, version=None):
+    """Readings for the current prompt version by default. Older versions stay in
+    the table — that is the point of keying on them — but the screen shows what the
+    prompt in the code today produces."""
     if not item_ids:
         return {}
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""SELECT * FROM tdc.item_summary
-                        WHERE scan_item_id = ANY(%s) AND model=%s""",
-                    (list(item_ids), model))
+                        WHERE scan_item_id = ANY(%s) AND model=%s AND prompt_version=%s""",
+                    (list(item_ids), model, version or PROMPT_VERSION))
         return {r["scan_item_id"]: r for r in cur.fetchall()}

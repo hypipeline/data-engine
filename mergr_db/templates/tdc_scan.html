@@ -164,8 +164,25 @@
               {% if m.sector %}<span><b>sector</b> {{ m.sector }}</span>{% endif %}
             </div>
             {% if m.summary %}<p class="rs">{{ m.summary }}</p>{% endif %}
+            {% if m.advisers %}
+            <div class="advs">
+              {% for a in m.advisers %}
+              <div class="adv">
+                {% if a is mapping %}
+                  <span class="af">{{ a.firm }}</span>
+                  <span class="asv">{{ a.service or 'service not stated' }}</span>
+                  {% if a.side %}<span class="pill confirmed">{{ a.side }}-side</span>
+                  {% else %}<span class="pill pending" title="the document does not say which side">side unknown</span>{% endif %}
+                  {% if a.people %}<span class="ap">{% for p in a.people %}{{ p.name }}{% if p.role %} ({{ p.role }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
+                {% else %}
+                  <span class="af">{{ a }}</span><span class="asv">v1 reading — firm only</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
             {% if m.people %}<div class="rp">{% for p in m.people %}
-              <span><b>{{ p.role or 'adviser' }}</b> {{ p.name }}{% if p.firm %}, {{ p.firm }}{% endif %}</span>
+              <span><b>{{ p.role or 'person' }}</b> {{ p.name }}{% if p.firm %}, {{ p.firm }}{% endif %}</span>
             {% endfor %}</div>{% endif %}
           {% else %}
             <span class="muted">read: not a deal{% if m.summary %} — {{ m.summary|truncate(120) }}{% endif %}</span>
@@ -255,6 +272,11 @@
   .read .rp b{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:.06em;
     text-transform:uppercase;margin-right:4px}
   .read .rs{font-size:12.5px;color:var(--muted);margin:5px 0 0;line-height:1.5}
+  .advs{display:grid;gap:3px;margin-top:6px}
+  .adv{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:12px}
+  .adv .af{font-weight:600}
+  .adv .asv{color:var(--muted);font-size:11px;letter-spacing:.03em;text-transform:lowercase}
+  .adv .ap{color:var(--muted);font-size:11.5px}
   .read .rmeta{font-size:10.5px;color:var(--muted);margin-top:6px;
     font-family:ui-monospace,Menlo,monospace}
   .io{margin-top:7px}
