@@ -34,6 +34,26 @@
       <a class="filt {{ 'on' if active_ch == 'transactions' }}"
          href="/tdc/deals/scan?ch=transactions{{ q }}">Transactions page <b>{{ n_tx }}</b></a>
     </span></div>
+  {% if picked %}
+  <div class="srcbar">
+    <span class="k">Reading</span>
+    {% if picked.linkedin_url and active_ch != 'transactions' %}
+      <a href="{{ picked.linkedin_url }}" target="_blank" rel="noopener">
+        <b>li</b> {{ picked.linkedin_url|replace('https://www.linkedin.com/company/','')|trim('/') }}</a>
+    {% endif %}
+    {% if picked.deals_url and active_ch != 'linkedin' %}
+      <a href="{{ picked.deals_url }}" target="_blank" rel="noopener">
+        <b>tx</b> {{ picked.deals_url|replace('https://','')|replace('http://','')|replace('www.','')|truncate(52) }}</a>
+    {% endif %}
+    {% if active_ch == 'linkedin' and not picked.linkedin_url %}
+      <span class="muted">no LinkedIn page recorded for this firm</span>
+    {% elif active_ch == 'transactions' and not picked.deals_url %}
+      <span class="muted">no transactions page recorded for this firm</span>
+    {% elif not picked.linkedin_url and not picked.deals_url %}
+      <span class="muted">no sources recorded — nothing to scan</span>
+    {% endif %}
+  </div>
+  {% endif %}
   <div class="pd-head" style="margin-top:2px">
     <span class="right">
       <form method="get" action="/tdc/deals/scan" class="firmsel">
@@ -102,6 +122,15 @@
   .sti a{text-decoration:none}
   .sti a:hover{text-decoration:underline}
   .sbo{font-size:12.5px;color:var(--muted);line-height:1.5;margin:4px 0 0}
+  .srcbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 2px;
+    padding:7px 10px;background:var(--panel);border:1px solid var(--border);
+    border-radius:var(--radius);font-size:12px}
+  .srcbar .k{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .srcbar a{text-decoration:none;color:var(--fg);padding:1px 7px;border:1px solid var(--border);
+    border-radius:3px;word-break:break-all}
+  .srcbar a:hover{border-color:var(--muted)}
+  .srcbar a b{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:.06em;
+    text-transform:uppercase;margin-right:4px}
   .firmsel{display:flex;align-items:center;gap:7px}
   .firmsel label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   .firmsel select{font:inherit;font-size:12.5px;padding:3px 7px;border:1px solid var(--border);
