@@ -15,11 +15,11 @@
       {% for m in members %}<th>{{ m.firm }}<span class="muted"> · {{ 'li' if m.channel == 'linkedin' else 'tx' }}</span></th>{% endfor %}
     </tr></thead>
     <tbody>
-      {% for row in grid %}{% if row.any %}
+      {% for row in grid %}{% if row.present %}
       <tr class="{{ '' if row.agree else 'disagree' }}">
         <td class="fname">{{ row.field|replace('_',' ') }}
           {% if not row.agree %}<span class="pill sandboxed">differs</span>{% endif %}</td>
-        {% for id, v in row.values %}
+        {% for id, v in row.cells %}
         <td>{{ v or '—' }}</td>
         {% endfor %}
       </tr>

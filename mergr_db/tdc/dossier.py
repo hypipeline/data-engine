@@ -207,9 +207,12 @@ def detail(conn, dossier_id, version="v5"):
 
     grid = []
     for f in FIELDS:
-        vals = [(m["id"], m[f]) for m in members]
-        present = [v for _, v in vals if v]
+        cells = [(m["id"], m[f]) for m in members]
+        present = [v for _, v in cells if v]
         agree = len({norm_name(v) if f in ("acquirer", "target", "vendor") else v.lower()
                      for v in present}) <= 1
-        grid.append({"field": f, "values": vals, "any": bool(present), "agree": agree})
+        # "cells", not "values": Jinja resolves attributes before keys, so a key
+        # named after a dict method renders the method. Same trap that printed
+        # "<built-in method items>" across the coverage screen.
+        grid.append({"field": f, "cells": cells, "present": bool(present), "agree": agree})
     return members, grid
