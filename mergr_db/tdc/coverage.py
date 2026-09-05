@@ -427,6 +427,61 @@ URN_RE = re.compile(r"urn:li:activity:(\d{15,25})")
 DATE_RE = re.compile(r'datePublished"\s*:\s*"([^"]+)"')
 SEG_RE = re.compile(r'attributed-text-segment-list__content[^>]*>(.*?)</p>', re.S)
 OUT_RE = re.compile(r"https://lnkd\.in/\w+")
+OG_RE = re.compile(r'property="og:description"\s+content="([^"]*)"', re.S)
+# Chrome and profile furniture, not content.
+SKIP_IMG = re.compile(r"static\.licdn|company-background|profile-displayphoto|ghost|"
+                      r"spacer|pixel|1x1|logo-|favicon", re.I)
+
+
+def _post_body(page):
+    """The post text, taken from whichever source is longer.
+
+    Neither wins reliably: the rendered segment is usually complete, but one post
+    in twenty had og:description at 56 characters against a 1,349-character body,
+    and elsewhere og carries paragraph breaks the segment loses. Checked against
+    each other across every post scanned, nothing came back truncated.
+
+    Segments also include the post's comments, so only the first is the post — an
+    ordering assumption that held for all of them but is worth knowing about.
+    """
+    seg = SEG_RE.findall(page)
+    seg0 = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", seg[0]))).strip() if seg else ""
+    m = OG_RE.search(page)
+    og = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip() if m else ""
+    return (seg0, "segment") if len(seg0) >= len(og) else (og, "og")
+
+
+def _media(page, base_url, own_host=None):
+    """Links and images carried by the page, as evidence rather than decoration."""
+    links, seen = [], set()
+    for m in re.finditer(r'<a\s[^>]*href=["\'](https?://[^"\']+)["\'][^>]*>(.*?)</a>',
+                         page, re.I | re.S):
+        u = m.group(1)
+        host = urllib.parse.urlparse(u).netloc.replace("www.", "").lower()
+        if not host or host in seen:
+            continue
+        if own_host and host == own_host:
+            continue
+        if re.search(r"linkedin\.com|licdn|twitter|x\.com|facebook|youtube|instagram|"
+                     r"google\.|apple\.com|w3\.org", host):
+            continue
+        seen.add(host)
+        txt = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))).strip()
+        links.append({"url": u[:400], "host": host, "text": txt[:120]})
+        if len(links) >= 15:
+            break
+
+    imgs, iseen = [], set()
+    for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', page, re.I):
+        src = urllib.parse.urljoin(base_url, m.group(1))
+        if SKIP_IMG.search(src) or src in iseen:
+            continue
+        alt = re.search(r'alt=["\']([^"\']*)["\']', m.group(0))
+        iseen.add(src)
+        imgs.append({"src": src[:400], "alt": (alt.group(1)[:120] if alt else "")})
+        if len(imgs) >= 8:
+            break
+    return links, imgs
 
 
 def _plain(h):
@@ -451,14 +506,15 @@ def scan_linkedin(conn, linkedin_url, cap=10):
         title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else ""
         title = re.sub(r"\s*\|\s*LinkedIn\s*$", "", title)
         title = re.sub(r"\s*\|\s*[^|]*posted on the topic.*$", "", title).strip()
-        seg = SEG_RE.findall(b)
-        body = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", seg[0]))).strip() if seg else ""
+        body, body_from = _post_body(b)
         out = OUT_RE.search(body)
         d = DATE_RE.search(b)
+        links, imgs = _media(b, url, own_host="linkedin.com")
         items.append({"channel": "linkedin", "external_id": urn, "url": url,
                       "title": title, "body": OUT_RE.sub("", body).strip(),
                       "published_at": d.group(1) if d else None,
-                      "expanded": True, "outlink": out.group(0) if out else None})
+                      "expanded": True, "outlink": out.group(0) if out else None,
+                      "links": links, "images": imgs, "body_from": body_from})
     return items
 
 
@@ -495,21 +551,25 @@ def scan_transactions(conn, index_url, cap=12):
             except Exception:
                 items.append({"channel": "transactions", "external_id": slug, "url": u,
                               "title": slug.replace("-", " "), "body": "",
-                              "published_at": None, "expanded": False, "outlink": None})
+                              "published_at": None, "expanded": False, "outlink": None,
+                              "links": [], "images": [], "body_from": None})
                 continue
             t = re.search(r"<title>(.*?)</title>", b, re.S)
             title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else slug.replace("-", " ")
             lines = [l for l in _plain(b) if len(l) > 40]
+            links, imgs = _media(b, u, own_host=base.netloc.replace("www.", "").lower())
             items.append({"channel": "transactions", "external_id": slug, "url": u,
                           "title": title, "body": " ".join(lines[1:4])[:1200],
-                          "published_at": None, "expanded": True, "outlink": None})
+                          "published_at": None, "expanded": True, "outlink": None,
+                          "links": links, "images": imgs, "body_from": "page"})
         return items
 
     # no click targets — take the index entries themselves
     for i, line in enumerate([l for l in _plain(idx) if 25 < len(l) < 300][:cap]):
         items.append({"channel": "transactions", "external_id": f"row-{i}", "url": index_url,
                       "title": line[:180], "body": "", "published_at": None,
-                      "expanded": False, "outlink": None})
+                      "expanded": False, "outlink": None,
+                      "links": [], "images": [], "body_from": "index"})
     return items
 
 
@@ -533,15 +593,18 @@ def scan_firm(conn, row):
             cur.execute("""
                 INSERT INTO tdc.scan_item
                   (coverage_id, channel, external_id, url, title, body,
-                   published_at, expanded, outlink)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   published_at, expanded, outlink, links, images, body_from)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (coverage_id, channel, external_id) DO UPDATE SET
                   title=EXCLUDED.title, body=EXCLUDED.body, url=EXCLUDED.url,
                   published_at=EXCLUDED.published_at, expanded=EXCLUDED.expanded,
-                  outlink=EXCLUDED.outlink, last_seen=now()
+                  outlink=EXCLUDED.outlink, links=EXCLUDED.links, images=EXCLUDED.images,
+                  body_from=EXCLUDED.body_from, last_seen=now()
                 RETURNING (xmax = 0) AS inserted
             """, (row["id"], it["channel"], it["external_id"], it["url"], it["title"],
-                  it["body"], it["published_at"], it["expanded"], it["outlink"]))
+                  it["body"], it["published_at"], it["expanded"], it["outlink"],
+                  json.dumps(it.get("links") or []), json.dumps(it.get("images") or []),
+                  it.get("body_from")))
             new += 1 if cur.fetchone()[0] else 0
     conn.commit()
     return len(found), new, "; ".join(notes)

@@ -15,6 +15,10 @@
     <span class="v">{{ items|selectattr('channel','equalto','transactions')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Expanded</span>
     <span class="v">{{ items|selectattr('expanded')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">With links</span>
+    <span class="v">{{ items|selectattr('links')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">With images</span>
+    <span class="v">{{ items|selectattr('images')|list|length }}</span></div>
 </div>
 
 {% if flash %}<div class="pd-panel"><p class="pd-empty" style="padding:0;color:var(--fg)">{{ flash }}</p></div>{% endif %}
@@ -39,6 +43,17 @@
           {% else %}{{ i.title or i.external_id }}{% endif %}</div>
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
         {% if i.outlink %}<div class="sout" title="shared destination — two posts with the same link are the same deal">{{ i.outlink }}</div>{% endif %}
+        {% if i.links %}
+        <div class="slinks">
+          {% for l in i.links %}<a href="{{ l.url }}" target="_blank" rel="noopener"
+             title="{{ l.text }}">{{ l.host }}</a>{% endfor %}
+        </div>
+        {% endif %}
+        {% if i.images %}
+        <div class="simgs">
+          {% for im in i.images %}<img src="{{ im.src }}" alt="{{ im.alt }}" loading="lazy">{% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -64,6 +79,13 @@
   .sti a{text-decoration:none}
   .sti a:hover{text-decoration:underline}
   .sbo{font-size:12.5px;color:var(--muted);line-height:1.5;margin:4px 0 0}
+  .slinks{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .slinks a{font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:3px;
+    color:var(--muted);text-decoration:none}
+  .slinks a:hover{color:var(--fg);border-color:var(--muted)}
+  .simgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .simgs img{height:46px;width:auto;max-width:150px;object-fit:contain;
+    border:1px solid var(--border);border-radius:3px;background:#fff;padding:2px}
   .sout{font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,Menlo,monospace}
 </style>
 {% endblock %}
