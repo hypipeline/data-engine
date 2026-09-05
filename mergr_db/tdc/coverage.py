@@ -484,6 +484,38 @@ def _media(page, base_url, own_host=None):
     return links, imgs
 
 
+def strip_template(pages, threshold=0.6):
+    """Remove what repeats across a site's own pages.
+
+    There is no reliable content boundary in the markup to extract instead. On the
+    sites sampled <main> was either absent, 944 bytes of a 143kb page, or the whole
+    document; role=main and entry-content matched nothing. So the boundary is found
+    by comparison rather than by trusting the site to declare one.
+
+    Template is what every page of a site shares — cookie notices, menus,
+    preference panels, footers. Content is what one page has and its siblings do
+    not. That is the same rule that separates a firm's real outbound links from its
+    FINRA footer, applied to text instead.
+
+    `pages` is a list of line-lists. Needs at least two to say anything; with one
+    page there is nothing to compare against and it is returned untouched.
+    """
+    if len(pages) < 2:
+        return pages, [0] * len(pages)
+    seen = {}
+    for lines in pages:
+        for l in set(lines):
+            seen[l] = seen.get(l, 0) + 1
+    cut = max(2, int(len(pages) * threshold))
+    template = {l for l, n in seen.items() if n >= cut}
+    out, removed = [], []
+    for lines in pages:
+        kept = [l for l in lines if l not in template]
+        out.append(kept)
+        removed.append(sum(len(l) for l in lines if l in template))
+    return out, removed
+
+
 def _plain(h):
     h = re.sub(r"(?is)<(script|style|noscript|svg|nav|header|footer|form)\b.*?</\1>", " ", h)
     h = re.sub(r"(?i)</(p|h[1-6]|li|div|br)>", "\n", h)
@@ -545,7 +577,8 @@ def scan_transactions(conn, index_url, cap=12):
 
     items = []
     if targets:                                    # expanded: a page per deal
-        for u in targets[:cap]:
+        raw = []                                   # collected first, so the template
+        for u in targets[:cap]:                    # can be found by comparing them
             slug = urllib.parse.urlparse(u).path.rstrip("/").rsplit("/", 1)[-1]
             try:
                 b = fetch(conn, u, ttl=TTL_ITEM)
@@ -561,13 +594,22 @@ def scan_transactions(conn, index_url, cap=12):
             for l in _plain(b):
                 if len(l) > 30 and l not in seen:
                     seen.add(l); lines.append(l)
-            full = "\n".join(lines)[:20000]
             links, imgs = _media(b, u, own_host=base.netloc.replace("www.", "").lower())
+            raw.append((slug, u, title, lines, links, imgs))
+
+        # The index is part of the corpus: it shares the site's furniture, so it
+        # helps identify it, and it means a firm with a single deal page still has
+        # something to compare against.
+        corpus = [r[3] for r in raw] + [[l for l in _plain(idx) if len(l) > 30]]
+        cleaned, removed = strip_template(corpus)
+        for (slug, u, title, _l, links, imgs), lines, gone in zip(raw, cleaned, removed):
+            full = "\n".join(lines)[:20000]
             items.append({"channel": "transactions", "external_id": slug, "url": u,
-                          "title": title, "body": " ".join(lines[1:4])[:1200],
+                          "title": title, "body": " ".join(lines[0:3])[:1200],
                           "published_at": None, "expanded": True, "outlink": None,
                           "links": links, "images": imgs, "body_from": "page",
-                          "full_text": full, "full_chars": len(full)})
+                          "full_text": full, "full_chars": len(full),
+                          "chrome_chars": gone})
         return items
 
     # no click targets — take the index entries themselves
@@ -600,19 +642,21 @@ def scan_firm(conn, row):
                 INSERT INTO tdc.scan_item
                   (coverage_id, channel, external_id, url, title, body,
                    published_at, expanded, outlink, links, images, body_from,
-                   full_text, full_chars)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   full_text, full_chars, chrome_chars)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (coverage_id, channel, external_id) DO UPDATE SET
                   title=EXCLUDED.title, body=EXCLUDED.body, url=EXCLUDED.url,
                   published_at=EXCLUDED.published_at, expanded=EXCLUDED.expanded,
                   outlink=EXCLUDED.outlink, links=EXCLUDED.links, images=EXCLUDED.images,
                   body_from=EXCLUDED.body_from, full_text=EXCLUDED.full_text,
-                  full_chars=EXCLUDED.full_chars, last_seen=now()
+                  full_chars=EXCLUDED.full_chars, chrome_chars=EXCLUDED.chrome_chars,
+                  last_seen=now()
                 RETURNING (xmax = 0) AS inserted
             """, (row["id"], it["channel"], it["external_id"], it["url"], it["title"],
                   it["body"], it["published_at"], it["expanded"], it["outlink"],
                   json.dumps(it.get("links") or []), json.dumps(it.get("images") or []),
-                  it.get("body_from"), it.get("full_text"), it.get("full_chars")))
+                  it.get("body_from"), it.get("full_text"), it.get("full_chars"),
+                  it.get("chrome_chars")))
             new += 1 if cur.fetchone()[0] else 0
     conn.commit()
     return len(found), new, "; ".join(notes)

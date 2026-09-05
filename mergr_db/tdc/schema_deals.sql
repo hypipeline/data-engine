@@ -356,3 +356,7 @@ ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS body_from text;   -- segment 
 -- next to the item and worth being able to eyeball.
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS full_text text;
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS full_chars integer;
+
+-- How much of a page was template rather than content. Kept so the extraction can
+-- be judged: a page that is 90% chrome is either badly extracted or barely a page.
+ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS chrome_chars integer;
