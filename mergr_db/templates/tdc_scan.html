@@ -195,12 +195,26 @@
             · {{ m.latency_ms or 0 }}ms</div>
           <details class="io">
             <summary>Model input and output, verbatim</summary>
-            <div class="iolab">System prompt</div>
-            <div class="iotext">{{ m.system_prompt }}</div>
-            <div class="iolab">Sent — {{ (m.input_text or '')|length }} characters</div>
-            <div class="iotext">{{ m.input_text }}</div>
-            <div class="iolab">Returned{% if m.finish_reason %} · finish_reason {{ m.finish_reason }}{% endif %}</div>
-            <div class="iotext">{{ m.output_text }}</div>
+            <div class="iogroup">
+              <details class="iosec">
+                <summary>System prompt<span class="ct">{{ (m.system_prompt or '')|length }} chars</span></summary>
+                <div class="iotext">{{ m.system_prompt }}</div>
+              </details>
+              <details class="iosec">
+                <summary>Sent<span class="ct">{{ (m.input_text or '')|length }} chars · {{ m.prompt_tokens or 0 }} tokens</span></summary>
+                <div class="iotext">{{ m.input_text }}</div>
+              </details>
+              <details class="iosec">
+                <summary>Returned<span class="ct">{{ (m.output_text or '')|length }} chars · {{ m.completion_tokens or 0 }} tokens{% if m.finish_reason %} · {{ m.finish_reason }}{% endif %}</span></summary>
+                <div class="iotext">{{ m.output_text }}</div>
+              </details>
+              {% if m.response_meta %}
+              <details class="iosec">
+                <summary>Response metadata<span class="ct">usage, model, id</span></summary>
+                <div class="iotext">{{ m.response_meta|tojson(indent=2) }}</div>
+              </details>
+              {% endif %}
+            </div>
           </details>
         </div>
         {% endif %}
@@ -292,8 +306,17 @@
   .io summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
     padding:1px 7px;border:1px solid var(--border);border-radius:3px}
   .io summary:hover{color:var(--fg);border-color:var(--muted)}
-  .iolab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
-    margin:9px 0 3px;font-weight:600}
+  .iogroup{display:grid;gap:4px;margin-top:8px}
+  .iosec{border:1px solid var(--border);border-radius:3px;background:var(--panel)}
+  .iosec > summary{font-size:11px;padding:5px 9px;cursor:pointer;display:flex;
+    align-items:baseline;gap:8px;color:var(--fg);list-style:none}
+  .iosec > summary::-webkit-details-marker{display:none}
+  .iosec > summary::before{content:"\25B8";color:var(--muted);font-size:9px}
+  .iosec[open] > summary::before{content:"\25BE"}
+  .iosec > summary:hover{color:var(--fg)}
+  .iosec > summary .ct{margin-left:auto;color:var(--muted);font-size:10.5px;
+    font-family:ui-monospace,Menlo,monospace}
+  .iosec .iotext{border:0;border-top:1px solid var(--border);border-radius:0;margin:0}
   .iotext{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
     line-height:1.5;background:var(--panel-2,var(--panel));border:1px solid var(--border);
     border-radius:3px;padding:8px 10px;max-height:300px;overflow:auto}
