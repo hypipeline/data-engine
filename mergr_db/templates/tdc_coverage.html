@@ -28,7 +28,11 @@
 
 <div class="pd-panel">
   <div class="pd-head"><h2>Firms</h2>
-    <span class="right">weakest matches first</span></div>
+    <span class="right">
+      <a href="/tdc/deals/coverage" class="{{ 'filt on' if not have else 'filt' }}">All {{ total }}</a>
+      <a href="/tdc/deals/coverage?have=1" class="{{ 'filt on' if have else 'filt' }}">
+        With a LinkedIn or transactions page</a>
+    </span></div>
   {% if rows %}
   <table class="pd">
     <thead><tr><th>Firm</th><th>Website</th><th>LinkedIn</th><th class="n">Staff</th>

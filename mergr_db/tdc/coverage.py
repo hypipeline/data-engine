@@ -58,14 +58,19 @@ def upsert(conn, name, website, linkedin_url, employees, origin, resolved_by, ma
     conn.commit()
 
 
-def rows(conn, include_inactive=False):
+def rows(conn, include_inactive=False, with_source=False):
+    """with_source: only firms we can actually read something from — a LinkedIn
+    page or a transactions page. Everything else is a name we cannot yet watch."""
     sql = """SELECT id, name, website, linkedin_url, employees, name_match,
                     needs_check, active, resolved_by, bridge, bridge_note,
                     site_links_linkedin, linkedin_lists_site, checked_at,
                     deals_url, deals_how, deals_label, deals_signals, deals_checked_at,
                     deals_locked, deals_set_by, deals_set_at
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
-    where = "" if include_inactive else "WHERE active"
+    clauses = [] if include_inactive else ["active"]
+    if with_source:
+        clauses.append("(linkedin_url IS NOT NULL OR deals_url IS NOT NULL)")
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(sql.format(where))
         return cur.fetchall()
