@@ -47,6 +47,8 @@
         <div class="slinks">
           {% for l in i.links %}<a href="{{ l.url }}" target="_blank" rel="noopener"
              title="{{ l.text }}">{{ l.host }}</a>{% endfor %}
+          {% if i.chrome_links %}<span class="chrome"
+             title="{{ i.chrome_links|map(attribute='host')|join(', ') }} — linked from most of this firm's pages, so site furniture rather than evidence">+{{ i.chrome_links|length }} site-wide</span>{% endif %}
         </div>
         {% endif %}
         {% if i.images %}
@@ -83,6 +85,8 @@
   .slinks a{font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:3px;
     color:var(--muted);text-decoration:none}
   .slinks a:hover{color:var(--fg);border-color:var(--muted)}
+  .chrome{font-size:11px;color:var(--muted);padding:1px 6px;border:1px dashed var(--border);
+    border-radius:3px}
   .simgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
   .simgs img{height:46px;width:auto;max-width:150px;object-fit:contain;
     border:1px solid var(--border);border-radius:3px;background:#fff;padding:2px}

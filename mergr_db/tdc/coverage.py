@@ -610,6 +610,36 @@ def scan_firm(conn, row):
     return len(found), new, "; ".join(notes)
 
 
+def _demote_boilerplate(rows, threshold=0.4):
+    """A host linked from most of a firm's pages is chrome, not evidence.
+
+    Two Roads links FINRA, SIPC and its web designer from every page; those arrive
+    looking exactly like the one link that matters, schmidt-electric.com on a single
+    deal. Frequency is what separates them, and it can only be judged across a
+    firm's items rather than within one page.
+
+    Filtered on read rather than on write, so the raw capture is kept and the
+    threshold stays a decision rather than a permanent loss.
+    """
+    per_firm = {}
+    for r in rows:
+        seen = {l.get("host") for l in (r.get("links") or [])}
+        d = per_firm.setdefault(r["coverage_id"], {"n": 0, "hosts": {}})
+        d["n"] += 1
+        for h in seen:
+            d["hosts"][h] = d["hosts"].get(h, 0) + 1
+
+    for r in rows:
+        d = per_firm[r["coverage_id"]]
+        keep, chrome = [], []
+        for l in (r.get("links") or []):
+            share = d["hosts"].get(l.get("host"), 0) / max(d["n"], 1)
+            (chrome if (d["n"] > 2 and share >= threshold) else keep).append(l)
+        r["links"] = keep
+        r["chrome_links"] = chrome
+    return rows
+
+
 def scan_items(conn, coverage_id=None, limit=300):
     where = "WHERE s.coverage_id = %s" if coverage_id else ""
     args = (coverage_id, limit) if coverage_id else (limit,)
@@ -620,4 +650,4 @@ def scan_items(conn, coverage_id=None, limit=300):
             {where}
             ORDER BY s.published_at DESC NULLS LAST, s.first_seen DESC
             LIMIT %s""", args)
-        return cur.fetchall()
+        return _demote_boilerplate(cur.fetchall())
