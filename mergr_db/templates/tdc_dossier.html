@@ -44,15 +44,65 @@
         <button class="lift" type="submit" title="Not the same deal — remove and never propose again">Not this deal</button>
       </form>
     </div>
+    {% if not m.read_ok and m.read_error %}
+      <p class="asum"><span class="pill complained">read failed</span> {{ m.read_error }}</p>
+    {% endif %}
+    {% if m.headline and m.headline != members[0].headline %}
+      <div class="ahead">{{ m.headline }}</div>{% endif %}
     {% if m.summary %}<p class="asum">{{ m.summary }}</p>{% endif %}
+    <div class="rp">
+      {% for label, val in [('buyer', m.acquirer), ('target', m.target), ('vendor', m.vendor),
+                            ('price', m.consideration), ('revenue', m.revenue),
+                            ('ebitda', m.ebitda), ('date', m.date_hint), ('sector', m.sector)] %}
+        {% if val %}<span><b>{{ label }}</b> {{ val }}</span>{% endif %}
+      {% endfor %}
+    </div>
     {% if m.advisers %}<div class="advs">
       {% for a in m.advisers %}{% if a is mapping %}
       <div class="adv"><span class="af">{{ a.firm }}</span>
         <span class="asv">{{ a.service or '—' }}</span>
         {% if a.side %}<span class="pill confirmed">{{ a.side }}-side</span>
-        {% else %}<span class="pill pending">side unknown</span>{% endif %}</div>
+        {% else %}<span class="pill pending">side unknown</span>{% endif %}
+        {% if a.people %}<span class="ap">{% for p in a.people %}{{ p.name }}{% if p.role %} ({{ p.role }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}
+      </div>
       {% endif %}{% endfor %}
     </div>{% endif %}
+    {% if m.people %}<div class="rp">{% for p in m.people %}
+      <span><b>{{ p.role or 'person' }}</b> {{ p.name }}{% if p.firm %}, {{ p.firm }}{% endif %}</span>
+    {% endfor %}</div>{% endif %}
+    {% if m.output_text %}
+    <div class="rmeta">{% if m.clarity %}<span class="clarity {{ m.clarity }}">{{ m.clarity }} clarity</span> · {% endif %}
+      {{ m.model }} · {{ m.prompt_version }}
+      · {{ m.prompt_tokens or 0 }}+{{ m.completion_tokens or 0 }} tok
+      · ${{ '%.5f'|format(m.cost_usd or 0) }} {{ m.cost_source }}
+      · ${{ '%.2f'|format((m.cost_usd or 0) * 1000) }}/1k
+      {% if m.finish_reason and m.finish_reason != 'stop' %}· <span class="warnflag">{{ m.finish_reason }}</span>{% endif %}
+      · {{ m.latency_ms or 0 }}ms</div>
+    <details class="io jsontop">
+      <summary>JSON returned<span class="ct">{{ (m.output_text or '')|length }} chars
+        · {{ m.completion_tokens or 0 }} tokens</span></summary>
+      <pre class="jsonbox">{{ m.output_text|jsonpretty }}</pre>
+    </details>
+    <details class="io">
+      <summary>What was sent, verbatim</summary>
+      <div class="iogroup">
+        <details class="iosec">
+          <summary>System prompt<span class="ct">{{ (m.system_prompt or '')|length }} chars</span></summary>
+          <div class="iotext">{{ m.system_prompt }}</div>
+        </details>
+        <details class="iosec">
+          <summary>Sent<span class="ct">{{ (m.input_text or '')|length }} chars</span></summary>
+          <div class="iotext">{{ m.input_text }}</div>
+        </details>
+        {% if m.response_meta %}
+        <details class="iosec">
+          <summary>Response metadata<span class="ct">usage, model, id</span></summary>
+          <pre class="jsonbox">{{ m.response_meta|tojson|jsonpretty }}</pre>
+        </details>
+        {% endif %}
+      </div>
+    </details>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
@@ -65,5 +115,6 @@
   .ah{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:12.5px}
   .ah .af{font-weight:600;font-size:13.5px}
   .asum{font-size:12.5px;color:var(--muted);margin:5px 0 0;line-height:1.5}
+  .ahead{font-size:13px;font-weight:600;margin-top:5px}
 </style>
 {% endblock %}

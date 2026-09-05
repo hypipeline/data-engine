@@ -164,9 +164,12 @@ def dossiers(conn, version="v5"):
             SELECT d.id, d.status, d.created_at,
                    count(*)                          AS members,
                    count(DISTINCT i.coverage_id)     AS publishers,
-                   count(DISTINCT lower(s.acquirer)) FILTER (WHERE s.acquirer IS NOT NULL)
+                   -- normalised the same way the field grid normalises, or the badge
+                   -- calls "The Peakstone Group" and "The Peakstone Group, LLC" a
+                   -- disagreement while the grid, correctly, does not
+                   count(DISTINCT tdc.norm_co(s.acquirer)) FILTER (WHERE s.acquirer IS NOT NULL)
                                                      AS acquirer_variants,
-                   count(DISTINCT lower(s.target))   FILTER (WHERE s.target IS NOT NULL)
+                   count(DISTINCT tdc.norm_co(s.target))   FILTER (WHERE s.target IS NOT NULL)
                                                      AS target_variants,
                    min(i.published_at)               AS first_seen,
                    max(i.published_at)               AS last_seen,
@@ -195,7 +198,11 @@ def detail(conn, dossier_id, version="v5"):
             SELECT m.rule_code, m.matched_item_id, i.*, c.name AS firm,
                    s.headline, s.summary, s.acquirer, s.target, s.vendor,
                    s.consideration, s.revenue, s.ebitda, s.date_hint, s.date_basis,
-                   s.sector, s.advisers, s.people, s.clarity
+                   s.sector, s.advisers, s.people, s.clarity,
+                   s.model, s.prompt_version, s.output_text, s.input_text,
+                   s.system_prompt, s.finish_reason, s.response_meta,
+                   s.prompt_tokens, s.completion_tokens, s.cost_usd, s.cost_source,
+                   s.latency_ms, s.ok AS read_ok, s.error AS read_error
             FROM tdc.dossier_member m
             JOIN tdc.scan_item i ON i.id = m.scan_item_id
             JOIN tdc.coverage c ON c.id = i.coverage_id

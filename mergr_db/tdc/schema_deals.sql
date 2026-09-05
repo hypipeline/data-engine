@@ -536,3 +536,16 @@ CREATE TABLE IF NOT EXISTS tdc.dossier_reject (
     reason   text,
     PRIMARY KEY (item_a, item_b)
 );
+
+-- The same company-name normalisation the matcher uses, in SQL, so a summary count
+-- and the field grid cannot reach different conclusions about whether two accounts
+-- disagree. Legal suffixes are dropped: "The Peakstone Group" and "The Peakstone
+-- Group, LLC" are one firm.
+CREATE OR REPLACE FUNCTION tdc.norm_co(s text) RETURNS text AS $$
+  SELECT nullif(btrim(regexp_replace(
+    regexp_replace(
+      regexp_replace(lower(coalesce(s,'')), '[^a-z0-9 ]', ' ', 'g'),
+      '\y(ltd|limited|llc|inc|incorporated|plc|gmbh|ag|nv|bv|sa|spa|group|holding|holdings|company|co|llp|lp|partners)\y',
+      ' ', 'g'),
+    '\s+', ' ', 'g')), '')
+$$ LANGUAGE sql IMMUTABLE;
