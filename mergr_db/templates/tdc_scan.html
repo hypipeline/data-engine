@@ -203,8 +203,14 @@
             {% if m.finish_reason and m.finish_reason != 'stop' %}
               · <span class="warnflag">finish: {{ m.finish_reason }}</span>{% endif %}
             · {{ m.latency_ms or 0 }}ms</div>
+          <details class="io jsontop">
+            <summary>JSON returned<span class="ct">{{ (m.output_text or '')|length }} chars
+              · {{ m.completion_tokens or 0 }} tokens{% if m.finish_reason and m.finish_reason != 'stop' %}
+              · <span class="warnflag">{{ m.finish_reason }}</span>{% endif %}</span></summary>
+            <pre class="jsonbox">{{ m.output_text|jsonpretty }}</pre>
+          </details>
           <details class="io">
-            <summary>Model input and output, verbatim</summary>
+            <summary>What was sent, verbatim</summary>
             <div class="iogroup">
               <details class="iosec">
                 <summary>System prompt<span class="ct">{{ (m.system_prompt or '')|length }} chars</span></summary>
@@ -213,10 +219,6 @@
               <details class="iosec">
                 <summary>Sent<span class="ct">{{ (m.input_text or '')|length }} chars · {{ m.prompt_tokens or 0 }} tokens</span></summary>
                 <div class="iotext">{{ m.input_text }}</div>
-              </details>
-              <details class="iosec">
-                <summary>Returned<span class="ct">{{ (m.output_text or '')|length }} chars · {{ m.completion_tokens or 0 }} tokens{% if m.finish_reason %} · {{ m.finish_reason }}{% endif %}</span></summary>
-                <pre class="jsonbox">{{ m.output_text|jsonpretty }}</pre>
               </details>
               {% if m.response_meta %}
               <details class="iosec">
@@ -315,6 +317,19 @@
     font-family:ui-monospace,Menlo,monospace}
   .whole{font-size:10.5px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
   .io{margin-top:7px}
+  /* The returned object is the thing you look at; it should not be two clicks
+     behind a section that also holds a 2,000-character system prompt. */
+  .jsontop{margin-top:8px}
+  .jsontop > summary{font-size:11.5px;font-weight:600;color:var(--fg);
+    border-color:var(--muted);display:flex;align-items:baseline;gap:8px;
+    padding:3px 9px;list-style:none}
+  .jsontop > summary::-webkit-details-marker{display:none}
+  .jsontop > summary::before{content:"{ }";font-family:ui-monospace,Menlo,monospace;
+    color:var(--muted);font-size:10.5px}
+  .jsontop > summary .ct{margin-left:auto;font-weight:400;color:var(--muted);
+    font-size:10.5px;font-family:ui-monospace,Menlo,monospace}
+  .jsontop > .jsonbox{margin-top:5px;border:1px solid var(--border);
+    border-radius:var(--radius)}
   .io summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
     padding:1px 7px;border:1px solid var(--border);border-radius:3px}
   .io summary:hover{color:var(--fg);border-color:var(--muted)}
