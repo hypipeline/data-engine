@@ -349,3 +349,10 @@ CREATE INDEX IF NOT EXISTS fetch_cache_age_idx ON tdc.fetch_cache (fetched_at);
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS links jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS images jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS body_from text;   -- segment | og
+
+-- The whole readable page, not the three-line summary the list view shows. The
+-- raw HTML already sits in fetch_cache, but this is the extracted form the
+-- classifier and the claim extractor will actually read, so it is worth holding
+-- next to the item and worth being able to eyeball.
+ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS full_text text;
+ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS full_chars integer;

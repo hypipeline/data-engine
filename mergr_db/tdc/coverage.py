@@ -514,7 +514,8 @@ def scan_linkedin(conn, linkedin_url, cap=10):
                       "title": title, "body": OUT_RE.sub("", body).strip(),
                       "published_at": d.group(1) if d else None,
                       "expanded": True, "outlink": out.group(0) if out else None,
-                      "links": links, "images": imgs, "body_from": body_from})
+                      "links": links, "images": imgs, "body_from": body_from,
+                      "full_text": body, "full_chars": len(body)})
     return items
 
 
@@ -556,12 +557,17 @@ def scan_transactions(conn, index_url, cap=12):
                 continue
             t = re.search(r"<title>(.*?)</title>", b, re.S)
             title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else slug.replace("-", " ")
-            lines = [l for l in _plain(b) if len(l) > 40]
+            lines, seen = [], set()
+            for l in _plain(b):
+                if len(l) > 30 and l not in seen:
+                    seen.add(l); lines.append(l)
+            full = "\n".join(lines)[:20000]
             links, imgs = _media(b, u, own_host=base.netloc.replace("www.", "").lower())
             items.append({"channel": "transactions", "external_id": slug, "url": u,
                           "title": title, "body": " ".join(lines[1:4])[:1200],
                           "published_at": None, "expanded": True, "outlink": None,
-                          "links": links, "images": imgs, "body_from": "page"})
+                          "links": links, "images": imgs, "body_from": "page",
+                          "full_text": full, "full_chars": len(full)})
         return items
 
     # no click targets — take the index entries themselves
@@ -593,18 +599,20 @@ def scan_firm(conn, row):
             cur.execute("""
                 INSERT INTO tdc.scan_item
                   (coverage_id, channel, external_id, url, title, body,
-                   published_at, expanded, outlink, links, images, body_from)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   published_at, expanded, outlink, links, images, body_from,
+                   full_text, full_chars)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (coverage_id, channel, external_id) DO UPDATE SET
                   title=EXCLUDED.title, body=EXCLUDED.body, url=EXCLUDED.url,
                   published_at=EXCLUDED.published_at, expanded=EXCLUDED.expanded,
                   outlink=EXCLUDED.outlink, links=EXCLUDED.links, images=EXCLUDED.images,
-                  body_from=EXCLUDED.body_from, last_seen=now()
+                  body_from=EXCLUDED.body_from, full_text=EXCLUDED.full_text,
+                  full_chars=EXCLUDED.full_chars, last_seen=now()
                 RETURNING (xmax = 0) AS inserted
             """, (row["id"], it["channel"], it["external_id"], it["url"], it["title"],
                   it["body"], it["published_at"], it["expanded"], it["outlink"],
                   json.dumps(it.get("links") or []), json.dumps(it.get("images") or []),
-                  it.get("body_from")))
+                  it.get("body_from"), it.get("full_text"), it.get("full_chars")))
             new += 1 if cur.fetchone()[0] else 0
     conn.commit()
     return len(found), new, "; ".join(notes)

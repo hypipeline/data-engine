@@ -19,6 +19,8 @@
     <span class="v">{{ items|selectattr('links')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">With images</span>
     <span class="v">{{ items|selectattr('images')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Full text held</span>
+    <span class="v">{{ items|selectattr('full_text')|list|length }}</span></div>
 </div>
 
 {% if flash %}<div class="pd-panel"><p class="pd-empty" style="padding:0;color:var(--fg)">{{ flash }}</p></div>{% endif %}
@@ -83,6 +85,12 @@
         <div class="sti">{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title or i.external_id }}</a>
           {% else %}{{ i.title or i.external_id }}{% endif %}</div>
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
+        {% if i.full_text and i.full_chars > (i.body|length) + 80 %}
+        <details class="sfull">
+          <summary>Full page — {{ '{:,}'.format(i.full_chars) }} characters</summary>
+          <div class="sfulltext">{{ i.full_text }}</div>
+        </details>
+        {% endif %}
         {% if i.outlink %}<div class="sout" title="shared destination — two posts with the same link are the same deal">{{ i.outlink }}</div>{% endif %}
         {% if i.links or i.chrome_links %}
         <div class="slinks">
@@ -136,6 +144,14 @@
   .firmsel select{font:inherit;font-size:12.5px;padding:3px 7px;border:1px solid var(--border);
     border-radius:3px;background:var(--panel);color:var(--fg);max-width:340px}
   .firmsel select:focus{outline:2px solid #a86a12;outline-offset:1px}
+  .sfull{margin-top:6px}
+  .sfull summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
+    padding:1px 7px;border:1px solid var(--border);border-radius:3px}
+  .sfull summary:hover{color:var(--fg);border-color:var(--muted)}
+  .sfull[open] summary{margin-bottom:6px}
+  .sfulltext{white-space:pre-wrap;font-size:12.5px;line-height:1.55;color:var(--fg);
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:10px 12px;max-height:460px;overflow-y:auto}
   .slinks{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
   .slinks a{font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:3px;
     color:var(--muted);text-decoration:none}
