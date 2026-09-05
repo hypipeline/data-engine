@@ -199,6 +199,10 @@ def spend(conn):
                    sum(prompt_tokens)                              AS tok_in,
                    sum(completion_tokens)                          AS tok_out,
                    sum(cost_usd)                                   AS cost,
+                   -- the figure worth planning against: a total over 39 items means
+                   -- nothing, a rate per thousand is a budget
+                   round((sum(cost_usd) / nullif(count(*),0) * 1000)::numeric, 2)
+                                                                   AS per_1k,
                    sum(cost_usd) FILTER (WHERE cost_source='estimated') AS cost_estimated,
                    round(avg(latency_ms))                          AS avg_ms
             FROM tdc.item_summary GROUP BY model, prompt_version

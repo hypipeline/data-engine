@@ -29,13 +29,14 @@
   <form method="post" action="/tdc/deals/scan/read" class="pd-sync">
     <input type="hidden" name="id" value="{{ active_id or 0 }}">
     <button class="btn" type="submit">Read unread items{{ ' for this firm' if active_id }}</button>
-    <span class="out">{{ items|rejectattr('id','in',sums)|list|length }} of {{ items|length }} not yet read</span>
+    <span class="out">{{ items|rejectattr('id','in',sums)|list|length }} of {{ items|length }} not yet read
+      {%- if spend %} · last measured at ${{ '%.2f'|format(spend[-1].per_1k or 0) }} per 1,000{% endif %}</span>
   </form>
   {% if spend %}
   <table class="pd" style="margin-top:12px">
     <thead><tr><th>Model</th><th class="n">Calls</th><th class="n">Deals</th><th class="n">Failed</th>
       <th class="n">Tokens in</th><th class="n">Tokens out</th><th class="n">Cost</th>
-      <th class="n">Avg ms</th></tr></thead>
+      <th class="n">Per 1,000</th><th class="n">Avg ms</th></tr></thead>
     <tbody>
       {% for s in spend %}
       <tr>
@@ -47,6 +48,7 @@
         <td class="n muted">{{ '{:,}'.format(s.tok_out or 0) }}</td>
         <td class="n">${{ '%.4f'|format(s.cost or 0) }}{% if s.cost_estimated %}
           <span class="muted" title="part of this is our arithmetic, not OpenRouter's figure">*</span>{% endif %}</td>
+        <td class="n"><b>${{ '%.2f'|format(s.per_1k or 0) }}</b></td>
         <td class="n muted">{{ s.avg_ms or '—' }}</td>
       </tr>
       {% endfor %}
@@ -190,6 +192,7 @@
           <div class="rmeta">{{ m.model }} · {{ m.prompt_version }}
             · {{ m.prompt_tokens or 0 }}+{{ m.completion_tokens or 0 }} tok
             · ${{ '%.5f'|format(m.cost_usd or 0) }} {{ m.cost_source }}
+            · ${{ '%.2f'|format((m.cost_usd or 0) * 1000) }}/1k
             {% if m.finish_reason and m.finish_reason != 'stop' %}
               · <span class="warnflag">finish: {{ m.finish_reason }}</span>{% endif %}
             · {{ m.latency_ms or 0 }}ms</div>

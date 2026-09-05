@@ -1553,8 +1553,10 @@ def tdc_scan_read(request: Request, id: int = Form(0), limit: int = Form(25)):
                 spent += float(r.get("cost_usd") or 0)
                 deals += 1 if r.get("is_deal") else 0
                 failed += 0 if r.get("ok") else 1
-            msg = (f"Read {len(todo)} items — {deals} look like deals, {failed} failed, "
-                   f"${spent:.4f}." if todo else "Nothing left to read.")
+            per_1k = (spent / len(todo) * 1000) if todo else 0
+            msg = (f"Read {len(todo)} items — {deals} look like deals, {failed} failed. "
+                   f"${spent:.4f}, which is ${per_1k:.2f} per 1,000."
+                   if todo else "Nothing left to read.")
     except Exception as e:
         conn.rollback()
         msg = f"Read failed — {e}"
