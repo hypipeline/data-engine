@@ -69,7 +69,11 @@ Reply with JSON only, no prose, matching:
  "advisers": [{"firm": str, "service": str, "side": "buy"|"sell"|"lender"|null,
                "people": [{"name": str, "role": str|null}]}],
  "people": [{"name": str, "role": str|null, "firm": str|null}],
- "confidence": number}"""
+ "clarity": "high"|"medium"|"low"}
+
+clarity describes the DOCUMENT, not your own certainty: high when it names the
+parties and the transaction plainly, medium when something material is implied
+rather than stated, low when it is ambiguous about what happened or to whom."""
 
 
 def _rate(model):
