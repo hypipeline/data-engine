@@ -468,3 +468,71 @@ ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS date_basis text
 -- anything. clarity asks about the DOCUMENT instead, which is observable.
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS clarity text
     CHECK (clarity IN ('high','medium','low'));
+
+-- ---------------------------------------------------------------- dossier
+-- Every account we hold of one transaction, before deciding what to publish.
+-- A lead is a hypothesis, a dossier is the evidence gathered under it, a deal is
+-- the reconciled record, and the story is what gets written.
+--
+-- Nothing is absorbed: members stay whole and separately attributable, so a merge
+-- is an edge that can be removed rather than a rewrite that cannot be undone.
+CREATE TABLE IF NOT EXISTS tdc.merge_rule (
+    code        text PRIMARY KEY,
+    label       text NOT NULL,
+    verdict     text NOT NULL CHECK (verdict IN ('certain','review')),
+    enabled     boolean NOT NULL DEFAULT false,
+    note        text,
+    added_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Seeded with the whole cascade, most of it switched off. The list is expected to
+-- grow, and a rule that is written down but disabled is a decision recorded rather
+-- than a gap. Membership stores which rule admitted it, so each rule's precision
+-- can be measured on its own and a bad one retired without touching the others.
+INSERT INTO tdc.merge_rule (code, label, verdict, enabled, note) VALUES
+  ('R1', 'Shared outlink', 'certain', false,
+   'Two accounts pointing at the same destination. Exact, but only within a publisher.'),
+  ('R2', 'Outlink is the other''s URL', 'certain', false,
+   'A link-share post and the article it points at.'),
+  ('R3', 'Identical normalised title', 'certain', true,
+   'Firm name, punctuation and hashtags stripped. Near-verbatim in practice.'),
+  ('R4', 'Title similarity over 0.9, same publisher', 'certain', false,
+   'For a firm that rewords its own headline between channels.'),
+  ('R5', 'Same party pair within 90 days', 'certain', true,
+   'Unordered acquirer/target after normalisation. The only rule that reaches across firms.'),
+  ('R6', 'Party pair after acronym expansion', 'review', false,
+   'DTP against Dubai Technology Partners. Never auto-merges.'),
+  ('R7', 'One party, same publisher, 30 days', 'review', false,
+   'Weak on its own; useful as a prompt for a person.')
+ON CONFLICT (code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS tdc.dossier (
+    id          bigserial PRIMARY KEY,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    status      text NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open','promoted','spiked')),
+    deal_id     text REFERENCES tdc.deal(id),
+    note        text
+);
+
+CREATE TABLE IF NOT EXISTS tdc.dossier_member (
+    dossier_id   bigint NOT NULL REFERENCES tdc.dossier(id) ON DELETE CASCADE,
+    scan_item_id bigint NOT NULL REFERENCES tdc.scan_item(id) ON DELETE CASCADE,
+    rule_code    text REFERENCES tdc.merge_rule(code),
+    matched_item_id bigint,          -- which member it matched against
+    joined_at    timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (scan_item_id)       -- an item belongs to exactly one dossier
+);
+CREATE INDEX IF NOT EXISTS dossier_member_d_idx ON tdc.dossier_member (dossier_id);
+
+-- A rejected pair, so the same wrong suggestion is not proposed every sweep. Without
+-- this the review queue fills with the same refusals and stops being read.
+CREATE TABLE IF NOT EXISTS tdc.dossier_reject (
+    item_a   bigint NOT NULL,
+    item_b   bigint NOT NULL,
+    by       text,
+    at       timestamptz NOT NULL DEFAULT now(),
+    reason   text,
+    PRIMARY KEY (item_a, item_b)
+);

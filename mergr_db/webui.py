@@ -28,6 +28,7 @@ from tdc import admin as tdc_admin
 from tdc import nav as tdc_nav
 from tdc import coverage as tdc_cov
 from tdc import summarise as tdc_sum
+from tdc import dossier as tdc_dos
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -1609,6 +1610,78 @@ def tdc_scan_read(request: Request, id: int = Form(0), limit: int = Form(25)):
     finally:
         POOL.putconn(conn)
     return RedirectResponse(f"/tdc/deals/scan?{urlencode({'id': id, 'flash': msg})}",
+                            status_code=303)
+
+
+@app.get("/tdc/deals/dossiers", response_class=HTMLResponse)
+def tdc_dossiers(request: Request, flash: str = ""):
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        ctx = dict(rows=tdc_dos.dossiers(conn), rules=tdc_dos.enabled_rules(conn))
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_dossiers.html", "tdc-dossiers", flash=flash,
+                  subactive="dossiers", page_title="Dossiers",
+                  **_tdc_shell("deals"), **ctx)
+
+
+@app.get("/tdc/deals/dossier/{did}", response_class=HTMLResponse)
+def tdc_dossier(request: Request, did: int):
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        members, grid = tdc_dos.detail(conn, did)
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_dossier.html", "tdc-dossiers",
+                  did=did, members=members, grid=grid,
+                  subactive="dossiers", page_title="Dossier",
+                  **_tdc_shell("deals"))
+
+
+@app.post("/tdc/deals/dossiers/rebuild")
+def tdc_dossiers_rebuild(request: Request):
+    conn = POOL.getconn()
+    try:
+        r = tdc_dos.rebuild(conn)
+        msg = (f"{r['dossiers']} dossiers from {r['pairs']} certain pairs, "
+               f"grouping {r['items_grouped']} accounts.")
+    except Exception as e:
+        conn.rollback()
+        msg = f"Rebuild failed — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc/deals/dossiers?{urlencode({'flash': msg})}",
+                            status_code=303)
+
+
+@app.post("/tdc/deals/dossier/{did}/split")
+def tdc_dossier_split(request: Request, did: int, item_id: int = Form(...)):
+    """Remove an account and record the rejection, so the same pair is never
+    proposed again. Without that the queue fills with the same refusals."""
+    who = (auth.real_user(request) or {}).get("email") or "unknown"
+    conn = POOL.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT scan_item_id FROM tdc.dossier_member
+                            WHERE dossier_id=%s AND scan_item_id <> %s""", (did, item_id))
+            others = [r[0] for r in cur.fetchall()]
+            for o in others:
+                a, b = sorted((item_id, o))
+                cur.execute("""INSERT INTO tdc.dossier_reject (item_a, item_b, by, reason)
+                               VALUES (%s,%s,%s,'split by hand')
+                               ON CONFLICT DO NOTHING""", (a, b, who))
+            cur.execute("DELETE FROM tdc.dossier_member WHERE scan_item_id=%s", (item_id,))
+        conn.commit()
+        auth.audit(who, "tdc.dossier.split", str(did), f"removed item {item_id}")
+        msg = f"Removed account {item_id}; it will not be proposed for this group again."
+    except Exception as e:
+        conn.rollback()
+        msg = f"Not removed — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc/deals/dossiers?{urlencode({'flash': msg})}",
                             status_code=303)
 
 

@@ -1,0 +1,69 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">{{ (members[0].headline if members else None) or 'Dossier ' ~ did }}</h1>
+<p class="tdc-blurb">
+  {{ members|length }} account{{ '' if members|length == 1 else 's' }} from
+  {{ members|map(attribute='firm')|unique|list|length }} publisher{{ '' if members|map(attribute='firm')|unique|list|length == 1 else 's' }}.
+  Accounts are kept whole and separately attributable — the grouping is a set of edges, so
+  removing one undoes a wrong match rather than leaving something rewritten.</p>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Field by field</h2>
+    <span class="right">where accounts disagree is the interesting part</span></div>
+  <table class="pd">
+    <thead><tr><th>Field</th>
+      {% for m in members %}<th>{{ m.firm }}<span class="muted"> · {{ 'li' if m.channel == 'linkedin' else 'tx' }}</span></th>{% endfor %}
+    </tr></thead>
+    <tbody>
+      {% for row in grid %}{% if row.any %}
+      <tr class="{{ '' if row.agree else 'disagree' }}">
+        <td class="fname">{{ row.field|replace('_',' ') }}
+          {% if not row.agree %}<span class="pill sandboxed">differs</span>{% endif %}</td>
+        {% for id, v in row.values %}
+        <td>{{ v or '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}{% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Accounts</h2></div>
+  {% for m in members %}
+  <div class="acct">
+    <div class="ah">
+      <span class="af">{{ m.firm }}</span>
+      <span class="pill {{ 'confirmed' if m.channel == 'transactions' else 'pending' }}">{{ 'own site' if m.channel == 'transactions' else 'LinkedIn' }}</span>
+      <span class="muted">{{ m.published_at.strftime('%d %b %Y') if m.published_at else 'undated' }}</span>
+      {% if m.rule_code %}<span class="muted" title="joined by rule {{ m.rule_code }} against item {{ m.matched_item_id }}">via {{ m.rule_code }}</span>
+      {% else %}<span class="muted">first member</span>{% endif %}
+      <a href="{{ m.url }}" target="_blank" rel="noopener">open</a>
+      <form method="post" action="/tdc/deals/dossier/{{ did }}/split" class="inline">
+        <input type="hidden" name="item_id" value="{{ m.id }}">
+        <button class="lift" type="submit" title="Not the same deal — remove and never propose again">Not this deal</button>
+      </form>
+    </div>
+    {% if m.summary %}<p class="asum">{{ m.summary }}</p>{% endif %}
+    {% if m.advisers %}<div class="advs">
+      {% for a in m.advisers %}{% if a is mapping %}
+      <div class="adv"><span class="af">{{ a.firm }}</span>
+        <span class="asv">{{ a.service or '—' }}</span>
+        {% if a.side %}<span class="pill confirmed">{{ a.side }}-side</span>
+        {% else %}<span class="pill pending">side unknown</span>{% endif %}</div>
+      {% endif %}{% endfor %}
+    </div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+  tr.disagree td{background:var(--panel)}
+  .fname{font-weight:600;text-transform:capitalize}
+  .acct{padding:11px 0;border-bottom:1px solid var(--border)}
+  .acct:last-child{border-bottom:0}
+  .ah{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;font-size:12.5px}
+  .ah .af{font-weight:600;font-size:13.5px}
+  .asum{font-size:12.5px;color:var(--muted);margin:5px 0 0;line-height:1.5}
+</style>
+{% endblock %}

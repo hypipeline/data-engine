@@ -1,0 +1,73 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">Dossiers</h1>
+<p class="tdc-blurb">
+  Every account we hold of one transaction, grouped. A firm's post and its own write-up are one
+  voice saying a thing twice; the other side's adviser saying it is a second voice. That is why
+  <strong>publishers</strong> is counted separately from accounts — only distinct publishers
+  corroborate anything.</p>
+
+<div class="pd-stats">
+  <div class="pd-stat"><span class="k">Dossiers</span><span class="v">{{ rows|length }}</span></div>
+  <div class="pd-stat"><span class="k">Accounts grouped</span>
+    <span class="v">{{ rows|sum(attribute='members') }}</span></div>
+  <div class="pd-stat"><span class="k">More than one publisher</span>
+    <span class="v">{{ rows|selectattr('publishers','greaterthan',1)|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Parties disagree</span>
+    <span class="v {{ 'warn' if rows|selectattr('acquirer_variants','greaterthan',1)|list|length }}">
+      {{ rows|selectattr('acquirer_variants','greaterthan',1)|list|length }}</span></div>
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Rules in use</h2>
+    <span class="right">membership records which rule admitted it</span></div>
+  <table class="pd">
+    <thead><tr><th>Code</th><th>Rule</th><th>Verdict</th><th></th><th>What it is for</th></tr></thead>
+    <tbody>
+      {% for r in rules %}
+      <tr>
+        <td class="muted">{{ r.code }}</td>
+        <td>{{ r.label }}</td>
+        <td><span class="pill {{ 'confirmed' if r.verdict == 'certain' else 'pending' }}">{{ r.verdict }}</span></td>
+        <td>{% if r.enabled %}<span class="pill confirmed">on</span>
+            {% else %}<span class="muted">off</span>{% endif %}</td>
+        <td class="muted">{{ r.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/tdc/deals/dossiers/rebuild" class="pd-sync" style="margin-top:12px">
+    <button class="btn" type="submit">Rebuild dossiers</button>
+    <span class="out">recomputed from scratch each time — grouping is derived, never accumulated</span>
+  </form>
+  {% if flash %}<p class="out" style="margin:10px 0 0">{{ flash }}</p>{% endif %}
+</div>
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Groupings</h2></div>
+  {% if rows %}
+  <table class="pd">
+    <thead><tr><th>Deal</th><th class="n">Accounts</th><th class="n">Publishers</th>
+      <th>Span</th><th></th></tr></thead>
+    <tbody>
+      {% for d in rows %}
+      <tr>
+        <td><a href="/tdc/deals/dossier/{{ d.id }}">{{ d.headline or 'dossier ' ~ d.id }}</a></td>
+        <td class="n">{{ d.members }}</td>
+        <td class="n {{ '' if d.publishers > 1 else 'muted' }}">{{ d.publishers }}</td>
+        <td class="muted">
+          {%- if d.first_seen and d.last_seen and d.first_seen != d.last_seen -%}
+            {{ d.first_seen.strftime('%d %b') }} – {{ d.last_seen.strftime('%d %b %Y') }}
+          {%- elif d.last_seen -%}{{ d.last_seen.strftime('%d %b %Y') }}{%- else -%}—{%- endif -%}
+        </td>
+        <td>{% if d.acquirer_variants > 1 or d.target_variants > 1 %}
+          <span class="pill sandboxed" title="the accounts name different parties">disagree</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="pd-empty">Nothing grouped yet. Rebuild after a scan and a read.</p>
+  {% endif %}
+</div>
+{% endblock %}
