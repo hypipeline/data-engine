@@ -58,9 +58,32 @@ def upsert(conn, name, website, linkedin_url, employees, origin, resolved_by, ma
     conn.commit()
 
 
-def rows(conn, include_inactive=False, with_source=False):
-    """with_source: only firms we can actually read something from — a LinkedIn
-    page or a transactions page. Everything else is a name we cannot yet watch."""
+# Views onto the list, keyed rather than passed as SQL. Each is a question someone
+# actually asks while working through it, not a column exposed for its own sake.
+FILTERS = [
+    ("",      "All",                None),
+    ("ready", "Ready to watch",     "(bridge IS DISTINCT FROM \'neither\' OR deals_url IS NOT NULL)"),
+    ("tx",    "Transactions page",  "deals_url IS NOT NULL"),
+    ("li",    "Proven LinkedIn",    "bridge IN (\'both\',\'site_only\',\'linkedin_only\')"),
+    ("check", "Needs a look",       "bridge = \'neither\'"),
+    ("todo",  "Not reviewed",       "NOT deals_locked"),
+]
+_CLAUSE = {k: c for k, _, c in FILTERS}
+
+
+def filter_counts(conn):
+    """Every filter's count in one pass, so the links can carry them."""
+    parts = [f'count(*) FILTER (WHERE {c}) AS "{k}"' for k, _, c in FILTERS if c]
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(f'SELECT count(*) AS "_all", {", ".join(parts)} '
+                    f'FROM tdc.coverage WHERE active')
+        row = cur.fetchone()
+    row[""] = row["_all"]          # the All view is keyed on an empty string
+    return row
+
+
+def rows(conn, include_inactive=False, filt=None):
+    """filt is a key from FILTERS; anything unrecognised shows everything."""
     sql = """SELECT id, name, website, linkedin_url, employees, name_match,
                     needs_check, active, resolved_by, bridge, bridge_note,
                     site_links_linkedin, linkedin_lists_site, checked_at,
@@ -68,8 +91,9 @@ def rows(conn, include_inactive=False, with_source=False):
                     deals_locked, deals_set_by, deals_set_at
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     clauses = [] if include_inactive else ["active"]
-    if with_source:
-        clauses.append("(linkedin_url IS NOT NULL OR deals_url IS NOT NULL)")
+    extra = _CLAUSE.get(filt or "")
+    if extra:
+        clauses.append(extra)
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(sql.format(where))

@@ -1446,16 +1446,16 @@ def tdc_deals(request: Request):
 
 
 @app.get("/tdc/deals/coverage", response_class=HTMLResponse)
-def tdc_deals_coverage(request: Request, flash: str = "", have: str = ""):
+def tdc_deals_coverage(request: Request, flash: str = "", f: str = ""):
     conn = POOL.getconn()
     try:
         tdc_svc.ensure_schema(conn)
-        rows = tdc_cov.rows(conn, with_source=bool(have))
-        total = len(tdc_cov.rows(conn))
+        rows = tdc_cov.rows(conn, filt=f)
+        counts = tdc_cov.filter_counts(conn)
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_coverage.html", "tdc-coverage",
-                  rows=rows, total=total, have=bool(have),
+                  rows=rows, filters=tdc_cov.FILTERS, counts=counts, active_filter=f,
                   subactive="coverage", page_title="Coverage", flash=flash,
                   **_tdc_shell("deals"))
 
