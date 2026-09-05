@@ -259,3 +259,13 @@ ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS bridge text
     CHECK (bridge IN ('both','site_only','linkedin_only','neither','unreachable'));
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS bridge_note text;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS checked_at timestamptz;
+
+-- Where a firm publishes its own transactions. Corporate finance houses almost all
+-- have one, under a dozen different names — transactions, deals, track record,
+-- tombstones, credentials — so it is found by reading the site's own navigation
+-- rather than guessing paths, and then confirmed by what the page contains.
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_url text;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_how text;      -- nav | guess
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_label text;    -- what the site calls it
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_signals integer;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_checked_at timestamptz;

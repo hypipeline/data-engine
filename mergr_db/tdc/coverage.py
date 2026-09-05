@@ -61,7 +61,8 @@ def upsert(conn, name, website, linkedin_url, employees, origin, resolved_by, ma
 def rows(conn, include_inactive=False):
     sql = """SELECT id, name, website, linkedin_url, employees, name_match,
                     needs_check, active, resolved_by, bridge, bridge_note,
-                    site_links_linkedin, linkedin_lists_site, checked_at
+                    site_links_linkedin, linkedin_lists_site, checked_at,
+                    deals_url, deals_how, deals_label, deals_signals
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     where = "" if include_inactive else "WHERE active"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -220,3 +221,76 @@ def validate(conn, row):
                     (a, b, verdict, "; ".join(notes) or None, verdict, row["id"]))
     conn.commit()
     return verdict, a, b, "; ".join(notes)
+
+
+# --------------------------------------------------------- the transactions page
+# Nearly every corporate finance firm publishes its own completed deals, under a
+# dozen different names. The page is found by reading the site's own navigation —
+# the firm's word for it is better than any list of paths we could invent — and
+# only then confirmed by what the page actually contains. A URL called /deals that
+# holds no deals is not a deals page.
+NAV_WORDS = [
+    ("transaction", 10), ("tombstone", 10), ("track record", 9), ("our deals", 9),
+    ("recent deals", 9), ("deal news", 8), ("completed", 7), ("credentials", 6),
+    ("case stud", 5), ("deals", 5), ("experience", 3), ("portfolio", 3), ("news", 2),
+]
+DEAL_SIGNAL = re.compile(
+    r"\b(advised|advises|acquisition of|acquired by|acquired|sale of|sold to|"
+    r"merger with|has been sold|investment in|disposal|exit|MBO|management buyout)\b", re.I)
+
+
+def _links(base, body):
+    out = []
+    for m in re.finditer(r'<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', body, re.I | re.S):
+        href, text = m.group(1), re.sub(r"<[^>]+>", " ", m.group(2))
+        text = re.sub(r"\s+", " ", html.unescape(text)).strip()
+        if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+            continue
+        out.append((urllib.parse.urljoin(base, href), text))
+    return out
+
+
+def _score(url, text):
+    hay = f"{text.lower()} {urllib.parse.urlparse(url).path.lower()}"
+    return max((w for word, w in NAV_WORDS if word in hay), default=0)
+
+
+def find_deals_page(website, max_try=4):
+    """Returns (url, how, label, signals) — signals being how many deal-shaped
+    phrases the page actually carries, so a promising URL that turns out to be a
+    marketing page is not recorded as a transactions page."""
+    base = website if website.startswith("http") else "https://" + website
+    try:
+        home = _fetch(base, 15)
+    except Exception:
+        return None, None, None, None
+
+    host = urllib.parse.urlparse(base).netloc.replace("www.", "")
+    cands = {}
+    for url, text in _links(base, home):
+        if urllib.parse.urlparse(url).netloc.replace("www.", "") != host:
+            continue          # a firm's transactions live on its own site
+        s = _score(url, text)
+        if s and (url not in cands or cands[url][0] < s):
+            cands[url] = (s, text)
+
+    best = None
+    for url, (s, text) in sorted(cands.items(), key=lambda kv: -kv[1][0])[:max_try]:
+        try:
+            body = _fetch(url, 15)
+        except Exception:
+            continue
+        n = len(set(m.group(0).lower() for m in DEAL_SIGNAL.finditer(body)))
+        hits = len(DEAL_SIGNAL.findall(body))
+        if hits >= 3 and (best is None or hits > best[3]):
+            best = (url, "nav", text or None, hits)
+    return best if best else (None, None, None, 0)
+
+
+def save_deals_page(conn, row_id, url, how, label, signals):
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE tdc.coverage
+                          SET deals_url=%s, deals_how=%s, deals_label=%s,
+                              deals_signals=%s, deals_checked_at=now(), updated_at=now()
+                        WHERE id=%s""", (url, how, label, signals, row_id))
+    conn.commit()

@@ -17,6 +17,8 @@
   <div class="pd-stat"><span class="k">One direction</span>
     <span class="v">{{ (rows|selectattr('bridge','equalto','site_only')|list|length)
                       + (rows|selectattr('bridge','equalto','linkedin_only')|list|length) }}</span></div>
+  <div class="pd-stat"><span class="k">Transactions page</span>
+    <span class="v">{{ rows|selectattr('deals_url')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Unproven</span>
     <span class="v {{ 'warn' if rows|selectattr('needs_check')|list|length }}">
       {{ rows|selectattr('needs_check')|list|length }}</span></div>
@@ -28,7 +30,8 @@
   {% if rows %}
   <table class="pd">
     <thead><tr><th>Firm</th><th>Website</th><th>LinkedIn</th><th class="n">Staff</th>
-      <th title="site links to LinkedIn / LinkedIn carries the domain">Bridge</th></tr></thead>
+      <th title="site links to LinkedIn / LinkedIn carries the domain">Bridge</th>
+      <th title="the firm's own transactions page, found from its navigation">Transactions</th></tr></thead>
     <tbody>
       {% for r in rows %}
       <tr>
@@ -49,6 +52,13 @@
             <span class="pill sandboxed" title="{{ r.bridge_note }}">unreachable</span>
           {% elif r.bridge == 'neither' %}
             <span class="pill complained" title="neither end points at the other — probably a different company">unproven</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>
+          {% if r.deals_url %}
+            <a href="{{ r.deals_url }}" target="_blank" rel="noopener"
+               title="{{ r.deals_signals }} deal-shaped phrases on the page">{{ r.deals_label or 'transactions' }}</a>
+          {% elif r.deals_checked_at %}<span class="muted">none found</span>
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
       </tr>
