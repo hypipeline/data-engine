@@ -25,8 +25,14 @@
 
 <div class="pd-panel">
   <div class="pd-head"><h2>Found</h2>
-    <span class="right">
-      <a class="filt {{ 'on' if not firm }}" href="/tdc/deals/scan">All firms</a>
+    <span class="right filts">
+      <a class="filt {{ 'on' if not active_id }}" href="/tdc/deals/scan">All
+        <b>{{ firms|sum(attribute='items') }}</b></a>
+      {% for f in firms %}
+      <a class="filt {{ 'on' if active_id == f.id }}" href="/tdc/deals/scan?id={{ f.id }}"
+         title="{{ f.linkedin }} LinkedIn, {{ f.transactions }} transactions · last scanned {{ f.last_scan.strftime('%d %b %H:%M') if f.last_scan }}">{{ f.name }}
+        <b>{{ f.items }}</b></a>
+      {% endfor %}
     </span></div>
   {% if items %}
   <div class="scan">

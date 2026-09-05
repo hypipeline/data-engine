@@ -1491,9 +1491,11 @@ def tdc_deals_scan(request: Request, flash: str = "", id: int = 0):
     try:
         tdc_svc.ensure_schema(conn)
         items = tdc_cov.scan_items(conn, coverage_id=id or None)
+        firms = tdc_cov.scan_firms(conn)
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_scan.html", "tdc-scan", items=items, flash=flash,
+                  firms=firms, active_id=id,
                   firm=(items[0]["firm"] if id and items else None),
                   subactive="scan", page_title="Scan", **_tdc_shell("deals"))
 

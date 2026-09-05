@@ -640,6 +640,20 @@ def _demote_boilerplate(rows, threshold=0.4):
     return rows
 
 
+def scan_firms(conn):
+    """Firms that have been scanned, with how much each returned — so the filter
+    also answers 'which of these has anything worth reading'."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT c.id, c.name, count(*) AS items,
+                   count(*) FILTER (WHERE s.channel='linkedin')     AS linkedin,
+                   count(*) FILTER (WHERE s.channel='transactions') AS transactions,
+                   max(s.last_seen) AS last_scan
+            FROM tdc.scan_item s JOIN tdc.coverage c ON c.id = s.coverage_id
+            GROUP BY c.id, c.name ORDER BY c.name""")
+        return cur.fetchall()
+
+
 def scan_items(conn, coverage_id=None, limit=300):
     where = "WHERE s.coverage_id = %s" if coverage_id else ""
     args = (coverage_id, limit) if coverage_id else (limit,)
