@@ -14,7 +14,7 @@ from psycopg2.extras import RealDictCursor
 
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = os.environ.get("TDC_SUMMARY_MODEL", "google/gemini-2.5-flash")
-PROMPT_VERSION = "v4"
+PROMPT_VERSION = "v5"
 
 # Fallback only. OpenRouter reports the actual charge per request when asked, and
 # that is used when present — a rate table goes stale silently, and a cost we
@@ -179,7 +179,7 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
               (scan_item_id, model, prompt_version, is_deal, headline, summary,
                acquirer, target, vendor, consideration, revenue, ebitda, date_hint,
                date_basis, sector,
-               advisers, people, confidence, raw, prompt_tokens, completion_tokens,
+               advisers, people, clarity, raw, prompt_tokens, completion_tokens,
                cost_usd, cost_source, latency_ms, ok, error,
                system_prompt, input_text, output_text, finish_reason, response_meta)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
@@ -191,7 +191,7 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
               ebitda=EXCLUDED.ebitda, date_hint=EXCLUDED.date_hint,
               date_basis=EXCLUDED.date_basis,
               sector=EXCLUDED.sector, advisers=EXCLUDED.advisers, people=EXCLUDED.people,
-              confidence=EXCLUDED.confidence, raw=EXCLUDED.raw,
+              clarity=EXCLUDED.clarity, raw=EXCLUDED.raw,
               prompt_tokens=EXCLUDED.prompt_tokens, completion_tokens=EXCLUDED.completion_tokens,
               cost_usd=EXCLUDED.cost_usd, cost_source=EXCLUDED.cost_source,
               latency_ms=EXCLUDED.latency_ms, ok=EXCLUDED.ok, error=EXCLUDED.error,
@@ -204,7 +204,9 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
              out.get("consideration"), out.get("revenue"), out.get("ebitda"),
              out.get("date_hint"), out.get("date_basis"), out.get("sector"),
              json.dumps(out.get("advisers") or []), json.dumps(out.get("people") or []),
-             out.get("confidence"), json.dumps(out) if out else None,
+             (out.get("clarity") if out.get("clarity") in ("high", "medium", "low")
+              else None),
+             json.dumps(out) if out else None,
              usage.get("prompt_tokens"), usage.get("completion_tokens"),
              cost, cost_source, ms, err is None, err,
              SYSTEM, sent if sent is not None else text[:24000], content, finish,

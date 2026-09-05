@@ -461,3 +461,10 @@ ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS ebitda text;
 -- presented as a completion date.
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS date_basis text
     CHECK (date_basis IN ('stated','published'));
+
+-- clarity replaces the numeric confidence, which the model answered on two
+-- different scales in one run — 0.8 and 1 alongside 3 and 5 — and which was never
+-- meaningful anyway: a model's self-reported certainty is not calibrated against
+-- anything. clarity asks about the DOCUMENT instead, which is observable.
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS clarity text
+    CHECK (clarity IN ('high','medium','low'));
