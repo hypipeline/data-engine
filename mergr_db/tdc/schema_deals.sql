@@ -454,3 +454,10 @@ ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS response_meta jsonb;
 -- into a number throws away the hedge and the period that make it meaningful.
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS revenue text;
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS ebitda text;
+
+-- Whether the date came from the document's own words or from when it was
+-- published. Those are different claims — one is the deal, the other is when
+-- someone talked about it — and collapsing them is how a publication date ends up
+-- presented as a completion date.
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS date_basis text
+    CHECK (date_basis IN ('stated','published'));

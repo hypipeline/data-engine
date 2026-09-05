@@ -169,7 +169,8 @@
               {% if m.consideration %}<span><b>price</b> {{ m.consideration }}</span>{% endif %}
               {% if m.revenue %}<span><b>revenue</b> {{ m.revenue }}</span>{% endif %}
               {% if m.ebitda %}<span><b>ebitda</b> {{ m.ebitda }}</span>{% endif %}
-              {% if m.date_hint %}<span><b>date</b> {{ m.date_hint }}</span>{% endif %}
+              {% if m.date_hint %}<span><b>date</b> {{ m.date_hint }}
+                {%- if m.date_basis %} <span class="muted" title="{{ 'stated in the document' if m.date_basis == 'stated' else 'the date it was published, not a completion date' }}">({{ m.date_basis }})</span>{% endif %}</span>{% endif %}
               {% if m.sector %}<span><b>sector</b> {{ m.sector }}</span>{% endif %}
             </div>
             {% if m.summary %}<p class="rs">{{ m.summary }}</p>{% endif %}
