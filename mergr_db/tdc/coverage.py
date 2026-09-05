@@ -538,6 +538,22 @@ def strip_template(pages, threshold=0.6, min_run=4):
     return out, removed
 
 
+def _feed_date(raw):
+    """RFC 822 or ISO, whichever the feed uses. A date we cannot parse is left null
+    rather than guessed at."""
+    if not raw:
+        return None
+    from email.utils import parsedate_to_datetime
+    for parse in (parsedate_to_datetime,
+                  lambda v: __import__("datetime").datetime.fromisoformat(
+                      v.replace("Z", "+00:00"))):
+        try:
+            return parse(raw)
+        except Exception:
+            pass
+    return None
+
+
 def _plain(h, min_len=2):
     """Readable lines, keeping short ones.
 
@@ -593,6 +609,38 @@ def scan_linkedin(conn, linkedin_url, cap=10):
     return items
 
 
+FEED_LINK_RE = re.compile(
+    r'<link[^>]+type=["\']application/(?:rss\+xml|atom\+xml)["\'][^>]*href=["\']([^"\']+)["\']',
+    re.I)
+
+
+def _is_feed(body):
+    head = body.lstrip()[:400].lower()
+    return head.startswith("<?xml") or "<rss" in head or "<feed" in head
+
+
+def _feed_items(body):
+    """RSS or Atom entries: link, title, date. A feed is a list of articles, not an
+    article — reading one as a page collapses every deal in it into a single item,
+    which is exactly what happened to Peakstone's seven."""
+    out = []
+    for block in re.findall(r"(?is)<item\b.*?</item>|<entry\b.*?</entry>", body):
+        link = (re.search(r"(?is)<link[^>]*>([^<]+)</link>", block)
+                or re.search(r'(?is)<link[^>]*href=["\']([^"\']+)["\']', block))
+        title = re.search(r"(?is)<title[^>]*>(.*?)</title>", block)
+        date = (re.search(r"(?is)<pubDate>(.*?)</pubDate>", block)
+                or re.search(r"(?is)<published>(.*?)</published>", block)
+                or re.search(r"(?is)<updated>(.*?)</updated>", block))
+        if not link:
+            continue
+        t = title.group(1) if title else ""
+        t = re.sub(r"(?is)<!\[CDATA\[(.*?)\]\]>", r"\1", t)
+        out.append({"url": html.unescape(link.group(1)).strip(),
+                    "title": re.sub(r"\s+", " ", html.unescape(t)).strip(),
+                    "date": (date.group(1).strip() if date else None)})
+    return out
+
+
 def scan_transactions(conn, index_url, cap=12):
     """Read a firm's transactions index.
 
@@ -604,18 +652,41 @@ def scan_transactions(conn, index_url, cap=12):
     """
     idx = fetch(conn, index_url, ttl=TTL_INDEX)
     base = urllib.parse.urlparse(index_url)
-    root = f"{base.scheme}://{base.netloc}"
     prefix = base.path.rstrip("/")
 
+    # A feed is the best index there is: it lists the articles explicitly and dates
+    # them. Either the page we were given IS one, or it declares one — WordPress
+    # does on every archive, which is where Peakstone's seven deals were hiding
+    # inside a single captured "page".
+    feed_body, feed_url = (idx, index_url) if _is_feed(idx) else (None, None)
+    if feed_body is None:
+        m = FEED_LINK_RE.search(idx)
+        if m:
+            feed_url = urllib.parse.urljoin(index_url, html.unescape(m.group(1)))
+            try:
+                cand = fetch(conn, feed_url, ttl=TTL_INDEX)
+                if _is_feed(cand):
+                    feed_body = cand
+            except Exception:
+                feed_body = None
+
+    feed_meta = {}
     targets, seen = [], set()
-    for href in re.findall(r'href=["\']([^"\']+)["\']', idx, re.I):
-        u = urllib.parse.urljoin(index_url, href)
-        p = urllib.parse.urlparse(u)
-        if p.netloc.replace("www.", "") != base.netloc.replace("www.", ""):
-            continue
-        path = p.path.rstrip("/")
-        if path.startswith(prefix) and path != prefix and path not in seen:
-            seen.add(path); targets.append(u)
+    if feed_body:
+        for e in _feed_items(feed_body)[:cap]:
+            u = urllib.parse.urljoin(feed_url, e["url"])
+            if u in seen:
+                continue
+            seen.add(u); targets.append(u); feed_meta[u] = e
+    if not targets:                       # no feed — fall back to the page's own links
+        for href in re.findall(r'href=["\']([^"\']+)["\']', idx, re.I):
+            u = urllib.parse.urljoin(index_url, href)
+            p = urllib.parse.urlparse(u)
+            if p.netloc.replace("www.", "") != base.netloc.replace("www.", ""):
+                continue
+            path = p.path.rstrip("/")
+            if path.startswith(prefix) and path != prefix and path not in seen:
+                seen.add(path); targets.append(u)
 
     items = []
     if targets:                                    # expanded: a page per deal
@@ -632,6 +703,7 @@ def scan_transactions(conn, index_url, cap=12):
                 continue
             t = re.search(r"<title>(.*?)</title>", b, re.S)
             title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else slug.replace("-", " ")
+            title = (feed_meta.get(u, {}).get("title") or title)
             lines, seen = [], set()
             for l in _plain(b):
                 if l not in seen:
@@ -648,7 +720,8 @@ def scan_transactions(conn, index_url, cap=12):
             full = "\n".join(lines)[:20000]
             items.append({"channel": "transactions", "external_id": slug, "url": u,
                           "title": title, "body": " ".join(lines[0:3])[:1200],
-                          "published_at": None, "expanded": True, "outlink": None,
+                          "published_at": _feed_date(feed_meta.get(u, {}).get("date")),
+                          "expanded": True, "outlink": None,
                           "links": links, "images": imgs, "body_from": "page",
                           "full_text": full, "full_chars": len(full),
                           "chrome_chars": gone})
