@@ -429,8 +429,12 @@ SEG_RE = re.compile(r'attributed-text-segment-list__content[^>]*>(.*?)</p>', re.
 OUT_RE = re.compile(r"https://lnkd\.in/\w+")
 OG_RE = re.compile(r'property="og:description"\s+content="([^"]*)"', re.S)
 # Chrome and profile furniture, not content.
-SKIP_IMG = re.compile(r"static\.licdn|company-background|profile-displayphoto|ghost|"
-                      r"spacer|pixel|1x1|logo-|favicon", re.I)
+# Chrome and identity furniture, not content. company-logo needs matching without a
+# trailing hyphen — LinkedIn serves it as company-logo_100_100, which the old
+# pattern missed, and a firm's own logo is not a picture of the deal.
+SKIP_IMG = re.compile(r"static\.licdn|company-background|company-logo|profile-displayphoto|"
+                      r"ghost|spacer|pixel|1x1|logo[-_]|favicon|sprite", re.I)
+OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.I)
 
 
 def _post_body(page):
@@ -472,13 +476,23 @@ def _media(page, base_url, own_host=None):
             break
 
     imgs, iseen = [], set()
+    # og:image first: on LinkedIn the post's own picture is only there — the markup
+    # carries a company logo and nothing else — and on an article it is the
+    # featured image the publisher chose.
+    og = OG_IMAGE_RE.search(page)
+    if og and not SKIP_IMG.search(og.group(1)):
+        u = urllib.parse.urljoin(base_url, html.unescape(og.group(1)))
+        iseen.add(u)
+        imgs.append({"src": u[:600], "alt": "", "role": "primary"})
+
     for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', page, re.I):
         src = urllib.parse.urljoin(base_url, m.group(1))
         if SKIP_IMG.search(src) or src in iseen:
             continue
         alt = re.search(r'alt=["\']([^"\']*)["\']', m.group(0))
         iseen.add(src)
-        imgs.append({"src": src[:400], "alt": (alt.group(1)[:120] if alt else "")})
+        imgs.append({"src": src[:600], "alt": (alt.group(1)[:120] if alt else ""),
+                     "role": "inline"})
         if len(imgs) >= 8:
             break
     return links, imgs

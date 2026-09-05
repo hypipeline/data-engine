@@ -249,7 +249,9 @@
         {% endif %}
         {% if i.images %}
         <div class="simgs">
-          {% for im in i.images %}<img src="{{ im.src }}" alt="{{ im.alt }}" loading="lazy">{% endfor %}
+          {% for im in i.images %}<img src="{{ im.src }}" alt="{{ im.alt }}" loading="lazy"
+             class="{{ 'primary' if im.role == 'primary' }}"
+             title="{{ im.alt or ('post image' if im.role == 'primary' else 'inline image') }}">{% endfor %}
         </div>
         {% endif %}
       </div>
@@ -351,6 +353,7 @@
   .chrome{font-size:11px;color:var(--muted);padding:1px 6px;border:1px dashed var(--border);
     border-radius:3px}
   .simgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .simgs img.primary{height:92px;max-width:260px}
   .simgs img{height:46px;width:auto;max-width:150px;object-fit:contain;
     border:1px solid var(--border);border-radius:3px;background:#fff;padding:2px}
   .sout{font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,Menlo,monospace}
