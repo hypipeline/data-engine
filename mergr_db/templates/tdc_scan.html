@@ -23,6 +23,38 @@
     <span class="v">{{ items|selectattr('full_text')|list|length }}</span></div>
 </div>
 
+<div class="pd-panel">
+  <div class="pd-head"><h2>Reading</h2>
+    <span class="right">Gemini Flash via OpenRouter · cost as OpenRouter reports it</span></div>
+  <form method="post" action="/tdc/deals/scan/read" class="pd-sync">
+    <input type="hidden" name="id" value="{{ active_id or 0 }}">
+    <button class="btn" type="submit">Read unread items{{ ' for this firm' if active_id }}</button>
+    <span class="out">{{ items|rejectattr('id','in',sums)|list|length }} of {{ items|length }} not yet read</span>
+  </form>
+  {% if spend %}
+  <table class="pd" style="margin-top:12px">
+    <thead><tr><th>Model</th><th class="n">Calls</th><th class="n">Deals</th><th class="n">Failed</th>
+      <th class="n">Tokens in</th><th class="n">Tokens out</th><th class="n">Cost</th>
+      <th class="n">Avg ms</th></tr></thead>
+    <tbody>
+      {% for s in spend %}
+      <tr>
+        <td>{{ s.model }}</td>
+        <td class="n">{{ s.calls }}</td>
+        <td class="n">{{ s.deals }}</td>
+        <td class="n {{ 'muted' if not s.failed }}">{{ s.failed or '—' }}</td>
+        <td class="n muted">{{ '{:,}'.format(s.tok_in or 0) }}</td>
+        <td class="n muted">{{ '{:,}'.format(s.tok_out or 0) }}</td>
+        <td class="n">${{ '%.4f'|format(s.cost or 0) }}{% if s.cost_estimated %}
+          <span class="muted" title="part of this is our arithmetic, not OpenRouter's figure">*</span>{% endif %}</td>
+        <td class="n muted">{{ s.avg_ms or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
 {% if health %}
 <div class="pd-panel">
   <div class="pd-head"><h2>Source health</h2>
@@ -116,6 +148,32 @@
       <div class="sbody">
         <div class="sti">{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title or i.external_id }}</a>
           {% else %}{{ i.title or i.external_id }}{% endif %}</div>
+        {% set m = sums.get(i.id) %}
+        {% if m %}
+        <div class="read {{ 'isdeal' if m.is_deal }}">
+          {% if not m.ok %}<span class="pill complained">read failed</span>
+            <span class="muted">{{ m.error }}</span>
+          {% elif m.is_deal %}
+            <div class="rh">{{ m.headline or 'deal' }}</div>
+            <div class="rp">
+              {% if m.acquirer %}<span><b>buyer</b> {{ m.acquirer }}</span>{% endif %}
+              {% if m.target %}<span><b>target</b> {{ m.target }}</span>{% endif %}
+              {% if m.vendor %}<span><b>vendor</b> {{ m.vendor }}</span>{% endif %}
+              {% if m.consideration %}<span><b>price</b> {{ m.consideration }}</span>{% endif %}
+              {% if m.date_hint %}<span><b>date</b> {{ m.date_hint }}</span>{% endif %}
+              {% if m.sector %}<span><b>sector</b> {{ m.sector }}</span>{% endif %}
+            </div>
+            {% if m.summary %}<p class="rs">{{ m.summary }}</p>{% endif %}
+            {% if m.people %}<div class="rp">{% for p in m.people %}
+              <span><b>{{ p.role or 'adviser' }}</b> {{ p.name }}{% if p.firm %}, {{ p.firm }}{% endif %}</span>
+            {% endfor %}</div>{% endif %}
+          {% else %}
+            <span class="muted">read: not a deal{% if m.summary %} — {{ m.summary|truncate(120) }}{% endif %}</span>
+          {% endif %}
+          <div class="rmeta">{{ m.model }} · {{ m.prompt_tokens or 0 }}+{{ m.completion_tokens or 0 }} tok
+            · ${{ '%.5f'|format(m.cost_usd or 0) }} {{ m.cost_source }}</div>
+        </div>
+        {% endif %}
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
         {% if i.full_text and i.full_chars > (i.body|length) + 80 %}
         <details class="sfull">
@@ -176,6 +234,16 @@
   .firmsel select{font:inherit;font-size:12.5px;padding:3px 7px;border:1px solid var(--border);
     border-radius:3px;background:var(--panel);color:var(--fg);max-width:340px}
   .firmsel select:focus{outline:2px solid #a86a12;outline-offset:1px}
+  .read{margin-top:7px;padding:8px 10px;border:1px solid var(--border);
+    border-left:2px solid var(--border);border-radius:var(--radius);background:var(--panel)}
+  .read.isdeal{border-left-color:#b0281f}
+  .read .rh{font-size:13px;font-weight:600;margin-bottom:4px}
+  .read .rp{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:3px}
+  .read .rp b{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:.06em;
+    text-transform:uppercase;margin-right:4px}
+  .read .rs{font-size:12.5px;color:var(--muted);margin:5px 0 0;line-height:1.5}
+  .read .rmeta{font-size:10.5px;color:var(--muted);margin-top:6px;
+    font-family:ui-monospace,Menlo,monospace}
   .sfull{margin-top:6px}
   .sfull summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
     padding:1px 7px;border:1px solid var(--border);border-radius:3px}

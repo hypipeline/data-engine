@@ -26,6 +26,7 @@ from tdc import sync as tdc_sync
 from tdc import admin as tdc_admin
 from tdc import nav as tdc_nav
 from tdc import coverage as tdc_cov
+from tdc import summarise as tdc_sum
 import auth
 
 DSN = os.environ["DATABASE_URL"]
@@ -1494,6 +1495,8 @@ def tdc_deals_scan(request: Request, flash: str = "", id: int = 0, ch: str = "")
         firms = tdc_cov.scan_firms(conn)
         totals = tdc_cov.scan_items(conn, coverage_id=id or None)
         health = tdc_cov.scan_health(conn)
+        sums = tdc_sum.summaries_for(conn, [i["id"] for i in items])
+        spend = tdc_sum.spend(conn)
         # The sources behind what is on screen. Only meaningful for one firm —
         # across all of them it would be a list of twenty URLs, which answers
         # nothing.
@@ -1502,6 +1505,7 @@ def tdc_deals_scan(request: Request, flash: str = "", id: int = 0, ch: str = "")
         POOL.putconn(conn)
     return render(request, "tdc_scan.html", "tdc-scan", items=items, flash=flash,
                   firms=firms, active_id=id, active_ch=ch, picked=picked, health=health,
+                  sums=sums, spend=spend,
                   n_li=sum(1 for i in totals if i["channel"] == "linkedin"),
                   n_tx=sum(1 for i in totals if i["channel"] == "transactions"),
                   n_all=len(totals),
@@ -1525,6 +1529,35 @@ def tdc_coverage_scan(request: Request, id: int = Form(...)):
     except Exception as e:
         conn.rollback()
         msg = f"Scan failed — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc/deals/scan?{urlencode({'id': id, 'flash': msg})}",
+                            status_code=303)
+
+
+@app.post("/tdc/deals/scan/read")
+def tdc_scan_read(request: Request, id: int = Form(0), limit: int = Form(25)):
+    """Run the summariser over items that have not been read yet."""
+    conn = POOL.getconn()
+    try:
+        key = os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            msg = "No OpenRouter key available to this container."
+        else:
+            items = tdc_cov.scan_items(conn, coverage_id=id or None)
+            done = tdc_sum.summaries_for(conn, [i["id"] for i in items])
+            todo = [i for i in items if i["id"] not in done][:limit]
+            spent, deals, failed = 0.0, 0, 0
+            for it in todo:
+                r = tdc_sum.summarise_item(conn, it, key)
+                spent += float(r.get("cost_usd") or 0)
+                deals += 1 if r.get("is_deal") else 0
+                failed += 0 if r.get("ok") else 1
+            msg = (f"Read {len(todo)} items — {deals} look like deals, {failed} failed, "
+                   f"${spent:.4f}." if todo else "Nothing left to read.")
+    except Exception as e:
+        conn.rollback()
+        msg = f"Read failed — {e}"
     finally:
         POOL.putconn(conn)
     return RedirectResponse(f"/tdc/deals/scan?{urlencode({'id': id, 'flash': msg})}",

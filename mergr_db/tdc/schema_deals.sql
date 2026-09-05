@@ -385,3 +385,50 @@ CREATE TABLE IF NOT EXISTS tdc.scan_run (
     health_note   text
 );
 CREATE INDEX IF NOT EXISTS scan_run_cov_idx ON tdc.scan_run (coverage_id, channel, ran_at DESC);
+
+-- ---------------------------------------------------------------- item_summary
+-- What a model made of one scanned item.
+--
+-- Keyed on (item, model, prompt_version) rather than on the item alone, so a
+-- better prompt or a different model writes a new row instead of overwriting the
+-- old one. That makes two models on the same item directly comparable, and it is
+-- the same reason claims are immutable: the judgement is a fact about a model and
+-- a prompt at a moment, not a property of the item.
+--
+-- Nothing here is a claim yet. It is a reading, and it carries what it cost.
+CREATE TABLE IF NOT EXISTS tdc.item_summary (
+    id            bigserial PRIMARY KEY,
+    scan_item_id  bigint NOT NULL REFERENCES tdc.scan_item(id) ON DELETE CASCADE,
+    model         text NOT NULL,
+    prompt_version text NOT NULL,
+
+    -- the reading
+    is_deal       boolean,
+    headline      text,
+    summary       text,
+    acquirer      text,
+    target        text,
+    vendor        text,
+    consideration text,
+    date_hint     text,
+    sector        text,
+    advisers      jsonb NOT NULL DEFAULT '[]'::jsonb,
+    people        jsonb NOT NULL DEFAULT '[]'::jsonb,
+    confidence    numeric(3,2),
+    raw           jsonb,
+
+    -- what it cost. cost_source records whether the figure is the provider's own
+    -- number or our arithmetic — an estimate must never be shown as a measurement.
+    prompt_tokens     integer,
+    completion_tokens integer,
+    cost_usd      numeric(12,6),
+    cost_source   text CHECK (cost_source IN ('reported','estimated')),
+    latency_ms    integer,
+
+    ok            boolean NOT NULL DEFAULT true,
+    error         text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (scan_item_id, model, prompt_version)
+);
+CREATE INDEX IF NOT EXISTS item_summary_deal_idx ON tdc.item_summary (is_deal)
+    WHERE is_deal;
