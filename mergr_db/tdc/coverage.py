@@ -516,11 +516,24 @@ def strip_template(pages, threshold=0.6):
     return out, removed
 
 
-def _plain(h):
+def _plain(h, min_len=2):
+    """Readable lines, keeping short ones.
+
+    They used to be dropped below 30 characters, as a stand-in for "not
+    navigation" written before there was anything better. It never told a menu
+    item from a person: it discarded Home and Contact, and with them DAVID COPP,
+    Director, Partner and Team Members — the deal team, which is the point of the
+    page. Nav is now removed by comparing a site's pages against each other, which
+    is the job the length filter was badly approximating, so the filter goes.
+    """
     h = re.sub(r"(?is)<(script|style|noscript|svg|nav|header|footer|form)\b.*?</\1>", " ", h)
-    h = re.sub(r"(?i)</(p|h[1-6]|li|div|br)>", "\n", h)
-    return [re.sub(r"\s+", " ", x).strip()
-            for x in html.unescape(re.sub(r"<[^>]+>", " ", h)).split("\n")]
+    h = re.sub(r"(?i)</(p|h[1-6]|li|div|br|td|th|span|a)>", "\n", h)
+    out = []
+    for x in html.unescape(re.sub(r"<[^>]+>", " ", h)).split("\n"):
+        t = re.sub(r"\s+", " ", x).strip()
+        if len(t) >= min_len and re.search(r"[A-Za-z]", t):
+            out.append(t)
+    return out
 
 
 def scan_linkedin(conn, linkedin_url, cap=10):
@@ -592,7 +605,7 @@ def scan_transactions(conn, index_url, cap=12):
             title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else slug.replace("-", " ")
             lines, seen = [], set()
             for l in _plain(b):
-                if len(l) > 30 and l not in seen:
+                if l not in seen:
                     seen.add(l); lines.append(l)
             links, imgs = _media(b, u, own_host=base.netloc.replace("www.", "").lower())
             raw.append((slug, u, title, lines, links, imgs))
@@ -600,7 +613,7 @@ def scan_transactions(conn, index_url, cap=12):
         # The index is part of the corpus: it shares the site's furniture, so it
         # helps identify it, and it means a firm with a single deal page still has
         # something to compare against.
-        corpus = [r[3] for r in raw] + [[l for l in _plain(idx) if len(l) > 30]]
+        corpus = [r[3] for r in raw] + [_plain(idx)]
         cleaned, removed = strip_template(corpus)
         for (slug, u, title, _l, links, imgs), lines, gone in zip(raw, cleaned, removed):
             full = "\n".join(lines)[:20000]
