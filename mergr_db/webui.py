@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import re as _re_json
 
 import entity_client
 import li_profile_finder as lpf
@@ -36,6 +37,51 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="Data Engine UI")
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(HERE, "templates"))
+
+
+_JSON_TOKEN = _re_json.compile(
+    r"""(?P<str>"(?:\\.|[^"\\])*")(?P<colon>\s*:)?"""
+    r"""|(?P<num>-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"""
+    r"""|(?P<lit>\btrue\b|\bfalse\b|\bnull\b)""")
+
+
+def _json_pretty(text):
+    """Pretty-print a model's reply for reading. The stored text stays verbatim —
+    this only changes how it is shown, and an unparseable reply, which is the
+    interesting case, is shown exactly as it arrived rather than tidied.
+
+    Tokenising the raw JSON rather than regexing the escaped HTML: a string
+    containing an escaped quote — "he said \"hi\"" — ends the match early
+    otherwise, and the highlighting comes apart in the middle of the value.
+    """
+    import html as _h
+    import json as _j
+    from markupsafe import Markup
+    if not text:
+        return ""
+    try:
+        pretty = _j.dumps(_j.loads(text), indent=2, ensure_ascii=False)
+    except Exception:
+        return Markup(_h.escape(text))
+
+    out, pos = [], 0
+    for m in _JSON_TOKEN.finditer(pretty):
+        out.append(_h.escape(pretty[pos:m.start()]))
+        if m.group("str") is not None:
+            cls = "jk" if m.group("colon") else "js"
+            out.append(f"<span class={cls}>{_h.escape(m.group('str'))}</span>")
+            if m.group("colon"):
+                out.append(_h.escape(m.group("colon")))
+        elif m.group("num") is not None:
+            out.append(f"<span class=jn>{_h.escape(m.group('num'))}</span>")
+        else:
+            out.append(f"<span class=jb>{_h.escape(m.group('lit'))}</span>")
+        pos = m.end()
+    out.append(_h.escape(pretty[pos:]))
+    return Markup("".join(out))
+
+
+templates.env.filters["jsonpretty"] = _json_pretty
 # Cache-buster for the stylesheet: mtime of app.css -> ?v=... so browsers always
 # refetch when the CSS changes (otherwise a stale cached app.css hides new styles).
 try:

@@ -14,7 +14,7 @@ from psycopg2.extras import RealDictCursor
 
 OR_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = os.environ.get("TDC_SUMMARY_MODEL", "google/gemini-2.5-flash")
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 # Fallback only. OpenRouter reports the actual charge per request when asked, and
 # that is used when present — a rate table goes stale silently, and a cost we
@@ -34,6 +34,11 @@ Rules:
 - The firm publishing the document is usually an ADVISER, not a party. Do not record it
   as acquirer or target unless the document plainly says it bought or sold something.
 - Quote consideration exactly as written, including the currency, or null.
+- revenue and ebitda: the TARGET's figures, quoted exactly as written and including
+  the currency and the period if stated — "£12m FY25 revenue", "revenues of around
+  $40 million", "EBITDA of EUR 3.2m". Null unless the document gives them. Never
+  compute one from the other, never derive a multiple, and never convert currency.
+  A figure for the acquirer or the enlarged group is not the target's: leave null.
 
 ADVISERS — one entry per advising FIRM, each with:
   firm     the firm's name as written.
@@ -55,8 +60,8 @@ shareholders — each {"name", "role", "firm"}.
 
 Reply with JSON only, no prose, matching:
 {"is_deal": bool, "headline": str|null, "summary": str|null, "acquirer": str|null,
- "target": str|null, "vendor": str|null, "consideration": str|null, "date_hint": str|null,
- "sector": str|null,
+ "target": str|null, "vendor": str|null, "consideration": str|null,
+ "revenue": str|null, "ebitda": str|null, "date_hint": str|null, "sector": str|null,
  "advisers": [{"firm": str, "service": str, "side": "buy"|"sell"|"lender"|null,
                "people": [{"name": str, "role": str|null}]}],
  "people": [{"name": str, "role": str|null, "firm": str|null}],
@@ -155,16 +160,17 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
         cur.execute("""
             INSERT INTO tdc.item_summary
               (scan_item_id, model, prompt_version, is_deal, headline, summary,
-               acquirer, target, vendor, consideration, date_hint, sector,
+               acquirer, target, vendor, consideration, revenue, ebitda, date_hint, sector,
                advisers, people, confidence, raw, prompt_tokens, completion_tokens,
                cost_usd, cost_source, latency_ms, ok, error,
                system_prompt, input_text, output_text, finish_reason, response_meta)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                    %s,%s,%s,%s,%s)
+                    %s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (scan_item_id, model, prompt_version) DO UPDATE SET
               is_deal=EXCLUDED.is_deal, headline=EXCLUDED.headline, summary=EXCLUDED.summary,
               acquirer=EXCLUDED.acquirer, target=EXCLUDED.target, vendor=EXCLUDED.vendor,
-              consideration=EXCLUDED.consideration, date_hint=EXCLUDED.date_hint,
+              consideration=EXCLUDED.consideration, revenue=EXCLUDED.revenue,
+              ebitda=EXCLUDED.ebitda, date_hint=EXCLUDED.date_hint,
               sector=EXCLUDED.sector, advisers=EXCLUDED.advisers, people=EXCLUDED.people,
               confidence=EXCLUDED.confidence, raw=EXCLUDED.raw,
               prompt_tokens=EXCLUDED.prompt_tokens, completion_tokens=EXCLUDED.completion_tokens,
@@ -176,7 +182,8 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
             RETURNING *""",
             (item["id"], model, PROMPT_VERSION, out.get("is_deal"), out.get("headline"),
              out.get("summary"), out.get("acquirer"), out.get("target"), out.get("vendor"),
-             out.get("consideration"), out.get("date_hint"), out.get("sector"),
+             out.get("consideration"), out.get("revenue"), out.get("ebitda"),
+             out.get("date_hint"), out.get("sector"),
              json.dumps(out.get("advisers") or []), json.dumps(out.get("people") or []),
              out.get("confidence"), json.dumps(out) if out else None,
              usage.get("prompt_tokens"), usage.get("completion_tokens"),

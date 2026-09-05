@@ -162,6 +162,8 @@
               {% if m.target %}<span><b>target</b> {{ m.target }}</span>{% endif %}
               {% if m.vendor %}<span><b>vendor</b> {{ m.vendor }}</span>{% endif %}
               {% if m.consideration %}<span><b>price</b> {{ m.consideration }}</span>{% endif %}
+              {% if m.revenue %}<span><b>revenue</b> {{ m.revenue }}</span>{% endif %}
+              {% if m.ebitda %}<span><b>ebitda</b> {{ m.ebitda }}</span>{% endif %}
               {% if m.date_hint %}<span><b>date</b> {{ m.date_hint }}</span>{% endif %}
               {% if m.sector %}<span><b>sector</b> {{ m.sector }}</span>{% endif %}
             </div>
@@ -209,12 +211,12 @@
               </details>
               <details class="iosec">
                 <summary>Returned<span class="ct">{{ (m.output_text or '')|length }} chars · {{ m.completion_tokens or 0 }} tokens{% if m.finish_reason %} · {{ m.finish_reason }}{% endif %}</span></summary>
-                <div class="iotext">{{ m.output_text }}</div>
+                <pre class="jsonbox">{{ m.output_text|jsonpretty }}</pre>
               </details>
               {% if m.response_meta %}
               <details class="iosec">
                 <summary>Response metadata<span class="ct">usage, model, id</span></summary>
-                <div class="iotext">{{ m.response_meta|tojson(indent=2) }}</div>
+                <pre class="jsonbox">{{ m.response_meta|tojson|jsonpretty }}</pre>
               </details>
               {% endif %}
             </div>
@@ -320,6 +322,16 @@
   .iosec > summary .ct{margin-left:auto;color:var(--muted);font-size:10.5px;
     font-family:ui-monospace,Menlo,monospace}
   .iosec .iotext{border:0;border-top:1px solid var(--border);border-radius:0;margin:0}
+  .jsonbox{margin:0;border-top:1px solid var(--border);padding:9px 11px;overflow:auto;
+    max-height:340px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11.5px;line-height:1.55;tab-size:2;white-space:pre;background:var(--panel)}
+  .jsonbox .jk{color:#7a4ab8}
+  .jsonbox .js{color:#1f6f4a}
+  .jsonbox .jn{color:#b0281f}
+  .jsonbox .jb{color:#a86a12;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .jsonbox .jk{color:#c39bf0} .jsonbox .js{color:#7fd1a6}
+    .jsonbox .jn{color:#e0574b} .jsonbox .jb{color:#d69a3e}}
   .iotext{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
     line-height:1.5;background:var(--panel-2,var(--panel));border:1px solid var(--border);
     border-radius:3px;padding:8px 10px;max-height:300px;overflow:auto}

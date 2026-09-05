@@ -447,3 +447,10 @@ ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS input_text text;
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS output_text text;
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS finish_reason text;
 ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS response_meta jsonb;
+
+-- Financials as the document states them, verbatim, including currency and period.
+-- Stored as text for the same reason consideration is: "£12m FY25 revenue" and
+-- "revenues of around $40 million" are different claims, and normalising either
+-- into a number throws away the hedge and the period that make it meaningful.
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS revenue text;
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS ebitda text;
