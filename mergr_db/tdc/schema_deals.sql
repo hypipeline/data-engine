@@ -325,3 +325,20 @@ CREATE TABLE IF NOT EXISTS tdc.scan_item (
     UNIQUE (coverage_id, channel, external_id)
 );
 CREATE INDEX IF NOT EXISTS scan_item_cov_idx ON tdc.scan_item (coverage_id, published_at DESC);
+
+-- ---------------------------------------------------------------- fetch_cache
+-- Raw pages, kept so a rescan costs nothing for anything already seen.
+--
+-- Raw HTML rather than extracted text, deliberately: the same argument the source
+-- model makes for stored_text. When the extractor improves, a better result should
+-- be a re-parse of what we already hold, not another twenty thousand fetches.
+-- Postgres compresses this column out of line, and HTML compresses well.
+CREATE TABLE IF NOT EXISTS tdc.fetch_cache (
+    url         text PRIMARY KEY,
+    fetched_at  timestamptz NOT NULL DEFAULT now(),
+    status      integer,
+    bytes       integer,
+    body        text,
+    hits        integer NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS fetch_cache_age_idx ON tdc.fetch_cache (fetched_at);

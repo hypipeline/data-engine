@@ -373,6 +373,55 @@ def set_deals_url(conn, row_id, url, actor):
     return url or None, signals
 
 
+# ------------------------------------------------------------------- caching
+# TTLs are not uniform, because the pages are not alike. A published LinkedIn post
+# and a written-up deal page do not change once they exist, so they are held
+# effectively forever. The pages that list them — a company feed, a transactions
+# index — change every time something is added, and are the only reason to go back
+# to the network at all.
+TTL_INDEX = 6 * 3600            # company page, transactions index
+TTL_ITEM = 90 * 24 * 3600       # a post or a deal page: immutable in practice
+
+
+def fetch(conn, url, ttl=TTL_ITEM, timeout=20, force=False):
+    """_fetch with the network skipped when we already hold the page."""
+    if conn is not None and not force:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT body FROM tdc.fetch_cache
+                            WHERE url = %s
+                              AND fetched_at > now() - (%s || ' seconds')::interval""",
+                        (url, ttl))
+            row = cur.fetchone()
+        if row:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE tdc.fetch_cache SET hits = hits + 1 WHERE url = %s", (url,))
+            conn.commit()
+            return row[0]
+
+    # Rate limiting lives here rather than in the callers, so it applies on every
+    # real request and costs nothing when the page is already held.
+    time.sleep(0.4)
+    body = _fetch(url, timeout)
+    if conn is not None:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO tdc.fetch_cache (url, status, bytes, body)
+                           VALUES (%s, 200, %s, %s)
+                           ON CONFLICT (url) DO UPDATE SET
+                             fetched_at=now(), bytes=EXCLUDED.bytes, body=EXCLUDED.body""",
+                        (url, len(body), body))
+        conn.commit()
+    return body
+
+
+def cache_stats(conn):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""SELECT count(*) AS pages, coalesce(sum(bytes),0) AS bytes,
+                              coalesce(sum(hits),0) AS hits,
+                              pg_size_pretty(pg_total_relation_size('tdc.fetch_cache')) AS on_disk
+                       FROM tdc.fetch_cache""")
+        return cur.fetchone()
+
+
 # ------------------------------------------------------------------ scanning
 URN_RE = re.compile(r"urn:li:activity:(\d{15,25})")
 DATE_RE = re.compile(r'datePublished"\s*:\s*"([^"]+)"')
@@ -387,15 +436,15 @@ def _plain(h):
             for x in html.unescape(re.sub(r"<[^>]+>", " ", h)).split("\n")]
 
 
-def scan_linkedin(linkedin_url, cap=10):
+def scan_linkedin(conn, linkedin_url, cap=10):
     """Enumerate activity ids off the company page, then read each post directly.
     Only the enumeration needs a browser user-agent; the posts themselves do not."""
     items = []
-    page = _fetch(linkedin_url, 20)
+    page = fetch(conn, linkedin_url, ttl=TTL_INDEX)      # the feed moves; refetch often
     for urn in sorted(set(URN_RE.findall(page)), reverse=True)[:cap]:
         url = f"https://www.linkedin.com/feed/update/urn:li:activity:{urn}/"
         try:
-            b = _fetch(url, 20)
+            b = fetch(conn, url, ttl=TTL_ITEM)           # a published post never changes
         except Exception:
             continue
         t = re.search(r"<title>(.*?)</title>", b, re.S)
@@ -410,11 +459,10 @@ def scan_linkedin(linkedin_url, cap=10):
                       "title": title, "body": OUT_RE.sub("", body).strip(),
                       "published_at": d.group(1) if d else None,
                       "expanded": True, "outlink": out.group(0) if out else None})
-        time.sleep(0.4)
     return items
 
 
-def scan_transactions(index_url, cap=12):
+def scan_transactions(conn, index_url, cap=12):
     """Read a firm's transactions index.
 
     Where the index links a page per deal, each is fetched — that is the expanded
@@ -423,7 +471,7 @@ def scan_transactions(index_url, cap=12):
     are recorded unexpanded rather than skipped, because a title naming both sides
     is still the minimum viable story.
     """
-    idx = _fetch(index_url, 20)
+    idx = fetch(conn, index_url, ttl=TTL_INDEX)
     base = urllib.parse.urlparse(index_url)
     root = f"{base.scheme}://{base.netloc}"
     prefix = base.path.rstrip("/")
@@ -443,7 +491,7 @@ def scan_transactions(index_url, cap=12):
         for u in targets[:cap]:
             slug = urllib.parse.urlparse(u).path.rstrip("/").rsplit("/", 1)[-1]
             try:
-                b = _fetch(u, 20)
+                b = fetch(conn, u, ttl=TTL_ITEM)
             except Exception:
                 items.append({"channel": "transactions", "external_id": slug, "url": u,
                               "title": slug.replace("-", " "), "body": "",
@@ -455,7 +503,6 @@ def scan_transactions(index_url, cap=12):
             items.append({"channel": "transactions", "external_id": slug, "url": u,
                           "title": title, "body": " ".join(lines[1:4])[:1200],
                           "published_at": None, "expanded": True, "outlink": None})
-            time.sleep(0.3)
         return items
 
     # no click targets — take the index entries themselves
@@ -471,12 +518,12 @@ def scan_firm(conn, row):
     found, notes = [], []
     if row.get("linkedin_url"):
         try:
-            found += scan_linkedin(row["linkedin_url"])
+            found += scan_linkedin(conn, row["linkedin_url"])
         except Exception as e:
             notes.append(f"LinkedIn: {type(e).__name__}")
     if row.get("deals_url"):
         try:
-            found += scan_transactions(row["deals_url"])
+            found += scan_transactions(conn, row["deals_url"])
         except Exception as e:
             notes.append(f"transactions: {type(e).__name__}")
 
