@@ -435,6 +435,12 @@ OG_RE = re.compile(r'property="og:description"\s+content="([^"]*)"', re.S)
 SKIP_IMG = re.compile(r"static\.licdn|company-background|company-logo|profile-displayphoto|"
                       r"ghost|spacer|pixel|1x1|logo[-_]|favicon|sprite", re.I)
 OG_IMAGE_RE = re.compile(r'property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', re.I)
+# An image sitting among form controls is a widget, not content — a CAPTCHA, an
+# upload preview, a button. Positional rather than name-based on purpose: a CAPTCHA
+# URL is unique per request by design, so neither a filename pattern nor the
+# repetition test that removes template text could ever catch one.
+FORM_CTRL_RE = re.compile(r"<(?:input|label|textarea|select|button)\b", re.I)
+FORM_LOOKBACK = 400
 
 
 def _post_body(page):
@@ -488,6 +494,8 @@ def _media(page, base_url, own_host=None):
     for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*>', page, re.I):
         src = urllib.parse.urljoin(base_url, m.group(1))
         if SKIP_IMG.search(src) or src in iseen:
+            continue
+        if FORM_CTRL_RE.search(page[max(0, m.start() - FORM_LOOKBACK):m.start()]):
             continue
         alt = re.search(r'alt=["\']([^"\']*)["\']', m.group(0))
         iseen.add(src)
