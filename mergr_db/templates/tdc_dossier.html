@@ -9,21 +9,22 @@
 
 <div class="pd-panel">
   <div class="pd-head"><h2>Field by field</h2>
-    <span class="right">where accounts disagree is the interesting part</span></div>
+    <span class="right">every field, including the ones nobody states</span></div>
   <table class="pd">
     <thead><tr><th>Field</th>
       {% for m in members %}<th>{{ m.firm }}<span class="muted"> · {{ 'li' if m.channel == 'linkedin' else 'tx' }}</span></th>{% endfor %}
     </tr></thead>
     <tbody>
-      {% for row in grid %}{% if row.present %}
-      <tr class="{{ '' if row.agree else 'disagree' }}">
+      {% for row in grid %}
+      <tr class="{{ 'disagree' if not row.agree }}{{ ' absent' if not row.present }}">
         <td class="fname">{{ row.field|replace('_',' ') }}
           {% if not row.agree %}<span class="pill sandboxed">differs</span>{% endif %}</td>
         {% for id, v in row.cells %}
-        <td>{{ v or '—' }}</td>
+        <td>{% if v %}{{ v }}{% else %}<span class="unk"
+             title="no account states this — unknown, not zero">unknown</span>{% endif %}</td>
         {% endfor %}
       </tr>
-      {% endif %}{% endfor %}
+      {% endfor %}
     </tbody>
   </table>
 </div>
@@ -109,6 +110,8 @@
 
 <style>
   tr.disagree td{background:var(--panel)}
+  tr.absent .fname{color:var(--muted);font-weight:400}
+  .unk{color:var(--muted);font-size:12px}
   .fname{font-weight:600;text-transform:capitalize}
   .acct{padding:11px 0;border-bottom:1px solid var(--border)}
   .acct:last-child{border-bottom:0}

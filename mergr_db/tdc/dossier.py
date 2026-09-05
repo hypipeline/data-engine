@@ -212,6 +212,9 @@ def detail(conn, dossier_id, version="v5"):
             ORDER BY i.published_at DESC NULLS LAST, i.id""", (version, dossier_id))
         members = cur.fetchall()
 
+    # Every field, always — including the ones no account fills in. Unknown is a
+    # value, not a gap: hiding the consideration row because nobody disclosed a
+    # price makes the most common fact about a mid-market deal invisible.
     grid = []
     for f in FIELDS:
         cells = [(m["id"], m[f]) for m in members]
@@ -222,4 +225,39 @@ def detail(conn, dossier_id, version="v5"):
         # named after a dict method renders the method. Same trap that printed
         # "<built-in method items>" across the coverage screen.
         grid.append({"field": f, "cells": cells, "present": bool(present), "agree": agree})
+    # Rows that are not simple fields, so the table is the whole reading rather than
+    # the part that happens to be scalar.
+    def cells_of(fn):
+        return [(m["id"], fn(m)) for m in members]
+
+    def advisers_of(m):
+        out = []
+        for a in (m.get("advisers") or []):
+            if isinstance(a, dict) and a.get("firm"):
+                bits = [a["firm"]]
+                if a.get("service"):
+                    bits.append(a["service"])
+                bits.append(f"{a['side']}-side" if a.get("side") else "side unknown")
+                out.append(" · ".join(bits))
+        return "; ".join(out)
+
+    def people_of(m):
+        return "; ".join(
+            f"{p.get('name')}" + (f" ({p['role']})" if p.get("role") else "")
+            for p in (m.get("people") or []) if isinstance(p, dict) and p.get("name"))
+
+    extra = [
+        ("advisers", advisers_of),
+        ("people", people_of),
+        ("clarity", lambda m: m.get("clarity")),
+        ("published", lambda m: m["published_at"].strftime("%d %b %Y")
+                                if m.get("published_at") else None),
+        ("date basis", lambda m: m.get("date_basis")),
+    ]
+    for label, fn in extra:
+        cells = cells_of(fn)
+        present = [v for _, v in cells if v]
+        grid.append({"field": label, "cells": cells, "present": bool(present),
+                     "agree": len({str(v).lower() for v in present}) <= 1})
+
     return members, grid
