@@ -269,3 +269,13 @@ ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_how text;      -- nav | 
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_label text;    -- what the site calls it
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_signals integer;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_checked_at timestamptz;
+
+-- A human's transactions URL, kept apart from the scanner's. The scan writes
+-- deals_url and never deals_url_manual, so a rescan cannot clobber an edit — that
+-- holds by construction rather than by a flag someone has to remember to check.
+-- Keeping both also preserves the disagreement, which is the useful part: every
+-- override is a recorded case of "the scanner said X, the truth is Y".
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_url_manual text;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_by text;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_at timestamptz;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_signals integer;

@@ -54,12 +54,28 @@
             <span class="pill complained" title="neither end points at the other — probably a different company">unproven</span>
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
-        <td>
-          {% if r.deals_url %}
-            <a href="{{ r.deals_url }}" target="_blank" rel="noopener"
-               title="{{ r.deals_signals }} deal-shaped phrases on the page">{{ r.deals_label or 'transactions' }}</a>
-          {% elif r.deals_checked_at %}<span class="muted">none found</span>
-          {% else %}<span class="muted">—</span>{% endif %}
+        <td class="dealscell">
+          <form method="post" action="/tdc/deals/coverage/deals-url" class="dealsform">
+            <input type="hidden" name="id" value="{{ r.id }}">
+            <input type="url" name="url" value="{{ r.deals_url_manual or r.deals_url or '' }}"
+                   placeholder="{{ 'none found — paste one' if r.deals_checked_at else 'not scanned' }}"
+                   spellcheck="false">
+            <button class="lift" type="submit" title="Save this page for this firm">Save</button>
+          </form>
+          <div class="dealsmeta">
+            {% if r.deals_effective %}
+              <a href="{{ r.deals_effective }}" target="_blank" rel="noopener">open</a>
+            {% endif %}
+            {% if r.deals_url_manual %}
+              <span class="pill pending"
+                    title="set by {{ r.deals_manual_by }} on {{ r.deals_manual_at.strftime('%d %b %H:%M') if r.deals_manual_at }} · scan found {{ r.deals_url or 'nothing' }}">manual</span>
+              {% if r.deals_manual_signals == 0 %}<span class="muted">no deals on page</span>
+              {% elif r.deals_manual_signals %}<span class="muted">{{ r.deals_manual_signals }} signals</span>
+              {% else %}<span class="muted">unreachable</span>{% endif %}
+            {% elif r.deals_url %}
+              <span class="muted">{{ r.deals_label or 'from nav' }} · {{ r.deals_signals }} signals</span>
+            {% endif %}
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -68,5 +84,6 @@
   {% else %}
   <p class="pd-empty">Nothing seeded yet.</p>
   {% endif %}
+  {% if flash %}<p class="pd-empty" style="color:var(--fg)">{{ flash }}</p>{% endif %}
 </div>
 {% endblock %}

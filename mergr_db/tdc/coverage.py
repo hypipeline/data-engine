@@ -62,7 +62,9 @@ def rows(conn, include_inactive=False):
     sql = """SELECT id, name, website, linkedin_url, employees, name_match,
                     needs_check, active, resolved_by, bridge, bridge_note,
                     site_links_linkedin, linkedin_lists_site, checked_at,
-                    deals_url, deals_how, deals_label, deals_signals
+                    deals_url, deals_how, deals_label, deals_signals, deals_checked_at,
+                    deals_url_manual, deals_manual_by, deals_manual_at, deals_manual_signals,
+                    coalesce(deals_url_manual, deals_url) AS deals_effective
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     where = "" if include_inactive else "WHERE active"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -317,3 +319,38 @@ def save_deals_page(conn, row_id, url, how, label, signals):
                               deals_signals=%s, deals_checked_at=now(), updated_at=now()
                         WHERE id=%s""", (url, how, label, signals, row_id))
     conn.commit()
+
+
+def set_deals_url(conn, row_id, url, actor):
+    """Record a human's transactions URL for a firm.
+
+    The page is fetched and its deal signals counted — not to accept or reject the
+    edit, which is not the checker's business, but so a typo shows up as a page
+    carrying no deals rather than sitting there looking authoritative. An empty
+    value clears the override and falls back to whatever the scanner found.
+    """
+    url = (url or "").strip()
+    if not url:
+        with conn.cursor() as cur:
+            cur.execute("""UPDATE tdc.coverage
+                              SET deals_url_manual=NULL, deals_manual_by=NULL,
+                                  deals_manual_at=NULL, deals_manual_signals=NULL,
+                                  updated_at=now()
+                            WHERE id=%s""", (row_id,))
+        conn.commit()
+        return None, None
+
+    if not url.startswith("http"):
+        url = "https://" + url
+    try:
+        signals = len(DEAL_SIGNAL.findall(_fetch(url, 15)))
+    except Exception:
+        signals = None          # unreachable is not the same as empty
+
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE tdc.coverage
+                          SET deals_url_manual=%s, deals_manual_by=%s, deals_manual_at=now(),
+                              deals_manual_signals=%s, updated_at=now()
+                        WHERE id=%s""", (url, actor, signals, row_id))
+    conn.commit()
+    return url, signals

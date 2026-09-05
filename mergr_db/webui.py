@@ -1446,7 +1446,7 @@ def tdc_deals(request: Request):
 
 
 @app.get("/tdc/deals/coverage", response_class=HTMLResponse)
-def tdc_deals_coverage(request: Request):
+def tdc_deals_coverage(request: Request, flash: str = ""):
     conn = POOL.getconn()
     try:
         tdc_svc.ensure_schema(conn)
@@ -1454,8 +1454,33 @@ def tdc_deals_coverage(request: Request):
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_coverage.html", "tdc-coverage",
-                  rows=rows, subactive="coverage", page_title="Coverage",
+                  rows=rows, subactive="coverage", page_title="Coverage", flash=flash,
                   **_tdc_shell("deals"))
+
+
+@app.post("/tdc/deals/coverage/deals-url")
+def tdc_coverage_deals_url(request: Request, id: int = Form(...), url: str = Form("")):
+    """Set or clear a firm's transactions page by hand. Writes only the manual
+    column, so the next scan cannot overwrite it."""
+    who = (auth.real_user(request) or {}).get("email") or "unknown"
+    conn = POOL.getconn()
+    try:
+        saved, signals = tdc_cov.set_deals_url(conn, id, url, who)
+        if saved is None:
+            msg = "Override cleared — back to whatever the scan found."
+        elif signals is None:
+            msg = f"Saved, but {saved} could not be fetched to check it."
+        elif signals == 0:
+            msg = f"Saved. No deal-shaped content found on that page — worth a look."
+        else:
+            msg = f"Saved — {signals} deal-shaped phrases on that page."
+        auth.audit(who, "tdc.coverage.deals_url", str(id), saved or "cleared")
+    except Exception as e:
+        conn.rollback()
+        msg = f"Not saved — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc/deals/coverage?{urlencode({'flash': msg})}", status_code=303)
 
 
 @app.get("/tdc/deals/leads", response_class=HTMLResponse)
