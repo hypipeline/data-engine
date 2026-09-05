@@ -279,3 +279,11 @@ ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_url_manual text;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_by text;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_at timestamptz;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_signals integer;
+
+-- "There is no transactions page" is a finding, not an absence of one. Without
+-- this the only way to reject the scanner's suggestion was to clear the override,
+-- which fell straight back to the suggestion just rejected. Three states, not two:
+--   deals_none = true            checked, and there is no such page
+--   deals_url_manual IS NOT NULL checked, and it is this one
+--   neither                      not yet looked at
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_none boolean NOT NULL DEFAULT false;

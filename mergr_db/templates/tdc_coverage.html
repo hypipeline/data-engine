@@ -18,7 +18,9 @@
     <span class="v">{{ (rows|selectattr('bridge','equalto','site_only')|list|length)
                       + (rows|selectattr('bridge','equalto','linkedin_only')|list|length) }}</span></div>
   <div class="pd-stat"><span class="k">Transactions page</span>
-    <span class="v">{{ rows|selectattr('deals_url')|list|length }}</span></div>
+    <span class="v">{{ rows|selectattr('deals_effective')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Confirmed none</span>
+    <span class="v">{{ rows|selectattr('deals_none')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Unproven</span>
     <span class="v {{ 'warn' if rows|selectattr('needs_check')|list|length }}">
       {{ rows|selectattr('needs_check')|list|length }}</span></div>
@@ -58,11 +60,22 @@
           <form method="post" action="/tdc/deals/coverage/deals-url" class="dealsform">
             <input type="hidden" name="id" value="{{ r.id }}">
             <input type="url" name="url" value="{{ r.deals_url_manual or r.deals_url or '' }}"
-                   placeholder="{{ 'none found — paste one' if r.deals_checked_at else 'not scanned' }}"
+                   placeholder="{{ 'no page' if r.deals_none else ('none found — paste one' if r.deals_checked_at else 'not scanned') }}"
                    spellcheck="false">
-            <button class="lift" type="submit" title="Save this page for this firm">Save</button>
+            <button class="lift" type="submit" name="action" value="save"
+                    title="Save this page for this firm">Save</button>
+            <button class="lift" type="submit" name="action" value="none"
+                    title="Record that this firm has no transactions page">No page</button>
+            {% if r.deals_url_manual or r.deals_none %}
+            <button class="lift" type="submit" name="action" value="reset"
+                    title="Forget my decision and show what the scan found">Reset</button>
+            {% endif %}
           </form>
           <div class="dealsmeta">
+            {% if r.deals_none %}
+              <span class="pill unsubscribed"
+                    title="recorded by {{ r.deals_manual_by }} on {{ r.deals_manual_at.strftime('%d %b %H:%M') if r.deals_manual_at }} · scan had suggested {{ r.deals_url or 'nothing' }}">no page</span>
+            {% endif %}
             {% if r.deals_effective %}
               <a href="{{ r.deals_effective }}" target="_blank" rel="noopener">open</a>
             {% endif %}

@@ -1459,15 +1459,18 @@ def tdc_deals_coverage(request: Request, flash: str = ""):
 
 
 @app.post("/tdc/deals/coverage/deals-url")
-def tdc_coverage_deals_url(request: Request, id: int = Form(...), url: str = Form("")):
+def tdc_coverage_deals_url(request: Request, id: int = Form(...), url: str = Form(""),
+                           action: str = Form("save")):
     """Set or clear a firm's transactions page by hand. Writes only the manual
     column, so the next scan cannot overwrite it."""
     who = (auth.real_user(request) or {}).get("email") or "unknown"
     conn = POOL.getconn()
     try:
-        saved, signals = tdc_cov.set_deals_url(conn, id, url, who)
-        if saved is None:
-            msg = "Override cleared — back to whatever the scan found."
+        saved, signals = tdc_cov.set_deals_url(conn, id, url, who, action)
+        if saved == "none":
+            msg = "Recorded: this firm has no transactions page."
+        elif saved is None:
+            msg = "Reset — back to whatever the scan found."
         elif signals is None:
             msg = f"Saved, but {saved} could not be fetched to check it."
         elif signals == 0:

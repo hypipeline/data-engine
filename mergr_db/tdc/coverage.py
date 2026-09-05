@@ -64,7 +64,9 @@ def rows(conn, include_inactive=False):
                     site_links_linkedin, linkedin_lists_site, checked_at,
                     deals_url, deals_how, deals_label, deals_signals, deals_checked_at,
                     deals_url_manual, deals_manual_by, deals_manual_at, deals_manual_signals,
-                    coalesce(deals_url_manual, deals_url) AS deals_effective
+                    deals_none,
+                    CASE WHEN deals_none THEN NULL
+                         ELSE coalesce(deals_url_manual, deals_url) END AS deals_effective
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     where = "" if include_inactive else "WHERE active"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -321,21 +323,35 @@ def save_deals_page(conn, row_id, url, how, label, signals):
     conn.commit()
 
 
-def set_deals_url(conn, row_id, url, actor):
-    """Record a human's transactions URL for a firm.
+def set_deals_url(conn, row_id, url, actor, action="save"):
+    """Record what a person decided about a firm's transactions page.
 
-    The page is fetched and its deal signals counted — not to accept or reject the
-    edit, which is not the checker's business, but so a typo shows up as a page
-    carrying no deals rather than sitting there looking authoritative. An empty
-    value clears the override and falls back to whatever the scanner found.
+    Three outcomes, because two were not enough. `none` records that someone looked
+    and there is no such page — a finding that has to outrank the scanner, since
+    otherwise rejecting a bad suggestion just restored it. `reset` returns the row
+    to unexamined. `save` stores a URL.
+
+    A saved page is fetched and its deal signals counted — not to accept or reject
+    the edit, which is not the checker's business, but so a typo shows as a page
+    carrying no deals rather than sitting there looking authoritative.
     """
+    if action == "none":
+        with conn.cursor() as cur:
+            cur.execute("""UPDATE tdc.coverage
+                              SET deals_none=true, deals_url_manual=NULL,
+                                  deals_manual_signals=NULL, deals_manual_by=%s,
+                                  deals_manual_at=now(), updated_at=now()
+                            WHERE id=%s""", (actor, row_id))
+        conn.commit()
+        return "none", None
+
     url = (url or "").strip()
-    if not url:
+    if action == "reset" or not url:
         with conn.cursor() as cur:
             cur.execute("""UPDATE tdc.coverage
                               SET deals_url_manual=NULL, deals_manual_by=NULL,
                                   deals_manual_at=NULL, deals_manual_signals=NULL,
-                                  updated_at=now()
+                                  deals_none=false, updated_at=now()
                             WHERE id=%s""", (row_id,))
         conn.commit()
         return None, None
@@ -350,7 +366,7 @@ def set_deals_url(conn, row_id, url, actor):
     with conn.cursor() as cur:
         cur.execute("""UPDATE tdc.coverage
                           SET deals_url_manual=%s, deals_manual_by=%s, deals_manual_at=now(),
-                              deals_manual_signals=%s, updated_at=now()
+                              deals_manual_signals=%s, deals_none=false, updated_at=now()
                         WHERE id=%s""", (url, actor, signals, row_id))
     conn.commit()
     return url, signals
