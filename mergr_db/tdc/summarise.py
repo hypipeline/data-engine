@@ -53,6 +53,7 @@ def _call(api_key, model, text, timeout=90):
         "messages": [{"role": "system", "content": SYSTEM},
                      {"role": "user", "content": text[:24000]}],
         "temperature": 0,
+        "max_tokens": 1500,
         "response_format": {"type": "json_object"},
         # Ask OpenRouter for the actual charge rather than computing one.
         "usage": {"include": True},
@@ -83,10 +84,20 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
     text = "\n\n".join(x for x in (item.get("title"), item.get("full_text")
                                    or item.get("body")) if x)
     out, err, usage, cost, cost_source, ms = {}, None, {}, None, None, None
+    # Truncation is the other way a reply arrives unparseable, so leave room for the
+    # whole object rather than letting the default cut it mid-string.
+
     try:
         j, ms = _call(api_key, model, text)
         content = (j.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
         out = json.loads(content)
+        # json_object is not always honoured: this model returns a bare array often
+        # enough to matter, and one such reply killed a whole run. Coerce rather
+        # than trust the response_format flag.
+        if isinstance(out, list):
+            out = next((x for x in out if isinstance(x, dict)), {})
+        if not isinstance(out, dict):
+            raise ValueError(f"model returned {type(out).__name__}, not an object")
         usage = j.get("usage") or {}
         if usage.get("cost") is not None:
             cost, cost_source = float(usage["cost"]), "reported"
