@@ -43,7 +43,7 @@
           {% else %}{{ i.title or i.external_id }}{% endif %}</div>
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
         {% if i.outlink %}<div class="sout" title="shared destination — two posts with the same link are the same deal">{{ i.outlink }}</div>{% endif %}
-        {% if i.links %}
+        {% if i.links or i.chrome_links %}
         <div class="slinks">
           {% for l in i.links %}<a href="{{ l.url }}" target="_blank" rel="noopener"
              title="{{ l.text }}">{{ l.host }}</a>{% endfor %}
