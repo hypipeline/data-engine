@@ -663,21 +663,78 @@ def scan_transactions(conn, index_url, cap=12):
     return items
 
 
+# LinkedIn's company page shows only the most recent posts, so older ones falling
+# out of view is the channel working normally. A transactions index is a complete
+# list, and items vanishing from it means something changed.
+ROLLING = {"linkedin"}
+
+
+def assess(conn, coverage_id, channel, found, new, missing, content, chrome, error):
+    """Compare this run against the last one and say what it means.
+
+    Deliberately not a single number. "Found 0" is broken if the source returned
+    twelve last week and merely quiet if it has always returned nothing, and no
+    threshold on today's figures alone can tell those apart.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""SELECT items_found, content_chars FROM tdc.scan_run
+                        WHERE coverage_id=%s AND channel=%s AND ok
+                        ORDER BY ran_at DESC LIMIT 1""", (coverage_id, channel))
+        prev = cur.fetchone()
+
+    if error:
+        return "broken", error
+    if not prev:
+        return ("ok" if found else "quiet"), f"first run, {found} items"
+
+    was, now = prev["items_found"], found
+    if was and not now:
+        return "broken", f"returned {was} items last time and none now"
+    if was and now < was * 0.5:
+        return "degraded", f"{now} items, down from {was}"
+    if missing and channel not in ROLLING:
+        return "degraded", f"{missing} items we held are no longer listed"
+
+    # Extraction can fail while fetching still works — a redesign that moves the
+    # content region leaves the item count intact and the text hollow.
+    if now and prev["content_chars"]:
+        per_now = content / max(now, 1)
+        per_was = prev["content_chars"] / max(was, 1)
+        if per_was and per_now < per_was * 0.5:
+            return "degraded", (f"{int(per_now)} chars per item, was {int(per_was)} "
+                                f"— extraction may have broken")
+    if new:
+        return "ok", f"{new} new"
+    return "quiet", f"{now} items, nothing new"
+
+
 def scan_firm(conn, row):
     """Both channels for one firm. Returns (n_found, n_new, notes)."""
     found, notes = [], []
+    errors = {}
     if row.get("linkedin_url"):
         try:
             found += scan_linkedin(conn, row["linkedin_url"])
         except Exception as e:
+            errors["linkedin"] = f"{type(e).__name__}: {str(e)[:120]}"
             notes.append(f"LinkedIn: {type(e).__name__}")
     if row.get("deals_url"):
         try:
             found += scan_transactions(conn, row["deals_url"])
         except Exception as e:
+            errors["transactions"] = f"{type(e).__name__}: {str(e)[:120]}"
             notes.append(f"transactions: {type(e).__name__}")
 
+    # What we already held, per channel, so absences can be told from arrivals.
+    held = {}
+    with conn.cursor() as cur:
+        cur.execute("""SELECT channel, external_id FROM tdc.scan_item
+                        WHERE coverage_id = %s""", (row["id"],))
+        for ch, ext in cur.fetchall():
+            held.setdefault(ch, set()).add(ext)
+
     new = 0
+    per = {}
     with conn.cursor() as cur:
         for it in found:
             cur.execute("""
@@ -699,9 +756,46 @@ def scan_firm(conn, row):
                   json.dumps(it.get("links") or []), json.dumps(it.get("images") or []),
                   it.get("body_from"), it.get("full_text"), it.get("full_chars"),
                   it.get("chrome_chars")))
-            new += 1 if cur.fetchone()[0] else 0
+            inserted = cur.fetchone()[0]
+            new += 1 if inserted else 0
+            d = per.setdefault(it["channel"], {"found": 0, "new": 0, "ids": set(),
+                                               "content": 0, "chrome": 0})
+            d["found"] += 1
+            d["new"] += 1 if inserted else 0
+            d["ids"].add(it["external_id"])
+            d["content"] += it.get("full_chars") or 0
+            d["chrome"] += it.get("chrome_chars") or 0
+
+    for ch in set(list(per) + list(errors)):
+        d = per.get(ch, {"found": 0, "new": 0, "ids": set(), "content": 0, "chrome": 0})
+        missing = len(held.get(ch, set()) - d["ids"])
+        health, note = assess(conn, row["id"], ch, d["found"], d["new"], missing,
+                              d["content"], d["chrome"], errors.get(ch))
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO tdc.scan_run
+                             (coverage_id, channel, ok, error, items_found, items_new,
+                              items_seen, items_missing, content_chars, chrome_chars,
+                              health, health_note)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (row["id"], ch, ch not in errors, errors.get(ch), d["found"],
+                         d["new"], d["found"] - d["new"], missing, d["content"],
+                         d["chrome"], health, note))
+        notes.append(f"{ch}: {health} ({note})")
     conn.commit()
     return len(found), new, "; ".join(notes)
+
+
+def scan_health(conn):
+    """The latest run per source, worst first."""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT DISTINCT ON (r.coverage_id, r.channel)
+                   c.name AS firm, r.*
+            FROM tdc.scan_run r JOIN tdc.coverage c ON c.id = r.coverage_id
+            ORDER BY r.coverage_id, r.channel, r.ran_at DESC""")
+        rows = cur.fetchall()
+    order = {"broken": 0, "degraded": 1, "quiet": 2, "ok": 3}
+    return sorted(rows, key=lambda r: (order.get(r["health"], 4), r["firm"]))
 
 
 def _demote_boilerplate(rows, threshold=0.4):

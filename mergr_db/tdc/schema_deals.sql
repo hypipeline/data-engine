@@ -360,3 +360,28 @@ ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS full_chars integer;
 -- How much of a page was template rather than content. Kept so the extraction can
 -- be judged: a page that is 90% chrome is either badly extracted or barely a page.
 ALTER TABLE tdc.scan_item ADD COLUMN IF NOT EXISTS chrome_chars integer;
+
+-- ---------------------------------------------------------------- scan_run
+-- One row per source per scan, so a source that quietly stops working is visible.
+--
+-- "Nothing new" is ambiguous on its own: it is what a quiet fortnight looks like
+-- and also what a broken selector looks like. What separates them is whether the
+-- items we already had came back. A source returning the same twelve items is
+-- working and quiet; one returning none, or twelve different ones, has changed.
+CREATE TABLE IF NOT EXISTS tdc.scan_run (
+    id            bigserial PRIMARY KEY,
+    coverage_id   bigint NOT NULL REFERENCES tdc.coverage(id) ON DELETE CASCADE,
+    channel       text NOT NULL,
+    ran_at        timestamptz NOT NULL DEFAULT now(),
+    ok            boolean NOT NULL DEFAULT true,
+    error         text,
+    items_found   integer NOT NULL DEFAULT 0,
+    items_new     integer NOT NULL DEFAULT 0,
+    items_seen    integer NOT NULL DEFAULT 0,   -- returned again, already held
+    items_missing integer NOT NULL DEFAULT 0,   -- held before, absent this time
+    content_chars integer NOT NULL DEFAULT 0,
+    chrome_chars  integer NOT NULL DEFAULT 0,
+    health        text,                          -- ok | quiet | degraded | broken
+    health_note   text
+);
+CREATE INDEX IF NOT EXISTS scan_run_cov_idx ON tdc.scan_run (coverage_id, channel, ran_at DESC);

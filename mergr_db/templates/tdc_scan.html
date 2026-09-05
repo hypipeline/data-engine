@@ -23,6 +23,38 @@
     <span class="v">{{ items|selectattr('full_text')|list|length }}</span></div>
 </div>
 
+{% if health %}
+<div class="pd-panel">
+  <div class="pd-head"><h2>Source health</h2>
+    <span class="right">last run per source · worst first</span></div>
+  <table class="pd">
+    <thead><tr><th>Firm</th><th>Channel</th><th></th><th>Found</th><th>New</th>
+      <th>Missing</th><th>What it means</th><th>Last run</th></tr></thead>
+    <tbody>
+      {% for h in health %}
+      <tr>
+        <td>{{ h.firm }}</td>
+        <td class="muted">{{ 'LinkedIn' if h.channel == 'linkedin' else 'Transactions' }}</td>
+        <td><span class="pill {{ 'complained' if h.health == 'broken'
+                                 else 'sandboxed' if h.health == 'degraded'
+                                 else 'pending' if h.health == 'quiet'
+                                 else 'confirmed' }}">{{ h.health }}</span></td>
+        <td class="n">{{ h.items_found }}</td>
+        <td class="n">{{ h.items_new or '—' }}</td>
+        <td class="n {{ 'muted' if not h.items_missing }}">{{ h.items_missing or '—' }}</td>
+        <td class="muted">{{ h.error or h.health_note }}</td>
+        <td class="muted">{{ h.ran_at.strftime('%d %b %H:%M') if h.ran_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="pd-empty" style="padding-bottom:0">
+    A source returning nothing new is quiet; one that stops returning what it used to
+    return is broken. LinkedIn shows only recent posts, so items ageing out of it is the
+    channel working — a transactions index losing entries is not.</p>
+</div>
+{% endif %}
+
 {% if flash %}<div class="pd-panel"><p class="pd-empty" style="padding:0;color:var(--fg)">{{ flash }}</p></div>{% endif %}
 
 <div class="pd-panel">

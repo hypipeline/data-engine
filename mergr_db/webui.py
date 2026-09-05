@@ -1493,6 +1493,7 @@ def tdc_deals_scan(request: Request, flash: str = "", id: int = 0, ch: str = "")
         items = tdc_cov.scan_items(conn, coverage_id=id or None, channel=ch or None)
         firms = tdc_cov.scan_firms(conn)
         totals = tdc_cov.scan_items(conn, coverage_id=id or None)
+        health = tdc_cov.scan_health(conn)
         # The sources behind what is on screen. Only meaningful for one firm —
         # across all of them it would be a list of twenty URLs, which answers
         # nothing.
@@ -1500,7 +1501,7 @@ def tdc_deals_scan(request: Request, flash: str = "", id: int = 0, ch: str = "")
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_scan.html", "tdc-scan", items=items, flash=flash,
-                  firms=firms, active_id=id, active_ch=ch, picked=picked,
+                  firms=firms, active_id=id, active_ch=ch, picked=picked, health=health,
                   n_li=sum(1 for i in totals if i["channel"] == "linkedin"),
                   n_tx=sum(1 for i in totals if i["channel"] == "transactions"),
                   n_all=len(totals),
