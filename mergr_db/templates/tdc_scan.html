@@ -26,10 +26,20 @@
 <div class="pd-panel">
   <div class="pd-head"><h2>Found</h2>
     <span class="right filts">
-      <a class="filt {{ 'on' if not active_id }}" href="/tdc/deals/scan">All
-        <b>{{ firms|sum(attribute='items') }}</b></a>
+      {% set q = ('&id=' ~ active_id) if active_id else '' %}
+      <a class="filt {{ 'on' if not active_ch }}" href="/tdc/deals/scan?ch={{ q }}">Both
+        <b>{{ n_all }}</b></a>
+      <a class="filt {{ 'on' if active_ch == 'linkedin' }}"
+         href="/tdc/deals/scan?ch=linkedin{{ q }}">LinkedIn <b>{{ n_li }}</b></a>
+      <a class="filt {{ 'on' if active_ch == 'transactions' }}"
+         href="/tdc/deals/scan?ch=transactions{{ q }}">Transactions page <b>{{ n_tx }}</b></a>
+    </span></div>
+  <div class="pd-head" style="margin-top:2px">
+    <span class="right filts">
+      {% set c = ('&ch=' ~ active_ch) if active_ch else '' %}
+      <a class="filt {{ 'on' if not active_id }}" href="/tdc/deals/scan?id={{ c }}">All firms</a>
       {% for f in firms %}
-      <a class="filt {{ 'on' if active_id == f.id }}" href="/tdc/deals/scan?id={{ f.id }}"
+      <a class="filt {{ 'on' if active_id == f.id }}" href="/tdc/deals/scan?id={{ f.id }}{{ c }}"
          title="{{ f.linkedin }} LinkedIn, {{ f.transactions }} transactions · last scanned {{ f.last_scan.strftime('%d %b %H:%M') if f.last_scan }}">{{ f.name }}
         <b>{{ f.items }}</b></a>
       {% endfor %}

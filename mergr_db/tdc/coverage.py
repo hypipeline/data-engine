@@ -654,9 +654,15 @@ def scan_firms(conn):
         return cur.fetchall()
 
 
-def scan_items(conn, coverage_id=None, limit=300):
-    where = "WHERE s.coverage_id = %s" if coverage_id else ""
-    args = (coverage_id, limit) if coverage_id else (limit,)
+def scan_items(conn, coverage_id=None, channel=None, limit=300):
+    clauses, args = [], []
+    if coverage_id:
+        clauses.append("s.coverage_id = %s"); args.append(coverage_id)
+    if channel in ("linkedin", "transactions"):
+        clauses.append("s.channel = %s"); args.append(channel)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    args.append(limit)
+    args = tuple(args)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(f"""
             SELECT s.*, c.name AS firm

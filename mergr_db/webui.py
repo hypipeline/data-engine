@@ -1486,16 +1486,20 @@ def tdc_coverage_deals_url(request: Request, id: int = Form(...), url: str = For
 
 
 @app.get("/tdc/deals/scan", response_class=HTMLResponse)
-def tdc_deals_scan(request: Request, flash: str = "", id: int = 0):
+def tdc_deals_scan(request: Request, flash: str = "", id: int = 0, ch: str = ""):
     conn = POOL.getconn()
     try:
         tdc_svc.ensure_schema(conn)
-        items = tdc_cov.scan_items(conn, coverage_id=id or None)
+        items = tdc_cov.scan_items(conn, coverage_id=id or None, channel=ch or None)
         firms = tdc_cov.scan_firms(conn)
+        totals = tdc_cov.scan_items(conn, coverage_id=id or None)
     finally:
         POOL.putconn(conn)
     return render(request, "tdc_scan.html", "tdc-scan", items=items, flash=flash,
-                  firms=firms, active_id=id,
+                  firms=firms, active_id=id, active_ch=ch,
+                  n_li=sum(1 for i in totals if i["channel"] == "linkedin"),
+                  n_tx=sum(1 for i in totals if i["channel"] == "transactions"),
+                  n_all=len(totals),
                   firm=(items[0]["firm"] if id and items else None),
                   subactive="scan", page_title="Scan", **_tdc_shell("deals"))
 
