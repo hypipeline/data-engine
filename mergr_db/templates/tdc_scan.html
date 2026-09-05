@@ -170,8 +170,21 @@
           {% else %}
             <span class="muted">read: not a deal{% if m.summary %} — {{ m.summary|truncate(120) }}{% endif %}</span>
           {% endif %}
-          <div class="rmeta">{{ m.model }} · {{ m.prompt_tokens or 0 }}+{{ m.completion_tokens or 0 }} tok
-            · ${{ '%.5f'|format(m.cost_usd or 0) }} {{ m.cost_source }}</div>
+          <div class="rmeta">{{ m.model }} · {{ m.prompt_version }}
+            · {{ m.prompt_tokens or 0 }}+{{ m.completion_tokens or 0 }} tok
+            · ${{ '%.5f'|format(m.cost_usd or 0) }} {{ m.cost_source }}
+            {% if m.finish_reason and m.finish_reason != 'stop' %}
+              · <span class="warnflag">finish: {{ m.finish_reason }}</span>{% endif %}
+            · {{ m.latency_ms or 0 }}ms</div>
+          <details class="io">
+            <summary>Model input and output, verbatim</summary>
+            <div class="iolab">System prompt</div>
+            <div class="iotext">{{ m.system_prompt }}</div>
+            <div class="iolab">Sent — {{ (m.input_text or '')|length }} characters</div>
+            <div class="iotext">{{ m.input_text }}</div>
+            <div class="iolab">Returned{% if m.finish_reason %} · finish_reason {{ m.finish_reason }}{% endif %}</div>
+            <div class="iotext">{{ m.output_text }}</div>
+          </details>
         </div>
         {% endif %}
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
@@ -244,6 +257,16 @@
   .read .rs{font-size:12.5px;color:var(--muted);margin:5px 0 0;line-height:1.5}
   .read .rmeta{font-size:10.5px;color:var(--muted);margin-top:6px;
     font-family:ui-monospace,Menlo,monospace}
+  .io{margin-top:7px}
+  .io summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
+    padding:1px 7px;border:1px solid var(--border);border-radius:3px}
+  .io summary:hover{color:var(--fg);border-color:var(--muted)}
+  .iolab{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+    margin:9px 0 3px;font-weight:600}
+  .iotext{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+    line-height:1.5;background:var(--panel-2,var(--panel));border:1px solid var(--border);
+    border-radius:3px;padding:8px 10px;max-height:300px;overflow:auto}
+  .warnflag{color:#a86a12;font-weight:600}
   .sfull{margin-top:6px}
   .sfull summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
     padding:1px 7px;border:1px solid var(--border);border-radius:3px}

@@ -48,6 +48,8 @@ def _rate(model):
 
 
 def _call(api_key, model, text, timeout=90):
+    """Returns (response_json, latency_ms, sent_body) — the body included so the
+    exact request can be stored, not reconstructed."""
     body = {
         "model": model,
         "messages": [{"role": "system", "content": SYSTEM},
@@ -67,7 +69,7 @@ def _call(api_key, model, text, timeout=90):
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as r:
         j = json.loads(r.read())
-    return j, int((time.time() - t0) * 1000)
+    return j, int((time.time() - t0) * 1000), body
 
 
 def summarise_item(conn, item, api_key, model=MODEL, force=False):
@@ -84,12 +86,19 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
     text = "\n\n".join(x for x in (item.get("title"), item.get("full_text")
                                    or item.get("body")) if x)
     out, err, usage, cost, cost_source, ms = {}, None, {}, None, None, None
+    sent, content, finish, meta = None, None, None, None
     # Truncation is the other way a reply arrives unparseable, so leave room for the
     # whole object rather than letting the default cut it mid-string.
 
     try:
-        j, ms = _call(api_key, model, text)
-        content = (j.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
+        j, ms, body = _call(api_key, model, text)
+        sent = (body["messages"][1]["content"])          # exactly what was sent
+        choice = (j.get("choices") or [{}])[0]
+        finish = choice.get("finish_reason")
+        content = choice.get("message", {}).get("content") or "{}"
+        # everything except the content, which is stored in full separately
+        meta = {k: v for k, v in j.items() if k != "choices"}
+        meta["finish_reason"] = finish
         out = json.loads(content)
         # json_object is not always honoured: this model returns a bare array often
         # enough to matter, and one such reply killed a whole run. Coerce rather
@@ -108,6 +117,8 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
             cost_source = "estimated"
     except Exception as e:
         err = f"{type(e).__name__}: {str(e)[:200]}"
+        if finish == "length":
+            err += " — reply was cut off (finish_reason=length)"
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
@@ -115,8 +126,10 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
               (scan_item_id, model, prompt_version, is_deal, headline, summary,
                acquirer, target, vendor, consideration, date_hint, sector,
                advisers, people, confidence, raw, prompt_tokens, completion_tokens,
-               cost_usd, cost_source, latency_ms, ok, error)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               cost_usd, cost_source, latency_ms, ok, error,
+               system_prompt, input_text, output_text, finish_reason, response_meta)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                    %s,%s,%s,%s,%s)
             ON CONFLICT (scan_item_id, model, prompt_version) DO UPDATE SET
               is_deal=EXCLUDED.is_deal, headline=EXCLUDED.headline, summary=EXCLUDED.summary,
               acquirer=EXCLUDED.acquirer, target=EXCLUDED.target, vendor=EXCLUDED.vendor,
@@ -126,7 +139,9 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
               prompt_tokens=EXCLUDED.prompt_tokens, completion_tokens=EXCLUDED.completion_tokens,
               cost_usd=EXCLUDED.cost_usd, cost_source=EXCLUDED.cost_source,
               latency_ms=EXCLUDED.latency_ms, ok=EXCLUDED.ok, error=EXCLUDED.error,
-              created_at=now()
+              system_prompt=EXCLUDED.system_prompt, input_text=EXCLUDED.input_text,
+              output_text=EXCLUDED.output_text, finish_reason=EXCLUDED.finish_reason,
+              response_meta=EXCLUDED.response_meta, created_at=now()
             RETURNING *""",
             (item["id"], model, PROMPT_VERSION, out.get("is_deal"), out.get("headline"),
              out.get("summary"), out.get("acquirer"), out.get("target"), out.get("vendor"),
@@ -134,7 +149,9 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
              json.dumps(out.get("advisers") or []), json.dumps(out.get("people") or []),
              out.get("confidence"), json.dumps(out) if out else None,
              usage.get("prompt_tokens"), usage.get("completion_tokens"),
-             cost, cost_source, ms, err is None, err))
+             cost, cost_source, ms, err is None, err,
+             SYSTEM, sent if sent is not None else text[:24000], content, finish,
+             json.dumps(meta) if meta else None))
         row = cur.fetchone()
     conn.commit()
     return row

@@ -432,3 +432,18 @@ CREATE TABLE IF NOT EXISTS tdc.item_summary (
 );
 CREATE INDEX IF NOT EXISTS item_summary_deal_idx ON tdc.item_summary (is_deal)
     WHERE is_deal;
+
+-- Exactly what the model was sent and exactly what came back, verbatim.
+--
+-- prompt_version alone is not enough: it names a prompt the code held at the time,
+-- and code changes. The same argument as storing a source's text rather than its
+-- URL — a reading you cannot reproduce is a reading you cannot check.
+--
+-- finish_reason earns its place on its own: the one item that failed to parse did
+-- so because the reply was cut mid-string, and 'length' says that immediately
+-- where a JSONDecodeError does not.
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS system_prompt text;
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS input_text text;
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS output_text text;
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS finish_reason text;
+ALTER TABLE tdc.item_summary ADD COLUMN IF NOT EXISTS response_meta jsonb;
