@@ -63,10 +63,7 @@ def rows(conn, include_inactive=False):
                     needs_check, active, resolved_by, bridge, bridge_note,
                     site_links_linkedin, linkedin_lists_site, checked_at,
                     deals_url, deals_how, deals_label, deals_signals, deals_checked_at,
-                    deals_url_manual, deals_manual_by, deals_manual_at, deals_manual_signals,
-                    deals_none,
-                    CASE WHEN deals_none THEN NULL
-                         ELSE coalesce(deals_url_manual, deals_url) END AS deals_effective
+                    deals_locked, deals_set_by, deals_set_at
              FROM tdc.coverage {} ORDER BY needs_check DESC, bridge, name"""
     where = "" if include_inactive else "WHERE active"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -315,58 +312,32 @@ def find_deals_page(website, max_try=4):
 
 
 def save_deals_page(conn, row_id, url, how, label, signals):
+    """Scanner write. Locked rows are skipped — a person has already answered."""
     with conn.cursor() as cur:
         cur.execute("""UPDATE tdc.coverage
                           SET deals_url=%s, deals_how=%s, deals_label=%s,
                               deals_signals=%s, deals_checked_at=now(), updated_at=now()
-                        WHERE id=%s""", (url, how, label, signals, row_id))
+                        WHERE id=%s AND NOT deals_locked""", (url, how, label, signals, row_id))
     conn.commit()
 
 
-def set_deals_url(conn, row_id, url, actor, action="save"):
-    """Record what a person decided about a firm's transactions page.
-
-    Three outcomes, because two were not enough. `none` records that someone looked
-    and there is no such page — a finding that has to outrank the scanner, since
-    otherwise rejecting a bad suggestion just restored it. `reset` returns the row
-    to unexamined. `save` stores a URL.
-
-    A saved page is fetched and its deal signals counted — not to accept or reject
-    the edit, which is not the checker's business, but so a typo shows as a page
-    carrying no deals rather than sitting there looking authoritative.
-    """
-    if action == "none":
-        with conn.cursor() as cur:
-            cur.execute("""UPDATE tdc.coverage
-                              SET deals_none=true, deals_url_manual=NULL,
-                                  deals_manual_signals=NULL, deals_manual_by=%s,
-                                  deals_manual_at=now(), updated_at=now()
-                            WHERE id=%s""", (actor, row_id))
-        conn.commit()
-        return "none", None
-
+def set_deals_url(conn, row_id, url, actor):
+    """Set a firm's transactions page. Whatever is passed is the answer from now on,
+    including nothing — the row locks and the scanner leaves it alone thereafter."""
     url = (url or "").strip()
-    if action == "reset" or not url:
-        with conn.cursor() as cur:
-            cur.execute("""UPDATE tdc.coverage
-                              SET deals_url_manual=NULL, deals_manual_by=NULL,
-                                  deals_manual_at=NULL, deals_manual_signals=NULL,
-                                  deals_none=false, updated_at=now()
-                            WHERE id=%s""", (row_id,))
-        conn.commit()
-        return None, None
-
-    if not url.startswith("http"):
+    if url and not url.startswith("http"):
         url = "https://" + url
-    try:
-        signals = len(DEAL_SIGNAL.findall(_fetch(url, 15)))
-    except Exception:
-        signals = None          # unreachable is not the same as empty
-
+    signals = None
+    if url:
+        try:
+            signals = len(DEAL_SIGNAL.findall(_fetch(url, 15)))
+        except Exception:
+            signals = None
     with conn.cursor() as cur:
         cur.execute("""UPDATE tdc.coverage
-                          SET deals_url_manual=%s, deals_manual_by=%s, deals_manual_at=now(),
-                              deals_manual_signals=%s, deals_none=false, updated_at=now()
-                        WHERE id=%s""", (url, actor, signals, row_id))
+                          SET deals_url=%s, deals_signals=%s, deals_how='manual',
+                              deals_label=NULL, deals_locked=true, deals_set_by=%s,
+                              deals_set_at=now(), deals_checked_at=now(), updated_at=now()
+                        WHERE id=%s""", (url or None, signals, actor, row_id))
     conn.commit()
-    return url, signals
+    return url or None, signals

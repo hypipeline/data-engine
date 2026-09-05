@@ -270,20 +270,32 @@ ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_label text;    -- what t
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_signals integer;
 ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_checked_at timestamptz;
 
--- A human's transactions URL, kept apart from the scanner's. The scan writes
--- deals_url and never deals_url_manual, so a rescan cannot clobber an edit — that
--- holds by construction rather than by a flag someone has to remember to check.
--- Keeping both also preserves the disagreement, which is the useful part: every
--- override is a recorded case of "the scanner said X, the truth is Y".
-ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_url_manual text;
-ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_by text;
-ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_at timestamptz;
-ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_manual_signals integer;
+-- One transactions URL per firm. If a person sets it, that is the answer — for
+-- good, and including when they set it to nothing. deals_locked simply means a
+-- human has spoken, and the scanner skips those rows entirely.
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_locked boolean NOT NULL DEFAULT false;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_set_by text;
+ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_set_at timestamptz;
 
--- "There is no transactions page" is a finding, not an absence of one. Without
--- this the only way to reject the scanner's suggestion was to clear the override,
--- which fell straight back to the suggestion just rejected. Three states, not two:
---   deals_none = true            checked, and there is no such page
---   deals_url_manual IS NOT NULL checked, and it is this one
---   neither                      not yet looked at
-ALTER TABLE tdc.coverage ADD COLUMN IF NOT EXISTS deals_none boolean NOT NULL DEFAULT false;
+-- Fold the earlier manual/none columns down into the single field, once.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema='tdc' AND table_name='coverage'
+               AND column_name='deals_url_manual') THEN
+    UPDATE tdc.coverage
+       SET deals_url = deals_url_manual, deals_locked = true,
+           deals_set_by = deals_manual_by, deals_set_at = deals_manual_at
+     WHERE deals_url_manual IS NOT NULL;
+    UPDATE tdc.coverage
+       SET deals_url = NULL, deals_locked = true,
+           deals_set_by = deals_manual_by, deals_set_at = deals_manual_at
+     WHERE deals_none;
+  END IF;
+END $$;
+
+ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_url_manual;
+ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_none;
+ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_by;
+ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_at;
+ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_signals;

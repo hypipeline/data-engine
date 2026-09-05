@@ -18,9 +18,9 @@
     <span class="v">{{ (rows|selectattr('bridge','equalto','site_only')|list|length)
                       + (rows|selectattr('bridge','equalto','linkedin_only')|list|length) }}</span></div>
   <div class="pd-stat"><span class="k">Transactions page</span>
-    <span class="v">{{ rows|selectattr('deals_effective')|list|length }}</span></div>
-  <div class="pd-stat"><span class="k">Confirmed none</span>
-    <span class="v">{{ rows|selectattr('deals_none')|list|length }}</span></div>
+    <span class="v">{{ rows|selectattr('deals_url')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Set by you</span>
+    <span class="v">{{ rows|selectattr('deals_locked')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Unproven</span>
     <span class="v {{ 'warn' if rows|selectattr('needs_check')|list|length }}">
       {{ rows|selectattr('needs_check')|list|length }}</span></div>
@@ -59,32 +59,14 @@
         <td class="dealscell">
           <form method="post" action="/tdc/deals/coverage/deals-url" class="dealsform">
             <input type="hidden" name="id" value="{{ r.id }}">
-            <input type="url" name="url" value="{{ r.deals_url_manual or r.deals_url or '' }}"
-                   placeholder="{{ 'no page' if r.deals_none else ('none found — paste one' if r.deals_checked_at else 'not scanned') }}"
-                   spellcheck="false">
-            <button class="lift" type="submit" name="action" value="save"
-                    title="Save this page for this firm">Save</button>
-            <button class="lift" type="submit" name="action" value="none"
-                    title="Record that this firm has no transactions page">No page</button>
-            {% if r.deals_url_manual or r.deals_none %}
-            <button class="lift" type="submit" name="action" value="reset"
-                    title="Forget my decision and show what the scan found">Reset</button>
-            {% endif %}
+            <input type="url" name="url" value="{{ r.deals_url or '' }}"
+                   placeholder="none — leave empty to say so" spellcheck="false">
+            <button class="lift" type="submit">Save</button>
           </form>
           <div class="dealsmeta">
-            {% if r.deals_none %}
-              <span class="pill unsubscribed"
-                    title="recorded by {{ r.deals_manual_by }} on {{ r.deals_manual_at.strftime('%d %b %H:%M') if r.deals_manual_at }} · scan had suggested {{ r.deals_url or 'nothing' }}">no page</span>
-            {% endif %}
-            {% if r.deals_effective %}
-              <a href="{{ r.deals_effective }}" target="_blank" rel="noopener">open</a>
-            {% endif %}
-            {% if r.deals_url_manual %}
-              <span class="pill pending"
-                    title="set by {{ r.deals_manual_by }} on {{ r.deals_manual_at.strftime('%d %b %H:%M') if r.deals_manual_at }} · scan found {{ r.deals_url or 'nothing' }}">manual</span>
-              {% if r.deals_manual_signals == 0 %}<span class="muted">no deals on page</span>
-              {% elif r.deals_manual_signals %}<span class="muted">{{ r.deals_manual_signals }} signals</span>
-              {% else %}<span class="muted">unreachable</span>{% endif %}
+            {% if r.deals_url %}<a href="{{ r.deals_url }}" target="_blank" rel="noopener">open</a>{% endif %}
+            {% if r.deals_locked %}
+              <span class="muted" title="set by {{ r.deals_set_by }} on {{ r.deals_set_at.strftime('%d %b %H:%M') if r.deals_set_at }}">yours</span>
             {% elif r.deals_url %}
               <span class="muted">{{ r.deals_label or 'from nav' }} · {{ r.deals_signals }} signals</span>
             {% endif %}
