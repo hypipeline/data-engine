@@ -1485,6 +1485,41 @@ def tdc_coverage_deals_url(request: Request, id: int = Form(...), url: str = For
     return RedirectResponse(f"/tdc/deals/coverage?{urlencode({'flash': msg})}", status_code=303)
 
 
+@app.get("/tdc/deals/scan", response_class=HTMLResponse)
+def tdc_deals_scan(request: Request, flash: str = "", id: int = 0):
+    conn = POOL.getconn()
+    try:
+        tdc_svc.ensure_schema(conn)
+        items = tdc_cov.scan_items(conn, coverage_id=id or None)
+    finally:
+        POOL.putconn(conn)
+    return render(request, "tdc_scan.html", "tdc-scan", items=items, flash=flash,
+                  firm=(items[0]["firm"] if id and items else None),
+                  subactive="scan", page_title="Scan", **_tdc_shell("deals"))
+
+
+@app.post("/tdc/deals/coverage/scan")
+def tdc_coverage_scan(request: Request, id: int = Form(...)):
+    """Read both channels for one firm. Runs inline — it is roughly twenty fetches
+    and this is a single-operator tool, so a job queue would be machinery for its
+    own sake."""
+    conn = POOL.getconn()
+    try:
+        row = [r for r in tdc_cov.rows(conn) if r["id"] == id]
+        if not row:
+            msg = "No such firm."
+        else:
+            n, new, notes = tdc_cov.scan_firm(conn, row[0])
+            msg = f"{row[0]['name']}: {n} items, {new} new." + (f" ({notes})" if notes else "")
+    except Exception as e:
+        conn.rollback()
+        msg = f"Scan failed — {e}"
+    finally:
+        POOL.putconn(conn)
+    return RedirectResponse(f"/tdc/deals/scan?{urlencode({'id': id, 'flash': msg})}",
+                            status_code=303)
+
+
 @app.get("/tdc/deals/leads", response_class=HTMLResponse)
 def tdc_deals_leads(request: Request):
     return _tdc_soon(request, "deals", tdc_nav.DEALS, "leads")

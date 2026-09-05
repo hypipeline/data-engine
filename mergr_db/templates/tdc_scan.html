@@ -1,0 +1,69 @@
+{% extends "tdc_base.html" %}
+{% block tdc %}
+<h1 class="tdc-title">Scan{% if firm %} — {{ firm }}{% endif %}</h1>
+<p class="tdc-blurb">
+  Everything found on the watched sources, before anyone decides whether it is a deal.
+  <strong>Expanded</strong> means the text came from a page of its own; where a transactions
+  index has no click targets the entry itself is all there is, and it is kept unexpanded rather
+  than dropped — a title naming both sides is still the minimum viable story.</p>
+
+<div class="pd-stats">
+  <div class="pd-stat"><span class="k">Items</span><span class="v">{{ items|length }}</span></div>
+  <div class="pd-stat"><span class="k">LinkedIn</span>
+    <span class="v">{{ items|selectattr('channel','equalto','linkedin')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Transactions</span>
+    <span class="v">{{ items|selectattr('channel','equalto','transactions')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">Expanded</span>
+    <span class="v">{{ items|selectattr('expanded')|list|length }}</span></div>
+</div>
+
+{% if flash %}<div class="pd-panel"><p class="pd-empty" style="padding:0;color:var(--fg)">{{ flash }}</p></div>{% endif %}
+
+<div class="pd-panel">
+  <div class="pd-head"><h2>Found</h2>
+    <span class="right">
+      <a class="filt {{ 'on' if not firm }}" href="/tdc/deals/scan">All firms</a>
+    </span></div>
+  {% if items %}
+  <div class="scan">
+    {% for i in items %}
+    <div class="sitem">
+      <div class="smeta">
+        <span class="ch {{ i.channel }}">{{ 'li' if i.channel == 'linkedin' else 'tx' }}</span>
+        <span class="fm">{{ i.firm }}</span>
+        <span class="dt">{{ i.published_at.strftime('%d %b %Y') if i.published_at else '—' }}</span>
+        {% if not i.expanded %}<span class="pill pending" title="no page of its own; taken from the index">index only</span>{% endif %}
+      </div>
+      <div class="sbody">
+        <div class="sti">{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title or i.external_id }}</a>
+          {% else %}{{ i.title or i.external_id }}{% endif %}</div>
+        {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
+        {% if i.outlink %}<div class="sout" title="shared destination — two posts with the same link are the same deal">{{ i.outlink }}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="pd-empty">Nothing scanned yet. Run a scan from <a href="/tdc/deals/coverage">Coverage</a>.</p>
+  {% endif %}
+</div>
+
+<style>
+  .scan{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);
+    border-radius:var(--radius);overflow:hidden}
+  .sitem{background:var(--panel);padding:11px 13px;display:grid;
+    grid-template-columns:15rem minmax(0,1fr);gap:14px}
+  @media(max-width:760px){.sitem{grid-template-columns:1fr;gap:5px}}
+  .smeta{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+  .smeta .ch{font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;
+    border-radius:2px;border:1px solid var(--border);color:var(--muted)}
+  .smeta .ch.transactions{border-color:#b0281f;color:#b0281f}
+  .smeta .fm{font-size:12px;font-weight:600}
+  .smeta .dt{font-size:11px;color:var(--muted)}
+  .sti{font-size:13.5px;font-weight:600;line-height:1.35}
+  .sti a{text-decoration:none}
+  .sti a:hover{text-decoration:underline}
+  .sbo{font-size:12.5px;color:var(--muted);line-height:1.5;margin:4px 0 0}
+  .sout{font-size:11px;color:var(--muted);margin-top:4px;font-family:ui-monospace,Menlo,monospace}
+</style>
+{% endblock %}

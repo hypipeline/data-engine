@@ -299,3 +299,29 @@ ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_none;
 ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_by;
 ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_at;
 ALTER TABLE tdc.coverage DROP COLUMN IF EXISTS deals_manual_signals;
+
+-- ---------------------------------------------------------------- scan_item
+-- One row per thing found on a watched source: a LinkedIn post, or an entry on a
+-- firm's transactions page. Raw harvest, before any judgement about whether it is
+-- a deal — that is the lead's job, and this is what the lead is made from.
+--
+-- expanded records whether the text came from a page of its own or from the index
+-- it was listed on. Some transactions pages link a write-up per deal; others are a
+-- flat list with no click targets, and then a title is all there is. Both are
+-- valid, and which one you got changes how much the text can be trusted to carry.
+CREATE TABLE IF NOT EXISTS tdc.scan_item (
+    id          bigserial PRIMARY KEY,
+    coverage_id bigint NOT NULL REFERENCES tdc.coverage(id) ON DELETE CASCADE,
+    channel     text NOT NULL CHECK (channel IN ('linkedin','transactions')),
+    external_id text NOT NULL,          -- activity urn, or the page slug
+    url         text,
+    title       text,
+    body        text,
+    published_at timestamptz,
+    expanded    boolean NOT NULL DEFAULT false,
+    outlink     text,                   -- shared destination — a dedup key across posts
+    first_seen  timestamptz NOT NULL DEFAULT now(),
+    last_seen   timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (coverage_id, channel, external_id)
+);
+CREATE INDEX IF NOT EXISTS scan_item_cov_idx ON tdc.scan_item (coverage_id, published_at DESC);

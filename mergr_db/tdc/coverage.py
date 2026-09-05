@@ -6,6 +6,7 @@ and contact history are relationship data and are deliberately never read.
 """
 import difflib
 import html
+import time
 import json
 import os
 import re
@@ -370,3 +371,143 @@ def set_deals_url(conn, row_id, url, actor):
                         WHERE id=%s""", (url or None, signals, actor, row_id))
     conn.commit()
     return url or None, signals
+
+
+# ------------------------------------------------------------------ scanning
+URN_RE = re.compile(r"urn:li:activity:(\d{15,25})")
+DATE_RE = re.compile(r'datePublished"\s*:\s*"([^"]+)"')
+SEG_RE = re.compile(r'attributed-text-segment-list__content[^>]*>(.*?)</p>', re.S)
+OUT_RE = re.compile(r"https://lnkd\.in/\w+")
+
+
+def _plain(h):
+    h = re.sub(r"(?is)<(script|style|noscript|svg|nav|header|footer|form)\b.*?</\1>", " ", h)
+    h = re.sub(r"(?i)</(p|h[1-6]|li|div|br)>", "\n", h)
+    return [re.sub(r"\s+", " ", x).strip()
+            for x in html.unescape(re.sub(r"<[^>]+>", " ", h)).split("\n")]
+
+
+def scan_linkedin(linkedin_url, cap=10):
+    """Enumerate activity ids off the company page, then read each post directly.
+    Only the enumeration needs a browser user-agent; the posts themselves do not."""
+    items = []
+    page = _fetch(linkedin_url, 20)
+    for urn in sorted(set(URN_RE.findall(page)), reverse=True)[:cap]:
+        url = f"https://www.linkedin.com/feed/update/urn:li:activity:{urn}/"
+        try:
+            b = _fetch(url, 20)
+        except Exception:
+            continue
+        t = re.search(r"<title>(.*?)</title>", b, re.S)
+        title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else ""
+        title = re.sub(r"\s*\|\s*LinkedIn\s*$", "", title)
+        title = re.sub(r"\s*\|\s*[^|]*posted on the topic.*$", "", title).strip()
+        seg = SEG_RE.findall(b)
+        body = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", seg[0]))).strip() if seg else ""
+        out = OUT_RE.search(body)
+        d = DATE_RE.search(b)
+        items.append({"channel": "linkedin", "external_id": urn, "url": url,
+                      "title": title, "body": OUT_RE.sub("", body).strip(),
+                      "published_at": d.group(1) if d else None,
+                      "expanded": True, "outlink": out.group(0) if out else None})
+        time.sleep(0.4)
+    return items
+
+
+def scan_transactions(index_url, cap=12):
+    """Read a firm's transactions index.
+
+    Where the index links a page per deal, each is fetched — that is the expanded
+    form and carries parties, quotes and rationale. Where it does not, there is
+    nothing to click into and the index entries themselves are all there is; those
+    are recorded unexpanded rather than skipped, because a title naming both sides
+    is still the minimum viable story.
+    """
+    idx = _fetch(index_url, 20)
+    base = urllib.parse.urlparse(index_url)
+    root = f"{base.scheme}://{base.netloc}"
+    prefix = base.path.rstrip("/")
+
+    targets, seen = [], set()
+    for href in re.findall(r'href=["\']([^"\']+)["\']', idx, re.I):
+        u = urllib.parse.urljoin(index_url, href)
+        p = urllib.parse.urlparse(u)
+        if p.netloc.replace("www.", "") != base.netloc.replace("www.", ""):
+            continue
+        path = p.path.rstrip("/")
+        if path.startswith(prefix) and path != prefix and path not in seen:
+            seen.add(path); targets.append(u)
+
+    items = []
+    if targets:                                    # expanded: a page per deal
+        for u in targets[:cap]:
+            slug = urllib.parse.urlparse(u).path.rstrip("/").rsplit("/", 1)[-1]
+            try:
+                b = _fetch(u, 20)
+            except Exception:
+                items.append({"channel": "transactions", "external_id": slug, "url": u,
+                              "title": slug.replace("-", " "), "body": "",
+                              "published_at": None, "expanded": False, "outlink": None})
+                continue
+            t = re.search(r"<title>(.*?)</title>", b, re.S)
+            title = re.sub(r"\s+", " ", html.unescape(t.group(1))).strip() if t else slug.replace("-", " ")
+            lines = [l for l in _plain(b) if len(l) > 40]
+            items.append({"channel": "transactions", "external_id": slug, "url": u,
+                          "title": title, "body": " ".join(lines[1:4])[:1200],
+                          "published_at": None, "expanded": True, "outlink": None})
+            time.sleep(0.3)
+        return items
+
+    # no click targets — take the index entries themselves
+    for i, line in enumerate([l for l in _plain(idx) if 25 < len(l) < 300][:cap]):
+        items.append({"channel": "transactions", "external_id": f"row-{i}", "url": index_url,
+                      "title": line[:180], "body": "", "published_at": None,
+                      "expanded": False, "outlink": None})
+    return items
+
+
+def scan_firm(conn, row):
+    """Both channels for one firm. Returns (n_found, n_new, notes)."""
+    found, notes = [], []
+    if row.get("linkedin_url"):
+        try:
+            found += scan_linkedin(row["linkedin_url"])
+        except Exception as e:
+            notes.append(f"LinkedIn: {type(e).__name__}")
+    if row.get("deals_url"):
+        try:
+            found += scan_transactions(row["deals_url"])
+        except Exception as e:
+            notes.append(f"transactions: {type(e).__name__}")
+
+    new = 0
+    with conn.cursor() as cur:
+        for it in found:
+            cur.execute("""
+                INSERT INTO tdc.scan_item
+                  (coverage_id, channel, external_id, url, title, body,
+                   published_at, expanded, outlink)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (coverage_id, channel, external_id) DO UPDATE SET
+                  title=EXCLUDED.title, body=EXCLUDED.body, url=EXCLUDED.url,
+                  published_at=EXCLUDED.published_at, expanded=EXCLUDED.expanded,
+                  outlink=EXCLUDED.outlink, last_seen=now()
+                RETURNING (xmax = 0) AS inserted
+            """, (row["id"], it["channel"], it["external_id"], it["url"], it["title"],
+                  it["body"], it["published_at"], it["expanded"], it["outlink"]))
+            new += 1 if cur.fetchone()[0] else 0
+    conn.commit()
+    return len(found), new, "; ".join(notes)
+
+
+def scan_items(conn, coverage_id=None, limit=300):
+    where = "WHERE s.coverage_id = %s" if coverage_id else ""
+    args = (coverage_id, limit) if coverage_id else (limit,)
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(f"""
+            SELECT s.*, c.name AS firm
+            FROM tdc.scan_item s JOIN tdc.coverage c ON c.id = s.coverage_id
+            {where}
+            ORDER BY s.published_at DESC NULLS LAST, s.first_seen DESC
+            LIMIT %s""", args)
+        return cur.fetchall()

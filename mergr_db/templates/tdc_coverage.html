@@ -69,6 +69,11 @@
                    placeholder="none — leave empty to say so" spellcheck="false">
             <button class="lift" type="submit">Save</button>
           </form>
+          <form method="post" action="/tdc/deals/coverage/scan" class="inline">
+            <input type="hidden" name="id" value="{{ r.id }}">
+            <button class="lift" type="submit"
+                    title="Read this firm's LinkedIn posts and transactions page now">Scan</button>
+          </form>
           <div class="dealsmeta">
             {% if r.deals_url %}<a href="{{ r.deals_url }}" target="_blank" rel="noopener">open</a>{% endif %}
             {% if r.deals_locked %}
