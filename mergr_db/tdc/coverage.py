@@ -274,17 +274,40 @@ def find_deals_page(website, max_try=4):
         if s and (url not in cands or cands[url][0] < s):
             cands[url] = (s, text)
 
-    best = None
-    for url, (s, text) in sorted(cands.items(), key=lambda kv: -kv[1][0])[:max_try]:
+    def probe(url):
         try:
             body = _fetch(url, 15)
         except Exception:
-            continue
-        n = len(set(m.group(0).lower() for m in DEAL_SIGNAL.finditer(body)))
-        hits = len(DEAL_SIGNAL.findall(body))
-        if hits >= 3 and (best is None or hits > best[3]):
-            best = (url, "nav", text or None, hits)
-    return best if best else (None, None, None, 0)
+            return None
+        return len(DEAL_SIGNAL.findall(body))
+
+    passing = []
+    for url, (sc, text) in sorted(cands.items(), key=lambda kv: -kv[1][0])[:max_try]:
+        hits = probe(url)
+        if hits and hits >= 3:
+            passing.append((url, text, hits))
+
+    # A single deal written up in full carries more deal language than an index
+    # listing forty of them, so ranking on hit count alone walks into one story.
+    # The index is the shallower URL, so depth decides first and volume only breaks
+    # ties — and where a passing page is deep, its parent is tried directly, since
+    # a site does not always link its own index from the home page.
+    def depth(u):
+        return len([p for p in urllib.parse.urlparse(u).path.split("/") if p])
+
+    for url, text, hits in list(passing):
+        parts = [p for p in urllib.parse.urlparse(url).path.split("/") if p]
+        if len(parts) >= 2:
+            parent = urllib.parse.urljoin(url, "/" + "/".join(parts[:-1]) + "/")
+            if parent not in [p[0] for p in passing]:
+                ph = probe(parent)
+                if ph and ph >= 3:
+                    passing.append((parent, text, ph))
+
+    if not passing:
+        return None, None, None, 0
+    url, text, hits = sorted(passing, key=lambda p: (depth(p[0]), -p[2]))[0]
+    return url, "nav", text or None, hits
 
 
 def save_deals_page(conn, row_id, url, how, label, signals):
