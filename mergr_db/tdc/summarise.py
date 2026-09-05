@@ -55,7 +55,10 @@ def _call(api_key, model, text, timeout=90):
         "messages": [{"role": "system", "content": SYSTEM},
                      {"role": "user", "content": text[:24000]}],
         "temperature": 0,
-        "max_tokens": 1500,
+        # One reply hit 1500 and came back cut mid-string. The object is small; a
+        # long one means the model is padding, and it should have room to finish
+        # rather than fail.
+        "max_tokens": 3000,
         "response_format": {"type": "json_object"},
         # Ask OpenRouter for the actual charge rather than computing one.
         "usage": {"include": True},
@@ -72,8 +75,14 @@ def _call(api_key, model, text, timeout=90):
     return j, int((time.time() - t0) * 1000), body
 
 
-def summarise_item(conn, item, api_key, model=MODEL, force=False):
-    """One item, one model. Returns the stored row as a dict."""
+def summarise_item(conn, item, api_key, model=MODEL, force=False, attempts=2):
+    """One item, one model. Returns the stored row as a dict.
+
+    Retries once on a provider error or a cut-off reply. Four of thirty-nine calls
+    came back with finish_reason 'error' when fired back to back, which is a
+    transient condition and not a fact about the document — recording it as a
+    failed reading would blame the source for the caller's impatience.
+    """
     if not force:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""SELECT * FROM tdc.item_summary
@@ -87,38 +96,40 @@ def summarise_item(conn, item, api_key, model=MODEL, force=False):
                                    or item.get("body")) if x)
     out, err, usage, cost, cost_source, ms = {}, None, {}, None, None, None
     sent, content, finish, meta = None, None, None, None
-    # Truncation is the other way a reply arrives unparseable, so leave room for the
-    # whole object rather than letting the default cut it mid-string.
-
-    try:
-        j, ms, body = _call(api_key, model, text)
-        sent = (body["messages"][1]["content"])          # exactly what was sent
-        choice = (j.get("choices") or [{}])[0]
-        finish = choice.get("finish_reason")
-        content = choice.get("message", {}).get("content") or "{}"
-        # everything except the content, which is stored in full separately
-        meta = {k: v for k, v in j.items() if k != "choices"}
-        meta["finish_reason"] = finish
-        out = json.loads(content)
-        # json_object is not always honoured: this model returns a bare array often
-        # enough to matter, and one such reply killed a whole run. Coerce rather
-        # than trust the response_format flag.
-        if isinstance(out, list):
-            out = next((x for x in out if isinstance(x, dict)), {})
-        if not isinstance(out, dict):
-            raise ValueError(f"model returned {type(out).__name__}, not an object")
-        usage = j.get("usage") or {}
-        if usage.get("cost") is not None:
-            cost, cost_source = float(usage["cost"]), "reported"
-        else:
-            r = _rate(model)
-            cost = (usage.get("prompt_tokens", 0) / 1e6 * r["in"]
-                    + usage.get("completion_tokens", 0) / 1e6 * r["out"])
-            cost_source = "estimated"
-    except Exception as e:
-        err = f"{type(e).__name__}: {str(e)[:200]}"
-        if finish == "length":
-            err += " — reply was cut off (finish_reason=length)"
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(1.5 * attempt)          # transient, so back off a little
+        err = None
+        try:
+            j, ms, body = _call(api_key, model, text)
+            sent = body["messages"][1]["content"]          # exactly what was sent
+            choice = (j.get("choices") or [{}])[0]
+            finish = choice.get("finish_reason")
+            content = choice.get("message", {}).get("content") or "{}"
+            meta = {k: v for k, v in j.items() if k != "choices"}
+            meta["finish_reason"] = finish
+            out = json.loads(content)
+            # json_object is not always honoured: this model returns a bare array
+            # often enough to matter, and one such reply killed a whole run.
+            if isinstance(out, list):
+                out = next((x for x in out if isinstance(x, dict)), {})
+            if not isinstance(out, dict):
+                raise ValueError(f"model returned {type(out).__name__}, not an object")
+            usage = j.get("usage") or {}
+            if usage.get("cost") is not None:
+                cost, cost_source = float(usage["cost"]), "reported"
+            else:
+                r = _rate(model)
+                cost = (usage.get("prompt_tokens", 0) / 1e6 * r["in"]
+                        + usage.get("completion_tokens", 0) / 1e6 * r["out"])
+                cost_source = "estimated"
+            break
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:200]}"
+            if finish == "length":
+                err += " — reply was cut off (finish_reason=length)"
+            elif finish == "error":
+                err += " — provider returned finish_reason=error"
 
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
