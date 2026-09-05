@@ -526,7 +526,14 @@ def _plain(h, min_len=2):
     page. Nav is now removed by comparing a site's pages against each other, which
     is the job the length filter was badly approximating, so the filter goes.
     """
-    h = re.sub(r"(?is)<(script|style|noscript|svg|nav|header|footer|form)\b.*?</\1>", " ", h)
+    # Only tags that never hold readable content. nav, header, footer and form are
+    # deliberately not here: HTML5 makes header and footer *sectioning* elements,
+    # legal inside article and section, so a page can carry one per card. Acuity's
+    # deal pages have four of each, and the team members' names sit inside them —
+    # stripping by tag name deleted Robbie Allen and David Copp outright. Page
+    # chrome is removed by comparing a site's pages instead, which is positional
+    # information the tag name does not carry.
+    h = re.sub(r"(?is)<(script|style|noscript|svg|template|iframe)\b.*?</\1>", " ", h)
     h = re.sub(r"(?i)</(p|h[1-6]|li|div|br|td|th|span|a)>", "\n", h)
     out = []
     for x in html.unescape(re.sub(r"<[^>]+>", " ", h)).split("\n"):
