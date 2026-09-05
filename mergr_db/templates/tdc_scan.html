@@ -35,15 +35,20 @@
          href="/tdc/deals/scan?ch=transactions{{ q }}">Transactions page <b>{{ n_tx }}</b></a>
     </span></div>
   <div class="pd-head" style="margin-top:2px">
-    <span class="right filts">
-      {% set c = ('&ch=' ~ active_ch) if active_ch else '' %}
-      <a class="filt {{ 'on' if not active_id }}" href="/tdc/deals/scan?id={{ c }}">All firms</a>
-      {% for f in firms %}
-      <a class="filt {{ 'on' if active_id == f.id }}" href="/tdc/deals/scan?id={{ f.id }}{{ c }}"
-         title="{{ f.linkedin }} LinkedIn, {{ f.transactions }} transactions · last scanned {{ f.last_scan.strftime('%d %b %H:%M') if f.last_scan }}">{{ f.name }}
-        <b>{{ f.items }}</b></a>
-      {% endfor %}
-    </span></div>
+    <span class="right">
+      <form method="get" action="/tdc/deals/scan" class="firmsel">
+        {% if active_ch %}<input type="hidden" name="ch" value="{{ active_ch }}">{% endif %}
+        <label for="firmpick">Firm</label>
+        <select id="firmpick" name="id" onchange="this.form.submit()">
+          <option value="">All firms — {{ firms|sum(attribute='n_items') }} items</option>
+          {% for f in firms %}
+          <option value="{{ f.id }}" {{ 'selected' if active_id == f.id }}>
+            {{ f.name }} — {{ f.n_items }} ({{ f.linkedin }} li / {{ f.transactions }} tx)
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+    </span>
   {% if items %}
   <div class="scan">
     {% for i in items %}
@@ -97,6 +102,11 @@
   .sti a{text-decoration:none}
   .sti a:hover{text-decoration:underline}
   .sbo{font-size:12.5px;color:var(--muted);line-height:1.5;margin:4px 0 0}
+  .firmsel{display:flex;align-items:center;gap:7px}
+  .firmsel label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .firmsel select{font:inherit;font-size:12.5px;padding:3px 7px;border:1px solid var(--border);
+    border-radius:3px;background:var(--panel);color:var(--fg);max-width:340px}
+  .firmsel select:focus{outline:2px solid #a86a12;outline-offset:1px}
   .slinks{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
   .slinks a{font-size:11px;padding:1px 6px;border:1px solid var(--border);border-radius:3px;
     color:var(--muted);text-decoration:none}

@@ -642,10 +642,15 @@ def _demote_boilerplate(rows, threshold=0.4):
 
 def scan_firms(conn):
     """Firms that have been scanned, with how much each returned — so the filter
-    also answers 'which of these has anything worth reading'."""
+    also answers 'which of these has anything worth reading'.
+
+    The count is n_items, not items: Jinja resolves attributes before keys, so a
+    column called `items` on a dict row silently renders the dict's own .items
+    method instead of the number.
+    """
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT c.id, c.name, count(*) AS items,
+            SELECT c.id, c.name, count(*) AS n_items,
                    count(*) FILTER (WHERE s.channel='linkedin')     AS linkedin,
                    count(*) FILTER (WHERE s.channel='transactions') AS transactions,
                    max(s.last_seen) AS last_scan
