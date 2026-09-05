@@ -205,9 +205,17 @@
         </div>
         {% endif %}
         {% if i.body %}<p class="sbo">{{ i.body|truncate(400) }}</p>{% endif %}
-        {% if i.full_text and i.full_chars > (i.body|length) + 80 %}
+        {% if i.full_text and i.full_chars <= 400 %}
+          <div class="whole">shown in full</div>
+        {% endif %}
+        {# Shown whenever the rendered body is cut, not only when a separately
+           fetched page exists. A LinkedIn post is its own full text, so the old
+           condition hid the control on exactly the items where the 400-character
+           display was the only thing you could see. #}
+        {% if i.full_text and i.full_chars > 400 %}
         <details class="sfull">
-          <summary>Full page — {{ '{:,}'.format(i.full_chars) }} characters</summary>
+          <summary>{{ 'Full post' if i.channel == 'linkedin' else 'Full page' }}
+            — {{ '{:,}'.format(i.full_chars) }} characters</summary>
           <div class="sfulltext">{{ i.full_text }}</div>
         </details>
         {% endif %}
@@ -279,6 +287,7 @@
   .adv .ap{color:var(--muted);font-size:11.5px}
   .read .rmeta{font-size:10.5px;color:var(--muted);margin-top:6px;
     font-family:ui-monospace,Menlo,monospace}
+  .whole{font-size:10.5px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
   .io{margin-top:7px}
   .io summary{font-size:11px;color:var(--muted);cursor:pointer;display:inline-block;
     padding:1px 7px;border:1px solid var(--border);border-radius:3px}
