@@ -952,9 +952,18 @@ def scan_items(conn, coverage_id=None, channel=None, limit=300):
     args.append(limit)
     args = tuple(args)
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # An item the source no longer lists is not deleted — a deal that scrolled
+        # off a feed is still a deal — but it must be distinguishable from current
+        # data, or old rows quietly stand in for what a source says today.
         cur.execute(f"""
-            SELECT s.*, c.name AS firm
-            FROM tdc.scan_item s JOIN tdc.coverage c ON c.id = s.coverage_id
+            SELECT s.*, c.name AS firm,
+                   (r.ran_at IS NOT NULL AND s.last_seen < r.ran_at) AS stale
+            FROM tdc.scan_item s
+            JOIN tdc.coverage c ON c.id = s.coverage_id
+            LEFT JOIN LATERAL (
+                SELECT ran_at FROM tdc.scan_run
+                 WHERE coverage_id = s.coverage_id AND channel = s.channel AND ok
+                 ORDER BY ran_at DESC LIMIT 1) r ON true
             {where}
             ORDER BY s.published_at DESC NULLS LAST, s.first_seen DESC
             LIMIT %s""", args)

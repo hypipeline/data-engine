@@ -13,6 +13,9 @@
     <span class="v">{{ items|selectattr('channel','equalto','linkedin')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Transactions</span>
     <span class="v">{{ items|selectattr('channel','equalto','transactions')|list|length }}</span></div>
+  <div class="pd-stat"><span class="k">No longer listed</span>
+    <span class="v {{ 'warn' if items|selectattr('stale')|list|length }}">
+      {{ items|selectattr('stale')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">Expanded</span>
     <span class="v">{{ items|selectattr('expanded')|list|length }}</span></div>
   <div class="pd-stat"><span class="k">With links</span>
@@ -146,6 +149,8 @@
         <span class="fm">{{ i.firm }}</span>
         <span class="dt">{{ i.published_at.strftime('%d %b %Y') if i.published_at else '—' }}</span>
         {% if not i.expanded %}<span class="pill pending" title="no page of its own; taken from the index">index only</span>{% endif %}
+        {% if i.stale %}<span class="pill sandboxed"
+          title="captured before, and the source no longer lists it — kept, but not what the source says today">no longer listed</span>{% endif %}
       </div>
       <div class="sbody">
         <div class="sti">{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title or i.external_id }}</a>
